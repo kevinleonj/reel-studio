@@ -3,66 +3,78 @@
 Written by the cloud lane only. Newest entry on top.
 
 ## Status board
-- Done: STEP-08 phase A — policy data (`infra/policy/`), Terraform `infra/bootstrap/` and `infra/main/`
-  (fmt, init `-backend=false`, validate, tflint and an offline `terraform test` pass on Terraform
-  1.16.5 with provider 8.6.0), `infra/.tflint.hcl`, `.github/workflows/deploy.yml`. Senior review
-  round 2: PASS at 90c3a9a. Doc-ledger entries for the task 0 libraries are in
-  `infra/doc-ledger.pending.json` (8 entries, Context7-checked). Committed locally, not pushed.
-- Partly: STEP-08 task 1 (policy data and tflint config exist; `scripts/check_policy.py`, its bad
-  fixtures, `mk/cloud.mk` and `ci-install.d/cloud.sh` wait for STEP-01).
-- Blocked: push and pull request, until STEP-01 (PR #1, `step-01-skeleton`) is merged to main.
-- Not started: tasks 0, 2, 3 (plan/apply), 5, 7, 8, 9.
-- Next: after STEP-01 merges — `git merge origin/main`, `make setup`, then task 0 with fakes,
-  `scripts/check_policy.py` test first, `mk/cloud.mk`, `scripts/ci-install.d/cloud.sh`, task 5
-  targets (written, not run), `scripts/smoke.py`, `make ci`, push, PR.
+- Done: STEP-08 phase A (Terraform roots, policy data, deploy.yml, offline `terraform test`) and,
+  after STEP-01 merged, the no-cloud part of the step: task 1 (`scripts/check_policy.py` test
+  first with mutated-infra bad fixtures, `mk/cloud.mk` `ci-cloud`, `scripts/ci-install.d/cloud.sh`,
+  tflint config), task 0 adapters (`gcp_storage`, `gcp_launcher`, `resend_mailer`, with fakes), the
+  task 5 scripts (`make gcp-project`, `bootstrap-plan`, `secrets-push`, `stripe-setup`, `dns`,
+  written and unit-tested, not run) and `scripts/smoke.py` (not run against a URL).
+- Partly: task 0's "same contract suite as the local adapters": the local adapters and
+  `tests/contract/` belong to the web lane (STEP-06) and are not on main; the cloud adapters are
+  tested against fakes in `tests/unit/infra/` until then.
+- Blocked: every task that needs the real project (2, 3 apply, 5 run, 6 environment, 7, 8, 9).
+- Not started: nothing else in the step that can run without the project.
+- Next: Kevin's items below, then `make gcp-project` → `make bootstrap-plan` (Kevin applies) →
+  `make secrets-push` → `make stripe-setup MODE=test` → `make dns` → deploy.yml → `make smoke`.
 
 ## Needs Kevin
-- **Where the deployer's `roles/iam.serviceAccountUser` lives.** `docs/ARCHITECTURE.md` §5 says the
-  bootstrap root grants it on the three runtime accounts; `docs/INFRA.md` §2 creates those accounts in
-  the main root, so they do not exist when bootstrap is applied. I put the grant in
-  `infra/main/iam.tf` with the same scope (one binding per runtime account, nothing at project
-  level). The deployer already holds `roles/iam.serviceAccountAdmin`, so no privilege changes. If
-  you prefer the accounts created in bootstrap instead, say so and I move both.
-- **Upgrade Terraform on the Mac to 1.16.5** (`brew upgrade terraform`; Homebrew has 1.16.1). Both
-  roots pin `required_version = "= 1.16.5"` (D60). This session used a checksum-verified 1.16.5 in the
-  session scratchpad (F403).
-- **Bootstrap variables you choose at plan time** (no defaults): `project_id`, `billing_account`,
-  `budget_currency_code` (your billing account's currency, F401), `github_repository_id`,
-  `github_repository_owner_id`. **Main root**, as GitHub repository variables: `GCP_PROJECT_ID`,
-  `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_DEPLOYER_SA`, `TF_STATE_BUCKET` (bootstrap outputs),
-  `EMAIL_DOMAIN`, `MAIL_FROM`, `KEVIN_ALERT_EMAIL`.
+- **Tools on the Mac for `make ci`:** `brew upgrade terraform` (1.16.5; Homebrew has 1.16.1 and both
+  roots pin `= 1.16.5`, F403), `brew install tflint trivy` (versions in F404), then
+  `make tflint-init` once. CI installs all of them itself (`scripts/ci-install.d/cloud.sh`).
+- **`gcloud auth application-default login`** before `make smoke` on the laptop (the step08 gate runs
+  it): smoke reads the live service, job and TTL state with Application Default Credentials.
+- **Launcher port changed (shared `reel_studio/core/ports.py`):** `launch(order_id, run_token)`,
+  because ARCHITECTURE §4 has the launcher pass ORDER_ID and RUN_TOKEN. The web lane's local
+  Dispatcher must take `run_token` too.
+- **New error code `cloud_unavailable`** (`reel_studio/core/errors.py`, boundary `CloudError`): the web
+  lane's copy table (`web/src/copy/en.json`) needs a message for it.
+- **Wiring the cloud adapters** (which settings feed bucket, job path, origin, Resend base URL and
+  sender) happens where the web lane builds its app; `reel_studio/settings.py` is the main lane's
+  file, so I did not add `GCS_BUCKET` / `EDITOR_JOB` there. Terraform sets those env names
+  provisionally (`infra/main/locals.tf` `common_env`).
+- **`pyproject.toml` (main lane):** `google-cloud-storage` ships no `py.typed`; a mypy override for
+  `google.cloud.storage.*` would replace the one local `# type: ignore[import-untyped]` in
+  `gcp_storage.py`. No new dependency was needed: Resend goes over REST with httpx, secrets with
+  `gcloud secrets versions add --data-file=-`.
+- **Where the deployer's `roles/iam.serviceAccountUser` lives.** ARCHITECTURE §5 says bootstrap; the
+  accounts are created in main (INFRA §2), so the grant is in `infra/main/iam.tf` with the same
+  scope. Alternative: create the accounts in bootstrap. Your call.
+- **First deploy may need a second dispatch** (IAM propagation after the actAs grant, 2-7 min).
 - **Create the `beta` environment before deploy.yml reaches main** (task 6): you as required
-  reviewer, deployment branches limited to main. GitHub auto-creates a missing environment without
-  protection, so the first dispatch would apply unreviewed. Today `gh api` shows 0 environments.
-- **First deploy may need a second dispatch.** The service, job and scheduler now wait for the
-  deployer's actAs grant in the plan graph, but IAM propagation takes about 2 and up to 7 minutes,
-  and the provider does not sleep after an IAM write. A permission-denied on the first run is
-  expected to heal on re-dispatch. Clean fix: create the three runtime accounts and the actAs grant in
-  bootstrap (ARCHITECTURE §5 wording), see the first item. Your call.
-- **Root `.gitignore`** could also carry `*.tfvars`, `tfplan.json`, `crash.log` (outside the lane);
-  `infra/.gitignore` now covers everything under `infra/`.
-- **A hook auto-commits every Write/Edit as `chore(auto): ...`.** It skipped files the hardcode hooks
-  flagged, leaving a half-committed tree. I squashed the 14+ auto-commits into logical commits
-  (local only, never pushed). Worth turning off for lane worktrees.
-- **Global hardcode hooks flag the Terraform constants files** (`infra/*/locals.tf`: API service names,
-  secret container names read as "SECRET"/"MODEL ID", GitHub's OIDC issuer, the F61 URL template).
-  These values already sit in the root's named-constant file; there is no suppression marker for
-  `gate-hardcode.sh`. Left as is; your call whether `.tf` locals files should be exempt.
+  reviewer, branches limited to main; a missing environment is auto-created without protection.
+- **Root `.gitignore`** could also carry `*.tfvars`, `tfplan.json`, `crash.log` (`infra/.gitignore`
+  covers `infra/`).
+- **Hooks:** the `chore(auto)` hook skips files other hooks flag, leaving half-committed trees (I
+  squash before every push); `gate-hardcode.sh` has no suppression marker and flags named constants
+  in `infra/*/locals.tf`, `core/constants.py` and the scripts' vendor base URLs.
+- **First run of `make dns` to watch:** Resend record names are qualified as `<name>.<domain>`
+  (F407); the `GET /api-keys` list shape is UNCONFIRMED (assumed like `/domains`).
 
-## What waits for STEP-01 (not on main yet)
-- `scripts/check_policy.py` + failing tests on bad fixtures in `tests/unit/infra/` (needs pytest and
-  `pyproject.toml`). It reads `infra/policy/explicit_args.toml`, `locations.toml` and `limits.toml`.
-- `mk/cloud.mk` targets (`bootstrap-plan`, `gcp-project`, `smoke`, `secrets-push`, `dns`,
-  `stripe-setup`) and wiring `terraform fmt/validate`, tflint, trivy and the policy check into `make ci`.
-- `scripts/ci-install.d/cloud.sh`: Terraform 1.16.5, tflint, Trivy at pinned versions.
-- Env names in `infra/main/locals.tf` `common_env`: `GCS_BUCKET` and `EDITOR_JOB` are provisional until
-  `reel_studio/settings.py` exists; the env contract test will reconcile them.
-- `deploy.yml` also needs `docker/api.Dockerfile` (web lane) and `docker/editor.Dockerfile` (engine lane),
-  the `beta` environment with you as reviewer (`gh api`, task 6), and `make smoke` (`scripts/smoke.py`).
+## What waits for a real project (STEP-08 tasks)
+- Task 2 `make gcp-project`, task 3 `make bootstrap-plan` then your apply and the state migration,
+  task 5 runs, task 6 `beta` environment and repository variables, task 7 runtime facts F30/F32/F34,
+  task 8 smoke and the phone order, task 9 budget check. The Gemini terms note for FACTS (task 5).
 
 ## Evidence lines (the gates read these)
 
 ## Log
+
+### 10 Oct 2026 — STEP-08 after STEP-01 merged (no cloud access)
+Before: phase A only. After (commits 41b3feb, 14b6ec8, 91da52e on top of the merge cd66765):
+- `scripts/check_policy.py` (python-hcl2): explicit arguments and `depends_on` edges, locations,
+  job memory/retries, no `service.uri`; 11 tests, each rule proven on a mutated copy of infra/.
+  On the real infra/: `policy: 0 violations`.
+- `make ci-cloud`: policy, `terraform fmt`, `validate` (both roots), `terraform test`, tflint
+  (google ruleset), trivy at HIGH,CRITICAL (a public bucket grant fails it, GCP-0001). Passes
+  locally with the pinned tools.
+- Adapters: Cloud Storage (origin-bound sessions, keyless V4 signed downloads, idempotent
+  delete), Cloud Run launcher (no retry: a second start pays Claude twice), Resend over REST with
+  idempotency keys and bounded backoff. `config/cloud.toml` + `load_cloud()` hold the tunables.
+- Scripts (not run): gcp-project, bootstrap-plan (reads the billing currency, F408), secrets-push,
+  stripe-setup (lookup-key price, single webhook), dns (Resend + Cloudflare + verify + sending
+  key), smoke (8 checks from the URL alone).
+- Doc ledger: 17 entries in `infra/doc-ledger.pending.json`, Context7 or vendor page each.
+- Not run: anything against Google Cloud, Stripe, Resend or Cloudflare (budget $0, no project).
 
 ### 9 Oct 2026 — STEP-08 phase A
 Before: no `infra/`, no deploy workflow. After:
