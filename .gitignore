@@ -5,6 +5,10 @@
 .lane
 .ci-pass
 .DS_Store
+# Written by the session hooks on every start
+.claude/state/
+# Kevin's user-level documentation gate; the project's record is docs/FACTS.md
+.claude/doc-ledger.json
 # Python
 __pycache__/
 .venv/
