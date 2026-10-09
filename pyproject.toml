@@ -20,7 +20,11 @@ reelctl = "reel_studio.cli.reelctl:main"
 editor = [
     "anthropic>=1.13.0",
     "google-genai>=2.29.0",
+    "numpy>=2.5.3",
+    "opencv-python-headless>=5.0.0.93",
     "pillow>=12.3.0",
+    "pillow-heif>=1.8.0",
+    "scenedetect-headless>=0.7.1",
 ]
 api = [
     "fastapi>=0.143.0",
@@ -80,3 +84,9 @@ strict = true
 files = ["reel_studio", "tests"]
 exclude = ['^\.claude/', '^scripts/check_literals\.py$', '^scripts/gates/']
 plugins = ["pydantic.mypy"]
+
+# PySceneDetect 0.7.1 ships neither stubs nor py.typed (checked with a scratch import under
+# make types); cv2, numpy and pillow_heif are typed.
+[[tool.mypy.overrides]]
+module = ["scenedetect", "scenedetect.*"]
+ignore_missing_imports = true

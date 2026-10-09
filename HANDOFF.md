@@ -42,6 +42,10 @@ Newest entry on top.
 - Choices: error keys other than `cost_cap` are named by us (EDITOR.md §10 names none); `make ci` also runs
   `gitleaks git` (ARCHITECTURE.md "gitleaks in pre-commit and CI"); pre-commit hooks are local so ruff has
   one version (uv.lock); `ci.yml` has no paths-ignore because the ruleset requires its check on every PR.
+- Dependencies for lane engine, declared here because lanes cannot edit pyproject.toml: `scenedetect-headless`,
+  `opencv-python-headless`, `numpy`, `pillow-heif` in `[editor]` (F84). `scenedetect` lost: it pulls the GUI
+  `opencv-python`, which needs libGL on the slim image (D72) and clobbers the headless `cv2`. mypy override for
+  `scenedetect` only (F85).
 - Follow-ups: lanes fill `ci-<lane>` and `scripts/ci-install.d/<lane>.sh`; port payload types settle with
   their first adapter (STEP-03, STEP-06); `.claude/doc-ledger.json` is kept for Kevin's user-level doc gate.
 
