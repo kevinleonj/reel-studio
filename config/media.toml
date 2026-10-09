@@ -15,6 +15,10 @@
 [tools]
 error_tail_lines = 15               # lines of ffmpeg stderr kept in an error; common.py:101
 probe_error_chars = 300             # ffprobe stderr kept in an error, characters; common.py:111
+# Not kit values: the kit set no timeout (common.py:99,106). A call may not outlive half the
+# 60-minute render job (D52); a probe or a filter list answers in seconds.
+run_timeout_s = 1800                # s, one ffmpeg run
+probe_timeout_s = 60                # s, one ffprobe or `ffmpeg -filters` call
 
 # ------------------------------------------------------------------ prepare: proxies (prep.py)
 [prepare]

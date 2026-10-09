@@ -12,6 +12,8 @@ from typing import Any
 
 import pytest
 
+from reel_studio.core import config
+from reel_studio.editor.media import tools as media_tools
 from tests.fixtures import make_clips
 
 PROBE_TIMEOUT_S = 60
@@ -55,3 +57,8 @@ def probe(tools: make_clips.Tools, path: Path) -> dict[str, Any]:  # Any: ffprob
     )
     data: dict[str, Any] = json.loads(done.stdout)
     return data
+
+
+@pytest.fixture(scope="session")
+def ffmpeg(tools: make_clips.Tools) -> media_tools.Ffmpeg:
+    return media_tools.Ffmpeg(tools.ffmpeg, tools.ffprobe, config.load_media().tools)

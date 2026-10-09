@@ -19,6 +19,8 @@ class _Strict(BaseModel):
 class Tools(_Strict):
     error_tail_lines: int
     probe_error_chars: int
+    run_timeout_s: int
+    probe_timeout_s: int
 
 
 class Tonemap(_Strict):
