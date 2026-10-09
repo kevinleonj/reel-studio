@@ -1,0 +1,146 @@
+# Deploy the beta (docs/INFRA.md §4, D60, D61). Manual trigger only; the apply job waits for Kevin's
+# approval on the `beta` environment and applies exactly the plan the plan job produced.
+# Repository variables (not secrets: none grants access on its own). From the bootstrap outputs:
+#   GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_DEPLOYER_SA, TF_STATE_BUCKET. Chosen by Kevin:
+#   GCP_PROJECT_ID, EMAIL_DOMAIN, MAIL_FROM, KEVIN_ALERT_EMAIL.
+# Actions are pinned by commit SHA to releases at least two weeks old (FACTS F78).
+name: deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  REGION: europe-west1 # D50
+  TERRAFORM_VERSION: 1.16.5 # D60, F36
+  UV_VERSION: 0.12.24 # F39
+  TF_IN_AUTOMATION: "1"
+  TF_INPUT: "0"
+  TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
+  TF_VAR_email_domain: ${{ vars.EMAIL_DOMAIN }}
+  TF_VAR_mail_from: ${{ vars.MAIL_FROM }}
+  TF_VAR_alert_email: ${{ vars.KEVIN_ALERT_EMAIL }}
+
+jobs:
+  plan:
+    # The Workload Identity provider only trusts refs/heads/main; fail fast anywhere else.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: infra/main
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build and push both images, tagged with the commit
+        working-directory: .
+        env:
+          PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          SHA: ${{ github.sha }}
+        run: |
+          registry="${REGION}-docker.pkg.dev/${PROJECT_ID}/reel"
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+          docker buildx build --platform linux/amd64 --file docker/api.Dockerfile \
+            --tag "${registry}/reel-api:${SHA}" --push .
+          docker buildx build --platform linux/amd64 --file docker/editor.Dockerfile \
+            --tag "${registry}/reel-editor:${SHA}" --push .
+          echo "TF_VAR_api_image=${registry}/reel-api:${SHA}" >> "$GITHUB_ENV"
+          echo "TF_VAR_editor_image=${registry}/reel-editor:${SHA}" >> "$GITHUB_ENV"
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform init
+        env:
+          STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: terraform init -lockfile=readonly -backend-config="bucket=${STATE_BUCKET}"
+
+      - name: Terraform plan
+        run: |
+          terraform plan -out tfplan
+          terraform show -json tfplan > tfplan.json
+
+      # The plan holds names and ids, never secret values (secrets are referenced, not read).
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tfplan
+          path: |
+            infra/main/tfplan
+            infra/main/tfplan.json
+          if-no-files-found: error
+          retention-days: 7
+
+  apply:
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: beta # Kevin is the required reviewer
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: infra/main
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+
+      # make smoke reads the live service and job with gcloud (docs/INFRA.md §4).
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: tfplan
+          path: infra/main
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform init
+        env:
+          STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: terraform init -lockfile=readonly -backend-config="bucket=${STATE_BUCKET}"
+
+      # Applies the saved plan: anything that changed since the plan makes the apply fail, not drift.
+      - name: Terraform apply
+        run: terraform apply tfplan
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Smoke test the live service
+        run: |
+          service_url="$(terraform output -raw service_url)"
+          make -C ../.. smoke URL="${service_url}"
