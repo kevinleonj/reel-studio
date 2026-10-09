@@ -24,11 +24,36 @@ Written by the web lane only. Newest entry on top.
 - `npm audit`: 7 high, one root (`braces` ReDoS via `micromatch`/`fast-glob` in the `shadcn` CLI tree, build-time only). Not triaged.
 - `scripts/check_literals.py` `WEB_HOMES` still exempts `web/src/lib/analytics.ts`, which no longer holds a URL (the tag URL arrives from `/api/config`); the scanner is protected.
 - `public/og.png` is a 1200×630 screenshot of the landing page; replace it with real artwork when there is some.
+- **The "ready" email cannot carry the order link.** Its button needs `/o/<id>#t=<token>`, but the token is stored only as its SHA-256 (D18), so the editor or the dispatcher cannot rebuild the link after checkout. Options: the ready email says "open the link from your first email"; or keep the token encrypted with a server key; or a short re-access flow. A decision on D18's edge; until then the fake editor sends no ready email (failure emails and Kevin's alert need no token and are sent).
+- **CI does not run the Firestore/Mailpit contract cases** (they skip without the emulators; `make test-emulator` runs them and now fails instead of skipping). Adding it to `make ci` means pulling the ~1 GB gcloud emulator image on every CI run (20-minute job limit); or the step06 gate could run `make test-emulator`. Your call; the gate is protected.
+- **For the composition root (after the settings fields):** run uvicorn with `access_log=False` (its access log prints path and query: signed-link `sig=` and Stripe's `?t=`); behind Cloud Run use `--proxy-headers` with a trusted-hosts list so rate limits see the client, not the front end; give the dispatcher a restart policy in compose. Tunables still without a home: dispatcher poll seconds, Firestore `timeout_s`/`max_attempts`, SMTP `timeout_s` (this lane can add them to `config/limits.toml` with the composition root).
 - Kevin's global hook commits every edit as `chore(auto)`; the branch was rebuilt into logical commits on top of `origin/main` before the push (TONIGHT.md rule).
 
 ## Evidence lines (the gates read these)
 
 ## Log
+
+### 10 Oct 2026 (night) — phase B senior review: FAIL (1 critical, 10 warnings), fixed
+
+- C1 the laptop's partial upload belonged to the file name: a re-chosen file could interleave, be
+  dropped or grow. Now each session keeps its own partial (truncated to the recorded offset before
+  every write), the finished file replaces any older one (last wins, as in Cloud Storage), a batch may
+  not name a file twice. Contract case "same name twice" plus three protocol regression cases.
+- W1 a mail server that is down no longer turns a created order into a 500 (typed `DeliveryFailed`;
+  logged); emails are shape-checked (no CR/LF) before any order exists. W2 a failing dispatcher tick is
+  logged and retried; any launch error fails the order and frees the slot. W3 no unauthenticated 500s
+  (non-ASCII signature, wrongly typed settings, NUL in paths). W4 a second Start answers 200. W5 Start
+  re-checks file count and bytes on what arrived. W6 a failed delete propagates and can be retried; the
+  status never says "deleted" while files remain. W7 `expires_at` for the Firestore TTL; one email per
+  outcome (`claim_email`); failure emails to the customer and Kevin from the sweep and launch failures
+  (`reel_studio/api/notify.py`, words from `en.json`). W8 tests for every signed field, a raw `..`
+  path, request-log hygiene, first-come FIFO, every guard, a wrong token on every order route. W9 a late
+  pause pauses the service on both adapters; emulator cases fail instead of skipping under
+  `make test-emulator`. W10 a chunked body is counted as it streams.
+- Suggestions taken: `fullmatch` for order ids, HEAD on the site, typed rate-limiter deque, the cap
+  refreshed mid-week, expected refusals logged at INFO, `limits_from(config)` with a test. Not taken: S4
+  (enforcing 256 KiB multiples on the laptop: the client already enforces it, F307), S8 (re-measure
+  Lighthouse through the API once it serves `dist/`).
 
 ### 10 Oct 2026 (night) — STEP-06 phase B: ports, API, fake editor, CI wiring
 
