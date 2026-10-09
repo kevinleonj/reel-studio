@@ -32,7 +32,7 @@ resource "google_billing_budget" "monthly" {
 
   # No all_updates_rule block: provider 8.6.0 requires a Pub/Sub topic or a monitoring channel inside
   # it (terraform validate), and without it the budget emails the billing account's administrators
-  # and users, which is what docs/INFRA.md §2 asks for (FACTS F77).
+  # and users, which is what docs/INFRA.md §2 asks for (FACTS F401).
 
   depends_on = [google_project_service.bootstrap]
 }

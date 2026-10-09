@@ -1,6 +1,6 @@
 # Arguments that must be written out in infra/, even when they equal the provider default.
 # Source: docs/INFRA.md §2 (resource table and "Bootstrap root extras"), provider hashicorp/google 8.6.0
-# (argument names checked against `terraform providers schema -json`, FACTS F76).
+# (argument names checked against `terraform providers schema -json`, FACTS F400).
 # scripts/check_policy.py reads this file: every resource of a listed type must set every listed
 # argument. A dotted name is a nested block path (block.argument); a bare block name means the block
 # must be present.

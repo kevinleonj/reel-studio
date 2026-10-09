@@ -22,9 +22,9 @@ Written by the cloud lane only. Newest entry on top.
   you prefer the accounts created in bootstrap instead, say so and I move both.
 - **Upgrade Terraform on the Mac to 1.16.5** (`brew upgrade terraform`; Homebrew has 1.16.1). Both
   roots pin `required_version = "= 1.16.5"` (D60). This session used a checksum-verified 1.16.5 in the
-  session scratchpad (F79).
+  session scratchpad (F403).
 - **Bootstrap variables you choose at plan time** (no defaults): `project_id`, `billing_account`,
-  `budget_currency_code` (your billing account's currency, F77), `github_repository_id`,
+  `budget_currency_code` (your billing account's currency, F401), `github_repository_id`,
   `github_repository_owner_id`. **Main root**, as GitHub repository variables: `GCP_PROJECT_ID`,
   `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_DEPLOYER_SA`, `TF_STATE_BUCKET` (bootstrap outputs),
   `EMAIL_DOMAIN`, `MAIL_FROM`, `KEVIN_ALERT_EMAIL`.
@@ -75,9 +75,9 @@ Before: no `infra/`, no deploy workflow. After:
 - Lock files carry darwin_arm64 and linux_amd64 hashes.
 - `deploy.yml`: manual trigger, `concurrency: deploy` with `cancel-in-progress: false`, plan job
   (WIF, both images for linux/amd64 tagged with the SHA, plan + JSON artifact, 20 min), apply job
-  (`environment: beta`, applies the saved plan, `make smoke`, 15 min). Actions pinned by SHA (F78).
-- Argument names and defaults from the provider schema dump and Context7 (F76); `validate` caught
-  `all_updates_rule` needing a channel, so the budget relies on default recipients (F77).
+  (`environment: beta`, applies the saved plan, `make smoke`, 15 min). Actions pinned by SHA (F402).
+- Argument names and defaults from the provider schema dump and Context7 (F400); `validate` caught
+  `all_updates_rule` needing a channel, so the budget relies on default recipients (F401).
 - Optional arguments left at provider defaults on purpose: probe timings, `rpo`, `requester_pays`,
   `enable_object_retention`, Firestore index `density`/`multikey`, Cloud Run `execution_environment`,
   service-level `scaling` (revision-level `template.scaling` carries min 0 / max 2), resource-manager
@@ -88,7 +88,7 @@ Before: no `infra/`, no deploy workflow. After:
   because Google documents ten minutes or more to enable TTL and the apply job has 15. Warnings fixed:
   tfvars comment, `credit_types_treatment = "INCLUDE_ALL_CREDITS"` written, env-secret timing
   comment, deploy.yml variable comment. Round 2 pending at the time of commit.
-- Review follow-ups (not done): confirm the three UNCONFIRMED rows in `locations.toml` and the F77
+- Review follow-ups (not done): confirm the three UNCONFIRMED rows in `locations.toml` and the F401
   currency rule in FACTS (the reviewer read all four pages as confirming); FACTS rows for GitHub OIDC
   claims, Scheduler OIDC, env-secret timing and TTL duration; pin secret versions for reel-api;
   `terraform test` with mock_provider as the failing-test artifact (IAM matrix, F61 URL, job limits);

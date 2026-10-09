@@ -3,7 +3,7 @@
 # Repository variables (not secrets: none grants access on its own). From the bootstrap outputs:
 #   GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_DEPLOYER_SA, TF_STATE_BUCKET. Chosen by Kevin:
 #   GCP_PROJECT_ID, EMAIL_DOMAIN, MAIL_FROM, KEVIN_ALERT_EMAIL.
-# Actions are pinned by commit SHA to releases at least two weeks old (FACTS F78).
+# Actions are pinned by commit SHA to releases at least two weeks old (FACTS F402).
 name: deploy
 
 on:
