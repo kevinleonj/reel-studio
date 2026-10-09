@@ -184,6 +184,40 @@ def make(folder: Path, tools: Tools) -> list[Path]:
     return [folder / name for name in NAMES]
 
 
+def make_sdr_twin(dst: Path, tools: Tools) -> Path:
+    """The HDR clip's test pattern encoded SDR BT.709, same rotation: the luma reference
+    Kevin chose on 9 Oct 2026 for the tonemap test (docs/handoff/engine.md)."""
+    tmp = dst.with_name("sdr_tmp.mov")
+    _run(
+        tools,
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=s=1920x1080:r=30:d=4",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=f=440:d=4",
+        "-c:v",
+        "libx264",
+        *FAST,
+        "-pix_fmt",
+        "yuv420p",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+        "-colorspace",
+        "bt709",
+        "-c:a",
+        "aac",
+        str(tmp),
+    )
+    _run(tools, "-display_rotation:v:0", "90", "-i", str(tmp), "-c", "copy", str(dst))
+    tmp.unlink()
+    return dst
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 1:
         sys.stderr.write("usage: make_clips.py <folder>\n")

@@ -61,3 +61,4 @@ SSIM_K1 = 0.01  # Wang et al. (2004) SSIM stabiliser K1 (kit qa.py:45)
 SSIM_K2 = 0.03  # Wang et al. (2004) SSIM stabiliser K2 (kit qa.py:45)
 MS_PER_S = 1000  # milliseconds per second
 BYTES_PER_MB = 1_000_000  # decimal megabytes, as the kit reports file sizes (kit qa.py:109-110)
+SECONDS_DECIMALS = 3  # durations rounded to whole milliseconds (kit prep.py:271)
