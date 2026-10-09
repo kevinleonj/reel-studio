@@ -69,8 +69,11 @@ temp folder; `--out` inside the input folder is refused (D02).
 Phase B review (FAIL: 2 critical, 12 warnings) and what changed: C1 image test could not pass in CI →
 fixed (06caee0); C2 `--out` inside the input folder overwrote a user file → refused, tested
 (7665d1c); W1-W5, W9, W11, W12, S1, S3-S6 fixed with tests (7665d1c, c31d62f, 06caee0); W6 gaps
-pinned by new tests; W7 → Needs Kevin 14; W8 → Needs Kevin 13; W10 → F206; S2 (outputs not atomic),
-S7 (codec names inline), S8 (small drifts) left as follow-ups.
+partly pinned by new tests; W7 → Needs Kevin 14; W8 → Needs Kevin 13; W10 → F206; S2 (outputs not
+atomic), S7 (codec names inline), S8 (small drifts) left as follow-ups. Re-review: PASS, plus W-A
+(`--out` guard missed `out/work` and case-variant paths), W-B (its test was vacuous after precheck) and
+W-C (a wrong FFPROBE_PATH read as no usable input), all fixed with tests in e10484c. Still unpinned
+by tests: dead-air and blur warnings, the size and black-frame hard checks failing (review S-A).
 
 Port map as built (plan B rows → modules): tools.py (common.py), prepare.py, colour.py + measure.py
 (prep.py measure, grade.py stats), sheets.py (new, D38), strip.py, grade.py, textcards.py,
