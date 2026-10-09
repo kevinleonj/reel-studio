@@ -1,0 +1,3 @@
+Order {{ order_id }} is {{ status }} at {{ stage }} ({{ code }}).
+
+Order id for reelctl: {{ order_id }}

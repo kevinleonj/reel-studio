@@ -1,0 +1,9 @@
+"{{ hook }}"
+
+Watch and download:
+{{ order_url }}
+
+Files are deleted after {{ out_days }} days.
+Edited by AI (Claude). Check it before posting.
+
+Reel Studio

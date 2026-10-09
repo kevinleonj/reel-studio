@@ -1,0 +1,7 @@
+{% extends "email/_layout.html" %}
+{% block title %}Your Reel didn't finish{% endblock %}
+{% block body %}
+<p>{{ message }}</p>
+<p>Your code still works.</p>
+{% with href = start_url, label = "Start again" %}{% include "email/_button.html" %}{% endwith %}
+{% endblock %}

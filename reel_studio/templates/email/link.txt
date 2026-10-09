@@ -1,0 +1,7 @@
+Upload your clips:
+{{ order_url }}
+
+Up to {{ max_files }} files, {{ max_total }}.
+Keep this email: the link is your access.
+
+Reel Studio
