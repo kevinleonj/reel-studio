@@ -12,7 +12,8 @@ Three ways to run it, one code base:
 
 ## Quick start
 
-Requires [uv](https://docs.astral.sh/uv/) 0.12 or later, Python 3.13 (uv installs it) and GNU make.
+Requires [uv](https://docs.astral.sh/uv/) 0.12 or later, Python 3.13 (uv installs it), GNU make and
+[gitleaks](https://github.com/gitleaks/gitleaks) 8.30 or later (`brew install gitleaks`).
 
 ```bash
 git clone https://github.com/kevinleonj/reel-studio.git

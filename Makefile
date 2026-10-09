@@ -6,8 +6,9 @@
 UV := uv run --locked
 PY313 := uv run --quiet --no-project --python 3.13 python
 FAST := not paid and not slow and not race and not e2e and not emulator
+GITLEAKS_TIMEOUT_S := 300
 
-.PHONY: help setup test-fast test lint types guardrails ci
+.PHONY: help sync setup test-fast test lint types guardrails ci
 
 help:
 	@echo "make setup      install dependencies and pre-commit, create .env from .env.example"
@@ -17,8 +18,11 @@ help:
 	@echo "make types      mypy (strict)"
 	@echo "make ci         everything CI runs; stamps .ci-pass on a clean tree"
 
-setup:
+# Every extra, so ruff, mypy and pytest come from uv.lock and never from a global install.
+sync:
 	uv sync --locked --all-extras
+
+setup: sync
 	$(UV) pre-commit install
 	@test -f .env || cp .env.example .env
 
@@ -41,9 +45,10 @@ guardrails:
 	python3 .claude/hooks/selfcheck.py
 	$(PY313) scripts/check_literals.py
 	python3 scripts/gates/_gate.py --self-test
-	gitleaks git --redact --no-banner --timeout 300 .
+	@command -v gitleaks >/dev/null || { echo "gitleaks not found: brew install gitleaks (README)"; exit 1; }
+	gitleaks git --redact --no-banner --timeout $(GITLEAKS_TIMEOUT_S) .
 
-ci: lint types test guardrails ci-engine ci-web ci-cloud
+ci: sync lint types test guardrails ci-engine ci-web ci-cloud
 	python3 scripts/ci_stamp.py
 
 # Each lane fills its own ci-<lane> target (docs/build/README.md).
