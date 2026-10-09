@@ -31,6 +31,14 @@ to `EditorSettings`; 9. STEP-01 merged (6089989). Open:
 12. **Review verdict file.** The phase A reviewer could not write the review verdict file under the
     protected `.claude/` folder (lane guard: it belongs to main). Before code reviews feed the Stop gate,
     add it and the doc ledger to `shared.paths` in the lanes file (protected).
+13. **Style photos are matched by substring (kit `grade.py:33`, kept per D46).** Any image whose name
+    contains `vsco`, `look` or `ref` is treated as a colour reference and left out of the Reel, so
+    `refried_beans.jpg` or `outlook.jpeg` silently disappear (the phase B review reproduced it). Each
+    such file is now logged. Whole-word matching would change kit behaviour: your call.
+14. **CI time.** The full suite runs four prepare passes and two full renders, plus the image build and
+    an in-container render, inside the protected workflow's 20-minute job. Locally: 2 min wall,
+    about 11 CPU-minutes. If the first CI run comes close to 20 minutes, the workflow timeout (protected)
+    or a shared render fixture is the lever.
 Plan notes kept from the answered items: fonts (Poppins-Bold.ttf + OFL.txt) ship as package data
 under `reel_studio/editor/media/fonts/`, no host-font fallbacks. Sheets failing case:
 `test_sheet_is_1536x864_with_16_tiles` fails against a port of kit `build_sheets` (`prep.py:167-221`,
@@ -42,11 +50,27 @@ under `reel_studio/editor/media/fonts/`, no host-font fallbacks. Sheets failing 
 
 ### 2026-10-10 — STEP-02 phase B: the media package, `reel render`, the editor image
 
-Before: config and plan only. After: `reel_studio/editor/media/` (19 modules, all under 300 lines),
-`reel render`, synthetic fixtures, `docker/editor.Dockerfile`, CI ffmpeg, FACTS F200-F205. One commit
-per module, each with its failing test seen first. Kit algorithms kept (D46) except where a locked
-decision or Kevin's answer said otherwise: D38 sheets, the 5e-3 identity tolerance, review sheets
-capped at F08's 2000 px (the critic reads them), originals staged one at a time.
+Before: config and plan only. After: `reel_studio/editor/media/` (20 modules, each under 300 lines;
+`core/media_config.py`, a 400-line list of config fields, is the one file over), `reel render`,
+synthetic fixtures, `docker/editor.Dockerfile`, CI's zscale check, FACTS F200-F206. One commit per
+module. Each module's test was written and run before the module existed and failed at import or
+collection; those runs are in this session's transcript, not in the commits (the review rightly
+found no failing run recorded in history).
+
+Kit behaviour kept (D46; ffmpeg arguments byte-identical and grade maths within 2.7e-6, measured by
+the review against transcribed kit functions) except: D38 sheets (new code); the 5e-3 identity
+tolerance; review sheets capped at F08's 2000 px (the critic reads them); originals staged one at a
+time; unknown EDL fields, blank labels and positions other than top/center/low are errors; `null`
+audio, defaults or versions are rejected; zero speed is an error instead of a crash; a v1 EDL must
+list every unused clip in `dropped`; a QA run that measures no loudness fails instead of passing;
+a decompression-bomb photo is skipped like any unreadable file; render intermediates live in a system
+temp folder; `--out` inside the input folder is refused (D02).
+
+Phase B review (FAIL: 2 critical, 12 warnings) and what changed: C1 image test could not pass in CI →
+fixed (06caee0); C2 `--out` inside the input folder overwrote a user file → refused, tested
+(7665d1c); W1-W5, W9, W11, W12, S1, S3-S6 fixed with tests (7665d1c, c31d62f, 06caee0); W6 gaps
+pinned by new tests; W7 → Needs Kevin 14; W8 → Needs Kevin 13; W10 → F206; S2 (outputs not atomic),
+S7 (codec names inline), S8 (small drifts) left as follow-ups.
 
 Port map as built (plan B rows → modules): tools.py (common.py), prepare.py, colour.py + measure.py
 (prep.py measure, grade.py stats), sheets.py (new, D38), strip.py, grade.py, textcards.py,
@@ -59,7 +83,7 @@ has a 1800 s timeout (`media.toml [tools]`, not a kit value); `--out` defaults b
 folder; fixture files get fixed file times so clip ids never depend on encode speed; `media.toml`
 loads through its own `config.load_media()`, so main's `Config` shape is unchanged.
 
-Follow-ups: Needs Kevin 10-12; image size and build time from CI; `reel make` (STEP-03) reuses
+Follow-ups: Needs Kevin 10-14; image size and build time from CI; review S2/S7/S8; `reel make` (STEP-03) reuses
 `pipeline.build_shots`, `edl.validate`, `render.render` and `qa.run` unchanged.
 
 ### 2026-10-09 — STEP-02 phase A: inventory and port plan (no package code)
