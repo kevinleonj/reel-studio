@@ -1,0 +1,76 @@
+# Locked values (docs/DECISIONS.md v1). Code reads these; a test fails if code hard-codes them.
+# Change only with Kevin; cite the decision or fact on the same line.
+
+[order]
+max_files = 40                      # D09
+max_total_bytes = 4_000_000_000     # D09, 4 GB
+max_file_minutes = 20               # D10 (Gemini timestamps cap audio at 30 min, F37)
+lengths_s = [15, 30, 60, 90]        # D11
+default_length_s = 30               # D11
+note_max_chars = 200                # D15
+allowed_types = ["video/mp4", "video/quicktime", "image/jpeg", "image/png"]  # A6: iPhone photos arrive as JPEG, prove in STEP-06
+
+[limits]
+weekly_reels = 50                   # D55
+running_max = 2                     # D55
+lease_minutes = 70                  # job timeout 60 + 10 (D52)
+checkout_expiry_minutes = 31        # D58, one above Stripe's 30-minute minimum (F20)
+sweep_minutes = 10                  # D55
+missed_expiry_check_minutes = 36    # checkout expiry + 5
+paid_not_started_days = 7           # D25
+poll_seconds = 5                    # D16
+checkout_per_minute_per_address = 10
+order_calls_per_minute_per_address = 120
+
+[retention]
+in_days = 7                         # docs/ARCHITECTURE.md §4
+work_days = 7
+out_days = 30
+order_days = 30
+
+[editor]
+model = "claude-sonnet-5-5"         # D32, F04
+critic_model = "claude-sonnet-5-5"  # D32
+cheap_model = "claude-haiku-5-5"    # D32, plumbing tests and D39 only
+effort = "high"                     # D33
+max_tokens = 16000                  # per call; sets the worst case in the cost guard
+max_tokens_retry = 32000            # one retry when a reply is cut off (docs/EDITOR.md §3)
+max_turns = 30
+max_renders = 2                     # D36
+cost_cap_usd = 5.0                  # D37
+max_strips = 12
+max_grade_previews = 2
+strip_max_seconds = 6
+haiku_drop = false                  # D39
+sdk_max_retries = 0                 # SDK retries off; our wrapper retries transient errors only (D45)
+transient_retries = 2
+
+[sheets]
+tile_w = 384                        # D38
+tile_h = 216
+cols = 4
+rows = 4
+frames_per_clip_min = 2
+frames_per_clip_max = 6
+max_image_side_px = 2000            # F08
+
+[gates]
+hook_min = 4                        # D36
+category_min = 3                    # "no category <= 2"
+total_min = 26
+
+[speech]
+model = "gemini-3.5-transcribe"     # D40, F37
+clean_gap_ms = 400                  # D41, F59
+visual_check_gap_ms = 150
+pad_ms_min = 30
+pad_ms_max = 200
+fade_ms = 30
+
+[codes]
+max_redemptions = 20                # a ceiling against a leaked code, not a quota (D55)
+
+[upload]
+chunk_mib = 8                       # multiple of 256 KiB
+parallel_files = 2
+chunk_retries = 5

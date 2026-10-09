@@ -1,0 +1,29 @@
+# Secrets and local state
+.env
+.env.*
+!.env.example
+.lane
+.ci-pass
+.DS_Store
+# Python
+__pycache__/
+.venv/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+# Web
+node_modules/
+web/dist/
+web/.astro/
+# Media and runs (never in git)
+out/
+data/
+runs/
+*.mp4
+*.mov
+*.MOV
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+tfplan

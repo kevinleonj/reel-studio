@@ -1,0 +1,43 @@
+# Five styles, forced choice, text only (D08). Voice default per style (D14).
+
+[styles.montage]
+label = "Quick clips, no talking"
+description = "Many short shots. We pick the best moments and cut a fast montage."
+skill = "montage"
+structure = "showcase"
+voice_default = false
+
+[styles.recipe]
+label = "Recipe"
+description = "From ingredients to the finished dish, step by step."
+skill = "montage"
+structure = "recipe"
+voice_default = false
+
+[styles.long_take]
+label = "One long video"
+description = "One continuous take. We cut the slow parts and keep the story."
+skill = "story_trim"
+structure = "story"
+voice_default = true
+
+[styles.talking]
+label = "Someone talking"
+description = "Clips of a person speaking to camera. We keep the best take of each line."
+skill = "talking"
+structure = "talk"
+voice_default = true
+
+[styles.tutorial]
+label = "Tutorial"
+description = "Someone shows and explains how to do something."
+skill = "talking"
+structure = "tutorial"
+voice_default = true
+
+[chips]                              # D15
+items = ["Start with the finished dish", "Calm pace", "Fast pace", "Show every step", "No text over faces", "End on the first bite"]
+exclusive = [["Calm pace", "Fast pace"]]
+
+[text_languages]                     # D07
+items = [{ code = "en", label = "English" }, { code = "es", label = "Spanish" }]

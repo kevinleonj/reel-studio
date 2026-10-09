@@ -1,0 +1,31 @@
+# USD. Claude prices per million tokens. Every table cites its fact in docs/FACTS.md.
+
+[claude.claude-sonnet-5-5]
+fact = "F05"
+input = 2.00
+cache_write_5m = 2.50
+cache_read = 0.10
+output = 10.00
+
+[claude.claude-haiku-5-5]
+fact = "F05"
+input = 0.10
+cache_write_5m = 0.125
+cache_read = 0.01
+output = 0.50
+long_prompt_threshold_tokens = 100000
+long_input = 0.50
+long_cache_write_5m = 0.625
+long_cache_read = 0.05
+long_output = 2.50
+
+[gemini."gemini-3.5-transcribe"]
+fact = "F37"
+usd_per_audio_minute = 0.005
+
+[google_cloud.run_jobs_tier1]
+fact = "F49"
+usd_per_vcpu_second = 0.000018
+usd_per_gib_second = 0.000002
+free_vcpu_seconds_per_month = 240000
+free_gib_seconds_per_month = 450000

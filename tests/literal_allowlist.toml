@@ -1,0 +1,15 @@
+# Exceptions for scripts/check_literals.py: values that may stay outside their home.
+#
+# - Every entry needs a `reason` of at least 10 characters saying why the value cannot live in
+#   its home; cite the FACTS or decision id when there is one. An entry without one stops the scan.
+# - Kevin approves every entry. Propose it in the pull request; never add one just to turn a red
+#   scan green.
+# - An entry silences every match of that exact path + rule + value. An entry that matches nothing
+#   in a full scan is reported as STALE and fails the scan, so delete it when the code moves on.
+# - Copy `value` from the quoted part of the scanner's output: the literal as written in the source.
+#
+# [[allow]]
+# path = "reel_studio/editor/media/render.py"
+# rule = "R1"
+# value = "48000"          # the literal as written in the source
+# reason = "AAC sample rate required by Instagram, see FACTS F45"

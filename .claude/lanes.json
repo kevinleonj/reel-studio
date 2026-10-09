@@ -1,0 +1,74 @@
+{
+  "_comment": [
+    "Paths each lane may edit. A worktree's lane is the word in its untracked .lane file.",
+    "No .lane file = lane \"main\" = every path (still subject to the other protections).",
+    "Matching: a path is owned when its repo-relative POSIX path starts with one of the prefixes.",
+    "Comparison ignores case, as the default macOS file system does. Keys starting with _ are ignored."
+  ],
+  "shared": {
+    "paths": [
+      "docs/FACTS.md",
+      "docs/LESSONS.md",
+      "config/",
+      "reel_studio/core/",
+      "tests/fakes/",
+      "tests/conftest.py",
+      ".env.example"
+    ]
+  },
+  "lanes": {
+    "engine": {
+      "paths": [
+        "reel_studio/editor/",
+        "reel_studio/adapters/claude",
+        "reel_studio/adapters/transcriber",
+        "reel_studio/cli/reel.py",
+        "tests/unit/editor/",
+        "tests/integration/editor/",
+        "tests/fixtures/",
+        "eval/",
+        "docker/editor.Dockerfile",
+        "mk/engine.mk",
+        "scripts/ci-install.d/engine.sh",
+        "docs/handoff/engine.md"
+      ]
+    },
+    "web": {
+      "paths": [
+        "reel_studio/api/",
+        "reel_studio/adapters/storage",
+        "reel_studio/adapters/orders",
+        "reel_studio/adapters/launcher",
+        "reel_studio/adapters/mailer",
+        "reel_studio/adapters/payments",
+        "reel_studio/cli/reelctl.py",
+        "reel_studio/templates/",
+        "web/",
+        "tests/unit/api/",
+        "tests/integration/api/",
+        "tests/contract/",
+        "tests/e2e/",
+        "docker/api.Dockerfile",
+        "compose.yaml",
+        "mk/web.mk",
+        "scripts/ci-install.d/web.sh",
+        "docs/handoff/web.md"
+      ]
+    },
+    "cloud": {
+      "paths": [
+        "infra/",
+        "scripts/check_policy.py",
+        "scripts/smoke.py",
+        ".github/workflows/deploy.yml",
+        "tests/unit/infra/",
+        "mk/cloud.mk",
+        "scripts/ci-install.d/cloud.sh",
+        "docs/handoff/cloud.md",
+        "scripts/cloud/",
+        "reel_studio/adapters/gcp_",
+        "reel_studio/adapters/resend"
+      ]
+    }
+  }
+}
