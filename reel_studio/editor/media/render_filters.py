@@ -7,8 +7,7 @@ from pydantic import BaseModel
 from reel_studio.core import constants
 from reel_studio.core.media_config import Media
 from reel_studio.core.media_config import Segment as SegmentConfig
-from reel_studio.editor.media.edl import Resolved, seg_dur
-from reel_studio.editor.media.edl_models import GradeBlock, Version
+from reel_studio.editor.media.edl_models import GradeBlock, Resolved, Version, seg_dur
 from reel_studio.editor.media.shots import Clip
 
 

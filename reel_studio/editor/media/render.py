@@ -16,8 +16,7 @@ from reel_studio.core.errors import RenderError
 from reel_studio.core.logging import get_logger
 from reel_studio.core.media_config import Media
 from reel_studio.editor.media import grade, textcards
-from reel_studio.editor.media.edl import resolve, speed_of
-from reel_studio.editor.media.edl_models import Edl
+from reel_studio.editor.media.edl_models import Edl, resolve, speed_of
 from reel_studio.editor.media.render_filters import (
     TextEvent,
     atempo_chain,

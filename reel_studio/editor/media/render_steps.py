@@ -6,8 +6,7 @@ from pathlib import Path
 
 from reel_studio.core import constants
 from reel_studio.core.media_config import Media
-from reel_studio.editor.media.edl import resolve, seg_dur, speed_of
-from reel_studio.editor.media.edl_models import Edl, Segment
+from reel_studio.editor.media.edl_models import Edl, Segment, resolve, seg_dur, speed_of
 from reel_studio.editor.media.render_filters import (
     TextEvent,
     atempo_chain,

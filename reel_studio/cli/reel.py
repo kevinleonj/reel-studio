@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from reel_studio.core import config
-from reel_studio.core.errors import ReelError
+from reel_studio.core.errors import NoUsableInput, ReelError
 from reel_studio.core.logging import configure, get_logger
 from reel_studio.editor.media import edl, pipeline, qa, render
 from reel_studio.editor.media.tools import Ffmpeg
@@ -40,8 +40,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def default_out(folder: Path) -> Path:
-    """Beside the input folder, never inside it (D02)."""
-    return folder.with_name(f"{folder.name}-reel")
+    """Beside the input folder, never inside it (D02); `.` is named after the real folder."""
+    real = folder.resolve()
+    return real.with_name(f"{real.name}-reel")
+
+
+def _overlaps(folder: Path, out: Path) -> bool:
+    """True when writing to `out` (or its work/ folder) would write inside `folder` (D02)."""
+    return out == folder or folder in out.parents
 
 
 def _bad(message: str) -> int:
@@ -49,16 +55,27 @@ def _bad(message: str) -> int:
     return BAD_INPUT
 
 
+def _edl_errors(errors: list[str]) -> int:
+    for error in errors:
+        log.error("EDL: %s", error, extra={"stage": STAGE, "event": "edl_error"})
+    return BAD_INPUT
+
+
 def render_command(args: argparse.Namespace, settings: EditorSettings) -> int:
-    folder: Path = args.folder
+    folder: Path = args.folder.resolve()
     if not folder.is_dir():
         return _bad(f"input folder not found: {folder}")
+    out: Path = (args.out if args.out is not None else default_out(folder)).resolve()
+    if _overlaps(folder, out):
+        return _bad(f"--out {out} is inside the input folder; the folder is only read (D02)")
     try:
         raw = json.loads(args.edl.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError) as exc:  # ValueError: bad JSON or not UTF-8
         return _bad(f"edit list unreadable: {exc}")
-    out: Path = args.out if args.out is not None else default_out(folder)
     media, limits = config.load_media(), config.load().limits.sheets
+    early = edl.precheck(raw, media)  # before minutes of ffmpeg work
+    if early:
+        return _edl_errors(early)
     ffmpeg = Ffmpeg(settings.ffmpeg_path, settings.ffprobe_path, media.tools)
     work = out / WORK
     shots = pipeline.build_shots(folder, work, ffmpeg, media, limits)
@@ -66,9 +83,7 @@ def render_command(args: argparse.Namespace, settings: EditorSettings) -> int:
     for warning in report.warnings:
         log.warning("EDL: %s", warning, extra={"stage": STAGE, "event": "edl_warning"})
     if report.errors or report.edl is None:
-        for error in report.errors:
-            log.error("EDL: %s", error, extra={"stage": STAGE, "event": "edl_error"})
-        return BAD_INPUT
+        return _edl_errors(report.errors)
     job = render.Job(work=work, input_dir=folder, out_dir=out, ffmpeg=ffmpeg, media=media)
     timeline = render.render(job, shots, report.edl)
     result = qa.run(job, timeline, limits.max_image_side_px)
@@ -92,6 +107,9 @@ def main(argv: Sequence[str] | None = None, settings: EditorSettings | None = No
     configure()
     try:
         return render_command(args, settings if settings is not None else EditorSettings())
+    except NoUsableInput as exc:  # nothing in the folder could be read: the input is the problem
+        log.error("%s", exc, extra={"stage": STAGE, "event": "failed", "outcome": exc.code})
+        return BAD_INPUT
     except ReelError as exc:
         log.exception(
             "%s", type(exc).__name__, extra={"stage": STAGE, "event": "failed", "outcome": exc.code}

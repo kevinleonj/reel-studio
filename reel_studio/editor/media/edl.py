@@ -19,9 +19,11 @@ from reel_studio.editor.media.edl_models import (
     ROTATIONS,
     STILL_OK,
     Edl,
-    Framing,
     Segment,
     Version,
+    resolve,
+    seg_dur,
+    speed_of,
 )
 from reel_studio.editor.media.grade import LOOKS
 from reel_studio.editor.media.shots import Clip, Shots
@@ -35,45 +37,6 @@ class Report:
     edl: Edl | None
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class Resolved:
-    """A segment's framing after `defaults` and media.toml fill the gaps (kit render.py:42-43)."""
-
-    zoom: float
-    focus_x: float
-    focus_y: float
-    rotate: int
-    fit: str
-
-
-def resolve(seg: Segment, defaults: Framing, media: Media) -> Resolved:
-    d = media.edl.defaults
-
-    def pick(name: str, fallback: Any) -> Any:  # Any: one of the Framing field types
-        own = getattr(seg, name)
-        if own is not None:
-            return own
-        inherited = getattr(defaults, name)
-        return inherited if inherited is not None else fallback
-
-    return Resolved(
-        pick("zoom", d.zoom),
-        pick("focus_x", d.focus),
-        pick("focus_y", d.focus),
-        pick("rotate", 0),
-        pick("fit", "crop"),
-    )
-
-
-def speed_of(seg: Segment, media: Media) -> float:
-    return seg.speed if seg.speed is not None else media.edl.defaults.speed
-
-
-def seg_dur(seg: Segment, media: Media) -> float:
-    """On-screen seconds: (out - in) / speed (kit render.py:46-47)."""
-    return (seg.out - seg.in_) / speed_of(seg, media)
 
 
 def parse(raw: Any) -> Edl | list[str]:  # Any: JSON as written by Claude or a person
@@ -103,7 +66,7 @@ class _Checker:
             self.err(f"format {edl.format!r} not one of {sorted(cfg.format_target_s)}")
         if edl.text_style not in STYLES:
             self.err(f"text_style must be one of {sorted(STYLES)}")
-        if edl.audio.music is not None:
+        if edl.audio.music:  # truthiness, as the kit (render.py:62): `false` is no music
             self.err("music is not supported: music is chosen inside Instagram. Remove audio.music")
         self.grade()
         if len(edl.versions) != 1:
@@ -181,6 +144,8 @@ class _Checker:
             self.err(f"{tag}: fit must be crop or blur")
         if frame.rotate not in ROTATIONS:
             self.err(f"{tag}: rotate must be 0 or 180")
+        if seg.text is not None and not seg.text.strip():
+            self.err(f"{tag}: label is blank")
         if seg.text and len(seg.text) > cfg.label_max_chars:
             self.err(f"{tag}: label over {cfg.label_max_chars} characters")
 
@@ -235,13 +200,16 @@ class _Checker:
     def shape(self, v: Version, vn: str) -> None:
         """Hook, ending, clutter and jump-cut warnings (kit render.py:146-162)."""
         cfg, segs = self.media.edl, v.segments
-        hook_s = seg_dur(segs[0], self.media)
+        if v.hook_text is not None and not v.hook_text.strip():
+            self.err(f"version {vn}: hook_text is blank")
         if segs[0].role != "hook":
             self.warn(f"version {vn}: first segment role is not hook")
-        elif hook_s > cfg.hook_max_s:
-            self.warn(
-                f"version {vn}: hook lasts {hook_s:.1f}s; payoff-first hooks work in under 3 s"
-            )
+        elif cfg.min_speed <= speed_of(segs[0], self.media) <= cfg.max_speed:  # else timing() erred
+            hook_s = seg_dur(segs[0], self.media)
+            if hook_s > cfg.hook_max_s:
+                self.warn(
+                    f"version {vn}: hook lasts {hook_s:.1f}s; payoff-first hooks work in under 3 s"
+                )
         if segs[-1].role not in ENDINGS:
             self.warn(
                 f"version {vn}: last segment is not a payoff/verdict/reveal (weak ending, no loop)"
@@ -255,7 +223,8 @@ class _Checker:
         for i in range(1, len(segs)):
             p, q = segs[i - 1], segs[i]
             zoom = resolve(p, self.edl.defaults, self.media).zoom
-            same = zoom == resolve(q, self.edl.defaults, self.media).zoom and p.speed == q.speed
+            same_zoom = zoom == resolve(q, self.edl.defaults, self.media).zoom
+            same = same_zoom and speed_of(p, self.media) == speed_of(q, self.media)
             if p.clip == q.clip and abs(q.in_ - p.out) < cfg.jump_cut_gap_s and same:
                 self.warn(
                     f"version {vn}[{i}]: same clip, same framing as previous shot — jump cut risk "
@@ -264,20 +233,30 @@ class _Checker:
 
     # ------------------------------------------------------------ v1 fields (EDITOR.md §7)
     def v1(self, order_style: str | None) -> None:
+        """v1 rules that need no clips."""
         edl, cfg = self.edl, self.media.edl
         if order_style is not None and edl.style != order_style:
             self.err(f"style {edl.style!r} does not match the order's style {order_style!r}")
-        seen: set[str] = set()
+        if edl.caption is not None and len(edl.caption) > cfg.caption_max_chars:
+            self.err(f"caption over {cfg.caption_max_chars} characters")
+        if edl.music_hint is not None and len(edl.music_hint) > cfg.music_hint_max_chars:
+            self.err(f"music_hint over {cfg.music_hint_max_chars} characters")
+
+    def dropped(self) -> None:
+        """Every dropped id is a clip, listed once; a v1 EDL accounts for every unused clip."""
+        edl, seen = self.edl, set()
         for item in edl.dropped:
             if self.shots.clip(item.clip) is None:
                 self.err(f"dropped: unknown clip id {item.clip}")
             if item.clip in seen:
                 self.err(f"dropped: {item.clip} listed twice")
             seen.add(item.clip)
-        if edl.caption is not None and len(edl.caption) > cfg.caption_max_chars:
-            self.err(f"caption over {cfg.caption_max_chars} characters")
-        if edl.music_hint is not None and len(edl.music_hint) > cfg.music_hint_max_chars:
-            self.err(f"music_hint over {cfg.music_hint_max_chars} characters")
+        if edl.style is None:  # a hand-written kit EDL has no dropped list (EDITOR.md §7 is v1)
+            return
+        used = {seg.clip for v in edl.versions for seg in v.segments}
+        for clip in self.shots.clips:
+            if clip.id not in used and clip.id not in seen:
+                self.err(f"dropped: {clip.id} is not in any segment and not listed with a reason")
 
 
 def validate(
@@ -292,4 +271,17 @@ def validate(
     for index, version in enumerate(parsed.versions):
         checker.version(version, index)
     checker.v1(order_style)
+    checker.dropped()
     return checker.report
+
+
+def precheck(raw: Any, media: Media) -> list[str]:  # Any: JSON
+    """The errors that need no clips: shape, top-level rules, v1 lengths. Cheap; run it first."""
+    parsed = parse(raw)
+    if not isinstance(parsed, Edl):
+        return list(parsed)
+    none = Shots(name="", clips=[], windows=[], sheets=[], total_raw_seconds=0.0)
+    checker = _Checker(parsed, none, media, Report(parsed))
+    checker.top_level()
+    checker.v1(None)
+    return checker.report.errors

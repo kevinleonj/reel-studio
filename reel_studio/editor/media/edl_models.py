@@ -6,11 +6,13 @@ omitted and are resolved against `defaults`, then media.toml, at use (kit render
 Unknown fields are refused: a typo must not silently fall back to a default.
 """
 
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from reel_studio.core import constants
+from reel_studio.core.media_config import Media
 
 ROLES = frozenset(
     {
@@ -36,6 +38,7 @@ STILL_OK = frozenset({"payoff", "reveal", "verdict"})  # may be static (kit rend
 ENDINGS = frozenset({"payoff", "verdict", "reveal"})  # a strong last shot (kit render.py:150)
 FITS = frozenset({"crop", "blur"})  # kit render.py:120
 ROTATIONS = frozenset({0, constants.HALF_TURN_DEG})  # kit render.py:122
+type Position = Literal["top", "center", "low"]  # kit textcards.py:57-64
 
 
 class _Model(BaseModel):
@@ -60,7 +63,7 @@ class Segment(Framing):
     role: str = "other"
     text: str | None = None
     text_span: int | None = None
-    text_position: str = "top"
+    text_position: Position = "top"
     audio_db: float = 0.0
     mute: bool = False
     allow_long: bool = False
@@ -75,7 +78,7 @@ class Version(_Model):
     name: str | None = None
     hook_text: str | None = None
     title_seconds: float | None = None
-    title_position: str = "top"
+    title_position: Position = "top"
     segments: list[Segment] = []
 
     @model_validator(mode="before")
@@ -129,3 +132,42 @@ class Edl(_Model):
     music_hint: str | None = None
     assumptions: list[str] = []
     check_by_eye: list[str] = []
+
+
+@dataclass(frozen=True)
+class Resolved:
+    """A segment's framing after `defaults` and media.toml fill the gaps (kit render.py:42-43)."""
+
+    zoom: float
+    focus_x: float
+    focus_y: float
+    rotate: int
+    fit: str
+
+
+def resolve(seg: Segment, defaults: Framing, media: Media) -> Resolved:
+    d = media.edl.defaults
+
+    def pick(name: str, fallback: Any) -> Any:  # Any: one of the Framing field types
+        own = getattr(seg, name)
+        if own is not None:
+            return own
+        inherited = getattr(defaults, name)
+        return inherited if inherited is not None else fallback
+
+    return Resolved(
+        pick("zoom", d.zoom),
+        pick("focus_x", d.focus),
+        pick("focus_y", d.focus),
+        pick("rotate", 0),
+        pick("fit", "crop"),
+    )
+
+
+def speed_of(seg: Segment, media: Media) -> float:
+    return seg.speed if seg.speed is not None else media.edl.defaults.speed
+
+
+def seg_dur(seg: Segment, media: Media) -> float:
+    """On-screen seconds: (out - in) / speed (kit render.py:46-47)."""
+    return (seg.out - seg.in_) / speed_of(seg, media)

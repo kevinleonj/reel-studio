@@ -195,3 +195,88 @@ def test_framing_fields_are_range_checked(bad: dict[str, Any]) -> None:
     raw["versions"][0]["segments"][2].update(bad)
 
     assert len(_check(raw).errors) == 1
+
+
+def test_zero_speed_on_the_first_segment_is_an_error_not_a_crash() -> None:
+    raw = _edl()
+    raw["versions"][0]["segments"][0]["speed"] = 0
+
+    report = _check(raw)
+
+    assert any("speed 0" in e for e in report.errors)
+
+
+@pytest.mark.parametrize("field", ["text_position", "title_position"])
+def test_unknown_text_position_is_an_error(field: str) -> None:
+    raw = _edl()
+    if field == "text_position":
+        raw["versions"][0]["segments"][1]["text_position"] = "bottom"
+    else:
+        raw["versions"][0]["title_position"] = "bottom"
+
+    assert any("bottom" in e or field in e for e in _check(raw).errors)
+
+
+@pytest.mark.parametrize("where", ["label", "hook"])
+def test_blank_text_is_an_error(where: str) -> None:
+    raw = _edl()
+    if where == "label":
+        raw["versions"][0]["segments"][1]["text"] = "   "
+    else:
+        raw["versions"][0]["hook_text"] = "  "
+
+    assert any("blank" in e for e in _check(raw).errors)
+
+
+def test_music_false_is_allowed_as_in_the_kit() -> None:
+    assert _check(_edl(audio={"natural_db": 0, "music": False})).errors == []
+
+
+def test_v1_edl_must_drop_every_unused_clip() -> None:
+    raw = _edl(style="recipe", dropped=[])
+    raw["versions"][0]["segments"] = [
+        s for s in raw["versions"][0]["segments"] if s["clip"] != "c02"
+    ]
+
+    errors = _check(raw).errors
+
+    assert any("c02" in e and "dropped" in e for e in errors)
+
+
+def test_jump_cut_warns_when_one_side_omits_the_default_speed() -> None:
+    raw = _edl()
+    raw["versions"][0]["segments"] = [
+        {"clip": "c01", "in": 0.5, "out": 2.5, "role": "hook"},
+        {"clip": "c01", "in": 3.0, "out": 4.5, "speed": 1.0, "role": "mix"},
+        {"clip": "c03", "in": 0.0, "out": 1.5, "role": "payoff"},
+    ]
+
+    assert any("jump cut" in w for w in _check(raw).warnings)
+
+
+@pytest.mark.parametrize(
+    ("change", "warning"),
+    [
+        ({"hook_text": "one two three four five six seven eight"}, "words"),
+        ({"last_role": "mix"}, "weak ending"),
+        ({"hook_out": 4.5}, "hook lasts"),
+    ],
+)
+def test_craft_warnings(change: dict[str, Any], warning: str) -> None:
+    raw = _edl()
+    version = raw["versions"][0]
+    if "hook_text" in change:
+        version["hook_text"] = change["hook_text"]
+    if "last_role" in change:
+        version["segments"][-1]["role"] = change["last_role"]
+    if "hook_out" in change:
+        version["segments"][0]["out"] = change["hook_out"]
+
+    assert any(warning in w for w in _check(raw).warnings)
+
+
+def test_shape_only_check_needs_no_clips() -> None:
+    errors = edl.precheck({"versions": [], "audio": {"music": "x"}}, config.load_media())
+
+    assert any("music" in e for e in errors)
+    assert any("need exactly 1 version" in e for e in errors)
