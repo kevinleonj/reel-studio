@@ -42,7 +42,7 @@ under `reel_studio/editor/media/fonts/`, no host-font fallbacks. Sheets failing 
 
 ### 2026-10-10 — STEP-02 phase B: the media package, `reel render`, the editor image
 
-Before: config and plan only. After: `reel_studio/editor/media/` (17 modules, all under 300 lines),
+Before: config and plan only. After: `reel_studio/editor/media/` (19 modules, all under 300 lines),
 `reel render`, synthetic fixtures, `docker/editor.Dockerfile`, CI ffmpeg, FACTS F200-F205. One commit
 per module, each with its failing test seen first. Kit algorithms kept (D46) except where a locked
 decision or Kevin's answer said otherwise: D38 sheets, the 5e-3 identity tolerance, review sheets
