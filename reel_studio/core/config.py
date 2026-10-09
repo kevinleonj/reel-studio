@@ -204,6 +204,10 @@ class Resend(_Strict):
     backoff_s: float
 
 
+class GcpProject(_Strict):
+    bootstrap_services: list[str]
+
+
 class Gcloud(_Strict):
     timeout_s: float
 
@@ -240,6 +244,7 @@ class Smoke(_Strict):
 class Cloud(_Strict):
     gcp: Gcp
     resend: Resend
+    gcp_project: GcpProject
     gcloud: Gcloud
     dns: Dns
     stripe: StripeSetup

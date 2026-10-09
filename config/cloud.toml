@@ -15,6 +15,10 @@ timeout_s = 15
 retries = 3
 backoff_s = 1.0
 
+[gcp_project]
+# make gcp-project enables only what Terraform needs to start; infra/bootstrap enables the rest.
+bootstrap_services = ["cloudresourcemanager.googleapis.com", "serviceusage.googleapis.com"]
+
 [gcloud]
 # `make gcp-project` and `make secrets-push` shell out to Kevin's gcloud login.
 timeout_s = 180

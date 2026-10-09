@@ -1,0 +1,181 @@
+"""scripts/cloud: gcloud-driven setup (`make gcp-project`, `make secrets-push`, `make
+bootstrap-plan`). Written, not run against a project in STEP-08 phase A; a fake runner records
+every command, and a secret must only ever travel on stdin."""
+
+import json
+import sys
+from collections.abc import Sequence
+
+import pytest
+from pydantic import SecretStr
+
+from scripts.cloud import _shell, bootstrap_plan, gcp_project, secrets_push
+
+PROJECT = "reel-studio-beta-test"
+TIMEOUT_S = 9.0
+
+
+class FakeRunner:
+    def __init__(self, answers: dict[str, str] | None = None, fail: str | None = None) -> None:
+        self.answers = answers if answers is not None else {}
+        self.fail = fail
+        self.calls: list[tuple[list[str], str | None, float]] = []
+
+    def __call__(self, args: Sequence[str], stdin: str | None, timeout_s: float) -> str:
+        self.calls.append((list(args), stdin, timeout_s))
+        joined = " ".join(args)
+        if self.fail is not None and self.fail in joined:
+            raise _shell.CommandError(f"{args[0]} failed")
+        for needle, answer in self.answers.items():
+            if needle in joined:
+                return answer
+        return ""
+
+
+# ---------------------------------------------------------------- secrets-push
+
+
+def test_secrets_push_sends_each_value_on_stdin_only() -> None:
+    runner = FakeRunner()
+    values = {
+        "anthropic-api-key": SecretStr("sk-ant-test-1"),
+        "gemini-api-key": SecretStr("gem-test-2"),
+        "stripe-secret-key": SecretStr("sk_test_3"),
+    }
+
+    secrets_push.push_all(runner, PROJECT, values, TIMEOUT_S)
+
+    assert [c[1] for c in runner.calls] == ["sk-ant-test-1", "gem-test-2", "sk_test_3"]
+    for args, stdin, timeout in runner.calls:
+        assert args[:4] == ["gcloud", "secrets", "versions", "add"]
+        assert "--data-file=-" in args
+        assert f"--project={PROJECT}" in args
+        assert stdin is not None
+        assert stdin not in " ".join(args)
+        assert timeout == TIMEOUT_S
+
+
+def test_secrets_push_names_exactly_the_three_cloud_secrets() -> None:
+    # docs/ARCHITECTURE.md §6: the Resend key and the webhook secret are written by make dns
+    # and make stripe-setup, never copied from the laptop.
+    assert sorted(secrets_push.SECRET_FIELDS.values()) == [
+        "anthropic-api-key",
+        "gemini-api-key",
+        "stripe-secret-key",
+    ]
+
+
+def test_secrets_push_stops_on_the_first_failure_without_echoing_values() -> None:
+    runner = FakeRunner(fail="gemini-api-key")
+    values = {"anthropic-api-key": SecretStr("a1"), "gemini-api-key": SecretStr("g2")}
+
+    with pytest.raises(_shell.CommandError) as caught:
+        secrets_push.push_all(runner, PROJECT, values, TIMEOUT_S)
+
+    assert "g2" not in str(caught.value)
+
+
+def test_empty_secret_is_refused() -> None:
+    with pytest.raises(ValueError, match="empty"):
+        secrets_push.push_all(FakeRunner(), PROJECT, {"gemini-api-key": SecretStr("")}, TIMEOUT_S)
+
+
+# ---------------------------------------------------------------- gcp-project
+
+
+def test_gcp_project_creates_links_and_enables_when_new() -> None:
+    runner = FakeRunner(fail="projects describe")
+
+    gcp_project.ensure_project(
+        runner, PROJECT, "000000-000000-000000", ["a.googleapis.com"], TIMEOUT_S
+    )
+
+    commands = [" ".join(c[0][:4]) for c in runner.calls]
+    assert commands == [
+        f"gcloud projects describe {PROJECT}",
+        f"gcloud projects create {PROJECT}",
+        "gcloud billing projects link",
+        "gcloud services enable a.googleapis.com",
+    ]
+    assert "--billing-account=000000-000000-000000" in runner.calls[2][0]
+
+
+def test_gcp_project_is_safe_to_run_twice() -> None:
+    runner = FakeRunner(answers={"projects describe": json.dumps({"projectId": PROJECT})})
+
+    gcp_project.ensure_project(
+        runner, PROJECT, "000000-000000-000000", ["a.googleapis.com"], TIMEOUT_S
+    )
+
+    assert all(c[0][1:3] != ["projects", "create"] for c in runner.calls)
+
+
+# ---------------------------------------------------------------- bootstrap-plan
+
+
+def test_bootstrap_plan_reads_currency_and_ids_then_prints_the_apply_command(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    runner = FakeRunner(
+        answers={
+            "billing accounts describe": json.dumps({"currencyCode": "EUR"}),
+            "gh api": "123\n456\n",
+        }
+    )
+
+    bootstrap_plan.plan(runner, PROJECT, "000000-000000-000000", "owner/repo", TIMEOUT_S)
+
+    terraform = [c[0] for c in runner.calls if c[0][0] == "terraform"]
+    assert terraform[0][:2] == ["terraform", "-chdir=infra/bootstrap"]
+    plan_args = terraform[-1]
+    assert "plan" in plan_args
+    assert f"-var=project_id={PROJECT}" in plan_args
+    assert "-var=budget_currency_code=EUR" in plan_args
+    assert "-var=github_repository_id=123" in plan_args
+    assert "-var=github_repository_owner_id=456" in plan_args
+    assert "-out=tfplan" in plan_args
+    out = capsys.readouterr().out
+    assert "terraform -chdir=infra/bootstrap apply tfplan" in out
+
+
+def test_bootstrap_plan_never_applies() -> None:
+    runner = FakeRunner(
+        answers={
+            "billing accounts describe": json.dumps({"currencyCode": "EUR"}),
+            "gh api": "1\n2\n",
+        }
+    )
+
+    bootstrap_plan.plan(runner, PROJECT, "000000-000000-000000", "owner/repo", TIMEOUT_S)
+
+    assert not any("apply" in c[0] for c in runner.calls)
+
+
+# ---------------------------------------------------------------- the runner itself
+
+
+def test_run_returns_stdout_and_feeds_stdin() -> None:
+    code = "import sys; sys.stdout.write(sys.stdin.read().upper())"
+
+    assert _shell.run([sys.executable, "-c", code], "abc", TIMEOUT_S) == "ABC"
+
+
+def test_run_failure_names_the_command_but_never_the_stdin() -> None:
+    code = "import sys; sys.stdin.read(); sys.stderr.write('denied'); sys.exit(3)"
+
+    with pytest.raises(_shell.CommandError) as caught:
+        _shell.run([sys.executable, "-c", code], "the-secret", TIMEOUT_S)
+
+    assert "exited 3" in str(caught.value)
+    assert "denied" in str(caught.value)
+    assert "the-secret" not in str(caught.value)
+
+
+def test_run_timeout_is_a_command_error() -> None:
+    with pytest.raises(_shell.CommandError, match="timed out"):
+        _shell.run([sys.executable, "-c", "import time; time.sleep(5)"], None, 0.2)
+
+
+def test_run_missing_binary_is_a_command_error() -> None:
+    with pytest.raises(_shell.CommandError, match="could not start"):
+        _shell.run(["/nonexistent/gcloud", "version"], None, TIMEOUT_S)
