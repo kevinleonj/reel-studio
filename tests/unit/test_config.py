@@ -62,6 +62,16 @@ def test_price_without_fact_fails(tmp_path: Path) -> None:
         config.load(folder)
 
 
+def test_model_without_a_price_fails(tmp_path: Path) -> None:
+    folder = _copy_config(tmp_path)
+    limits = folder / "limits.toml"
+    body = limits.read_text(encoding="utf-8")
+    limits.write_text(body.replace('cheap_model = "', 'cheap_model = "unpriced-', 1))
+
+    with pytest.raises(ValidationError, match="unpriced-"):
+        config.load(folder)
+
+
 def test_missing_file_fails(tmp_path: Path) -> None:
     folder = _copy_config(tmp_path)
     (folder / "styles.toml").unlink()

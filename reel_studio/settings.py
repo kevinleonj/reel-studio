@@ -16,8 +16,14 @@ ENV_FILE = ".env"
 
 class _Base(BaseSettings):
     # extra="ignore": .env holds every tier's variables; each class reads only its own.
+    # env_ignore_empty: a blank `KEY=` (as copied from .env.example) counts as missing, so a
+    # required value fails by name and an optional one falls back to its default (F81).
     model_config = SettingsConfigDict(
-        env_file=ENV_FILE, env_file_encoding="utf-8", extra="ignore", frozen=True
+        env_file=ENV_FILE,
+        env_file_encoding="utf-8",
+        env_ignore_empty=True,
+        extra="ignore",
+        frozen=True,
     )
 
 

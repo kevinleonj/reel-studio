@@ -7,9 +7,9 @@ a default. Floats are parsed as Decimal: prices and the cost cap are money.
 import tomllib
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 CONFIG_DIR = Path(__file__).resolve().parents[2] / "config"
 FACT_ID = r"^F\d+[a-z]?$"  # docs/FACTS.md row ids, e.g. F05, F21b
@@ -193,6 +193,16 @@ class Config(_Strict):
     limits: Limits
     prices: Prices
     styles: Styles
+
+    @model_validator(mode="after")
+    def _every_model_has_a_price(self) -> Self:
+        editor = self.limits.editor
+        claude = {editor.model, editor.critic_model, editor.cheap_model} - set(self.prices.claude)
+        gemini = {self.limits.speech.model} - set(self.prices.gemini)
+        unpriced = sorted(claude | gemini)
+        if unpriced:
+            raise ValueError(f"no price in prices.toml for: {', '.join(unpriced)}")
+        return self
 
 
 def _read(path: Path) -> dict[str, Any]:  # Any: raw TOML, validated by Config right after
