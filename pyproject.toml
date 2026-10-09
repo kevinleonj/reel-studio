@@ -1,0 +1,93 @@
+[project]
+name = "reel-studio"
+version = "0.1.0"
+description = "Turns up to 40 food clips into an Instagram Reel with the Claude Messages API and ffmpeg."
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Kevin León" }]
+requires-python = ">=3.13,<3.14" # D70
+dependencies = [
+    "jinja2>=3.1.6",
+    "pydantic>=2.14.0",
+    "pydantic-settings>=2.15.0",
+]
+
+[project.scripts]
+reel = "reel_studio.cli.reel:main"
+reelctl = "reel_studio.cli.reelctl:main"
+
+[project.optional-dependencies]
+editor = [
+    "anthropic>=1.13.0",
+    "google-genai>=2.29.0",
+    "numpy>=2.5.3",
+    "opencv-python-headless>=5.0.0.93",
+    "pillow>=12.3.0",
+    "pillow-heif>=1.8.0",
+    "scenedetect-headless>=0.7.1",
+]
+api = [
+    "fastapi>=0.143.0",
+    "google-cloud-firestore>=2.34.1",
+    "google-cloud-run>=0.16.2",
+    "google-cloud-storage>=3.17.0",
+    "httpx>=0.28.1",
+    "stripe>=16.0.0",
+    "uvicorn[standard]>=0.54.0",
+]
+dev = [
+    "grpcio>=1.84.0",
+    "mypy>=2.4.0",
+    "pre-commit>=4.6.2",
+    "pytest>=9.1.1",
+    "python-hcl2>=8.1.4",
+    "ruff>=0.16.10",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.24,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "reel_studio"
+module-root = ""
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "--strict-config"]
+markers = [
+    "paid: calls a paid API; runs only through make eval or make ab",
+    "slow: takes more than a few seconds; skipped by make test-fast",
+    "race: concurrency test; skipped by make test-fast",
+    "e2e: drives the running website through Playwright",
+    "emulator: needs the Firestore emulator or another local service",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+extend-exclude = [".claude", "scripts/check_literals.py", "scripts/gates"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "S", "BLE", "SIM", "RUF", "PL", "G", "LOG", "T20", "DTZ"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["reel_studio", "tests"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "PLR2004"]
+# Repository scripts run fixed git commands with arguments they build themselves.
+"scripts/**" = ["S603", "S607"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["reel_studio", "tests"]
+exclude = ['^\.claude/', '^scripts/check_literals\.py$', '^scripts/gates/']
+plugins = ["pydantic.mypy"]
+
+# No stubs or py.typed (checked under make types): PySceneDetect 0.7.1, and grpcio (used by the
+# test network block). cv2, numpy and pillow_heif are typed.
+[[tool.mypy.overrides]]
+module = ["scenedetect", "scenedetect.*", "grpc", "grpc.*"]
+ignore_missing_imports = true
