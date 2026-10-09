@@ -85,8 +85,8 @@ files = ["reel_studio", "tests"]
 exclude = ['^\.claude/', '^scripts/check_literals\.py$', '^scripts/gates/']
 plugins = ["pydantic.mypy"]
 
-# PySceneDetect 0.7.1 ships neither stubs nor py.typed (checked with a scratch import under
-# make types); cv2, numpy and pillow_heif are typed.
+# No stubs or py.typed (checked under make types): PySceneDetect 0.7.1, and grpcio (used by the
+# test network block). cv2, numpy and pillow_heif are typed.
 [[tool.mypy.overrides]]
-module = ["scenedetect", "scenedetect.*"]
+module = ["scenedetect", "scenedetect.*", "grpc", "grpc.*"]
 ignore_missing_imports = true

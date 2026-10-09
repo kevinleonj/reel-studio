@@ -1,7 +1,9 @@
 """Isolation for every test: no network, no .env, no real environment values.
 
-- Unit tests cannot open a connection (tests marked emulator, e2e or paid may).
-- Every variable a Settings class reads is removed from the environment.
+- Unit tests cannot open a connection, resolve a name, send a datagram or open a gRPC channel
+  (tests marked emulator, e2e or paid may). Raw C sockets opened by other native libraries are
+  not covered.
+- Every variable a Settings class reads, and Google's credential variables, are removed.
 - Each test runs in its own empty folder, so the repository's `.env` is never read.
 - `make_settings` builds Settings from explicit test values with `_env_file=None`.
 """
@@ -12,8 +14,8 @@ from typing import Any
 
 import pytest
 
-from reel_studio.settings import SETTINGS_CLASSES, AppSettings
-from tests.fakes import network
+from reel_studio.settings import AppSettings
+from tests.fakes import environment, network
 
 TEST_VALUES: dict[str, Any] = {
     "anthropic_api_key": "test-anthropic-key",
@@ -46,9 +48,7 @@ def _no_network(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch)
 
 @pytest.fixture(autouse=True)
 def _no_real_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    for cls in SETTINGS_CLASSES:
-        for field in cls.model_fields:
-            monkeypatch.delenv(field.upper(), raising=False)
+    environment.scrub(monkeypatch)
     monkeypatch.chdir(tmp_path)
 
 
