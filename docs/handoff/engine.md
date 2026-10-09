@@ -3,11 +3,11 @@
 Written by the engine lane only. Newest entry on top.
 
 ## Status board
-- Done: STEP-02 phase A (kit inventory, `config/media.toml`, port plan below)
-- Partly: STEP-02 (phase B, the package code, waits for STEP-01's skeleton: `pyproject.toml`, `reel_studio/core/ports.py`, `config.py`)
-- Blocked: phase B waits for STEP-01 to merge (background wait running); deps in Needs Kevin 6
-- Not started: STEP-02 phase B; STEP-03 onward
-- Next: when STEP-01 merges, `git merge origin/main`, `make setup`, then the failing tests below in order
+- Done: STEP-02 phase B code, tasks 1-5: fixtures, the media package, the EDL checks, `reel render`, the editor image (built only in CI)
+- Partly: STEP-02 gate: `--local` run, push, pull request and CI follow (see Log)
+- Blocked: —
+- Not started: STEP-03 (not tonight, TONIGHT.md)
+- Next: CI green, then `python3 scripts/gates/step02.py` without `--local`; record image size and build time from CI's ImageReport warning
 - Ledger: Context7 entries for numpy, cv2, scenedetect, PIL, pillow_heif in `eval/doc-ledger.pending.json`
 
 ## Needs Kevin
@@ -15,18 +15,22 @@ Answered 9 Oct 2026 (TONIGHT.md): 1. luma reference = SDR render of the same pat
 (changed from 10 % at 22:56; `media.toml [prepare.tonemap].sdr_luma_tolerance`); 2. new `sheets.py` per D38,
 `limits.toml [sheets].near_duplicate_ssim = 0.93` (origin `qa.py:31`); 3. `hardcode-ok` markers stay;
 4. kit `.ruff_cache` deleted by Claude at 22:50, kit equals the pre-session snapshot again (2,648 files,
-byte-identical; read with Read/`rg` only from now on); 7. main adds `ffmpeg_path`/`ffprobe_path` to
-`EditorSettings`, Kevin's env file has both. Open:
+byte-identical; read with Read/`rg` only from now on); 6. main added numpy, opencv-python-headless,
+pillow-heif and scenedetect-headless to `[editor]` in STEP-01; 7. main added `ffmpeg_path`/`ffprobe_path`
+to `EditorSettings`; 9. STEP-01 merged (6089989). Open:
 
-9. **Merge STEP-01.** Phase B needs its `Makefile`, `pyproject.toml`, `ports.py` and `config.py`. A
-   background wait in this session (`until git fetch … origin/main:Makefile …; echo STEP01_MERGED`)
-   starts phase B as soon as the merge lands; if the session has ended, start a new one on this lane.
 5. **EDITOR.md §1 says tonemap "zscale + hable"; the kit uses mobius** (`prep.py:45`,
    `media.toml [prepare.tonemap]`). The port keeps mobius per D46. Correct EDITOR §1, or say hable is wanted.
-6. **Dependencies the lane cannot add.** STEP-01's `[editor]` extra lists anthropic, google-genai,
-   pillow only; `pyproject.toml`/`uv.lock` are outside this lane. Phase B needs numpy 2.5.3,
-   opencv-python-headless 5.0.0.93 (no libGL in slim), scenedetect 0.7.1; pillow-heif 1.8.0 only if
-   HEIC is accepted (`limits.toml` allowed_types has none). Versions confirmed on PyPI by the reviewer.
+10. **`reel render` needs `ANTHROPIC_API_KEY` set though it never calls the API.** `EditorSettings`
+    (main's `settings.py`) requires the key, so a render-only run, the image test and the cloud render
+    job must carry it. Proposal for main: a `MediaSettings` class with `ffmpeg_path`/`ffprobe_path` that
+    `EditorSettings` extends; `reel render` would then read only `MediaSettings`.
+11. **Assumption A2 says "1080p proxies".** The kit's cover scaling (`prep.py:61-63`, kept per D46) makes a
+    landscape 1920x1080 clip a 3414x1920 proxy, so a landscape proxy holds about 3x the pixels A2 assumes.
+    A2's wording or the proxy rule needs your call before STEP-05 measures memory.
+12. **Review verdict file.** The phase A reviewer could not write the review verdict file under the
+    protected `.claude/` folder (lane guard: it belongs to main). Before code reviews feed the Stop gate,
+    add it and the doc ledger to `shared.paths` in the lanes file (protected).
 Plan notes kept from the answered items: fonts (Poppins-Bold.ttf + OFL.txt) ship as package data
 under `reel_studio/editor/media/fonts/`, no host-font fallbacks. Sheets failing case:
 `test_sheet_is_1536x864_with_16_tiles` fails against a port of kit `build_sheets` (`prep.py:167-221`,
@@ -35,6 +39,28 @@ under `reel_studio/editor/media/fonts/`, no host-font fallbacks. Sheets failing 
 ## Evidence lines (the gates read these)
 
 ## Log
+
+### 2026-10-10 — STEP-02 phase B: the media package, `reel render`, the editor image
+
+Before: config and plan only. After: `reel_studio/editor/media/` (17 modules, all under 300 lines),
+`reel render`, synthetic fixtures, `docker/editor.Dockerfile`, CI ffmpeg, FACTS F200-F205. One commit
+per module, each with its failing test seen first. Kit algorithms kept (D46) except where a locked
+decision or Kevin's answer said otherwise: D38 sheets, the 5e-3 identity tolerance, review sheets
+capped at F08's 2000 px (the critic reads them), originals staged one at a time.
+
+Port map as built (plan B rows → modules): tools.py (common.py), prepare.py, colour.py + measure.py
+(prep.py measure, grade.py stats), sheets.py (new, D38), strip.py, grade.py, textcards.py,
+edl_models.py + edl.py (render.py --check), render.py + render_filters.py + render_steps.py,
+qa.py + qa_frames.py + qa_sheets.py, shots.py + pipeline.py (prep.py main), fonts.py, cli/reel.py.
+
+Routine choices made without asking: unknown EDL fields are errors, not ignored; `title` still reads as
+`hook_text`; caption and music-hint limits live in `media.toml [edl]` (EDITOR §7); every ffmpeg call
+has a 1800 s timeout (`media.toml [tools]`, not a kit value); `--out` defaults beside the input
+folder; fixture files get fixed file times so clip ids never depend on encode speed; `media.toml`
+loads through its own `config.load_media()`, so main's `Config` shape is unchanged.
+
+Follow-ups: Needs Kevin 10-12; image size and build time from CI; `reel make` (STEP-03) reuses
+`pipeline.build_shots`, `edl.validate`, `render.render` and `qa.run` unchanged.
 
 ### 2026-10-09 — STEP-02 phase A: inventory and port plan (no package code)
 
