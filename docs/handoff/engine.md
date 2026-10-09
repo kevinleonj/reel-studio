@@ -72,8 +72,11 @@ fixed (06caee0); C2 `--out` inside the input folder overwrote a user file → re
 partly pinned by new tests; W7 → Needs Kevin 14; W8 → Needs Kevin 13; W10 → F206; S2 (outputs not
 atomic), S7 (codec names inline), S8 (small drifts) left as follow-ups. Re-review: PASS, plus W-A
 (`--out` guard missed `out/work` and case-variant paths), W-B (its test was vacuous after precheck) and
-W-C (a wrong FFPROBE_PATH read as no usable input), all fixed with tests in e10484c. Still unpinned
-by tests: dead-air and blur warnings, the size and black-frame hard checks failing (review S-A).
+W-C (a wrong FFPROBE_PATH read as no usable input), fixed in e10484c. Round 3 (PASS) found the W-C
+test vacuous and the guard one-directional (an input folder inside `out/work` was rewritten): both
+fixed in the next commit, the tool tests proved by deleting `ffmpeg.check()` (both then fail). Still
+unpinned by tests: dead-air and blur warnings, the hook `""` rule, the size and black-frame hard
+checks failing (review S-A).
 
 Port map as built (plan B rows → modules): tools.py (common.py), prepare.py, colour.py + measure.py
 (prep.py measure, grade.py stats), sheets.py (new, D38), strip.py, grade.py, textcards.py,
