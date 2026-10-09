@@ -65,7 +65,7 @@ def test_api_failure_becomes_cloud_unavailable_and_is_logged(
     denied = google_exceptions.PermissionDenied("actAs denied")  # type: ignore[no-untyped-call]
     client = FakeJobsClient(raises=denied)
 
-    with caplog.at_level(logging.INFO), pytest.raises(CloudUnavailable, match="actAs denied"):
+    with caplog.at_level(logging.INFO), pytest.raises(CloudUnavailable, match="PermissionDenied"):
         make(client).launch("order-1", "token-1")
 
     [record] = [r for r in caplog.records if r.name.endswith("gcp_launcher")]

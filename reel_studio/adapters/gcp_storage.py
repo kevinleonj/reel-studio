@@ -4,7 +4,8 @@
   website's origin and capped at the declared size (F32, F33); Cloud Run never carries the bytes.
 - Downloads: V4 signed URLs with `Content-Disposition: attachment`, signed without a key file
   through IAM signBlob, which needs roles/iam.serviceAccountTokenCreator on reel-api (F34).
-- Every call has a timeout and the bounded retry from config/cloud.toml, and logs its latency.
+- Every bucket call has a timeout and the bounded retry from config/cloud.toml, and logs its
+  latency. Signing goes through google-auth's own signBlob request (its defaults, doc ledger).
 """
 
 import time
@@ -15,8 +16,9 @@ from pathlib import Path, PurePosixPath
 from typing import Protocol
 
 import google.auth
-from google.api_core.exceptions import GoogleAPICallError, NotFound
+from google.api_core.exceptions import GoogleAPIError, NotFound
 from google.api_core.retry import Retry
+from google.auth.exceptions import GoogleAuthError
 from google.auth.transport.requests import Request
 
 # google-cloud-storage ships no py.typed; the module override belongs in pyproject.toml (main lane).
@@ -158,8 +160,8 @@ class GcpStorage:
             raise ValueError(
                 f"signed URL minutes must be 1 to {self._cfg.signed_url_max_minutes}, not {minutes}"
             )
-        identity = self._identity()
         with _Logged("sign", None):
+            identity = self._identity()
             return self._bucket.blob(key).generate_signed_url(
                 version=SIGNED_URL_VERSION,
                 expiration=timedelta(minutes=minutes),
@@ -213,5 +215,9 @@ class _Logged:
             log.info("storage %s", self._event, extra=fields)
             return
         log.error("storage %s failed error=%s", self._event, type(exc).__name__, extra=fields)
-        if isinstance(exc, GoogleAPICallError):
-            raise CloudUnavailable(f"cloud storage {self._event} failed: {exc}") from exc
+        # GoogleAPIError covers RetryError (our deadline ran out); GoogleAuthError covers a refused
+        # signBlob or token refresh. Only the type is kept: the text can carry request URLs.
+        if isinstance(exc, GoogleAPIError | GoogleAuthError):
+            raise CloudUnavailable(
+                f"cloud storage {self._event} failed: {type(exc).__name__}"
+            ) from exc

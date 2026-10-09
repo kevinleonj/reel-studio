@@ -5,6 +5,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import google.auth
+import google.auth.exceptions
 import pytest
 from google.api_core import exceptions as google_exceptions
 
@@ -139,7 +140,7 @@ def test_api_failure_becomes_cloud_unavailable_and_is_logged(
 ) -> None:
     bucket = FakeBucket(raises=google_exceptions.ServiceUnavailable("down"))  # type: ignore[no-untyped-call]
 
-    with caplog.at_level(logging.INFO), pytest.raises(CloudUnavailable, match="down"):
+    with caplog.at_level(logging.INFO), pytest.raises(CloudUnavailable, match="ServiceUnavailable"):
         make(bucket).create_upload_session(
             "o1", {"name": "a.mov", "size": 1, "content_type": "video/quicktime"}
         )
@@ -219,3 +220,25 @@ def test_adc_identity_refuses_a_user_login(monkeypatch: pytest.MonkeyPatch) -> N
 
     with pytest.raises(CloudUnavailable, match="service-account"):
         adc(monkeypatch, credentials)()
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        google_exceptions.RetryError("deadline", cause=None),  # type: ignore[no-untyped-call]
+        google.auth.exceptions.TransportError("signBlob refused"),  # type: ignore[no-untyped-call]
+        google.auth.exceptions.RefreshError("token"),  # type: ignore[no-untyped-call]
+    ],
+    ids=["retry-deadline", "signblob-transport", "refresh"],
+)
+def test_retry_and_auth_failures_are_typed_too(error: Exception) -> None:
+    def failing_identity() -> SigningIdentity:
+        raise error
+
+    cfg = StorageConfig(ORIGIN, TIMEOUT_S, RETRY, MAX_MINUTES)
+    storage = GcpStorage(FakeBucket(), failing_identity, cfg)
+
+    with pytest.raises(CloudUnavailable) as caught:
+        storage.signed_url("out/o1/reel.mp4", "reel.mp4", 30)
+
+    assert type(error).__name__ in str(caught.value)

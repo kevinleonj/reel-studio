@@ -7,6 +7,7 @@ names the command and its exit code, never what was piped into it.
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
+from typing import Protocol
 
 from pydantic import SecretStr
 
@@ -16,7 +17,6 @@ SERVICE_URL = "https://{service}-{number}.{region}.run.app"
 SERVICE_NAME = "reel-api"  # infra/main/locals.tf api_name
 
 Runner = Callable[[Sequence[str], str | None, float], str]
-SecretSink = Callable[[str, SecretStr], None]
 
 
 class CommandError(Exception):
@@ -67,13 +67,50 @@ def push_secret(
     )
 
 
-def secret_sink(runner: Runner, project: str, timeout_s: float) -> SecretSink:
-    """push_secret bound to one project, for code that only decides what to store."""
+class SecretStore(Protocol):
+    """Where show-once secrets go. Check `ready` before asking a vendor to mint one."""
 
-    def store(secret_id: str, value: SecretStr) -> None:
-        push_secret(runner, project, secret_id, value, timeout_s)
+    def ready(self, secret_id: str) -> None: ...
+    def has_value(self, secret_id: str) -> bool: ...
+    def put(self, secret_id: str, value: SecretStr) -> None: ...
 
-    return store
+
+class GcloudSecrets:
+    """Secret Manager through Kevin's gcloud login; values only on stdin."""
+
+    def __init__(self, runner: Runner, project: str, timeout_s: float) -> None:
+        self._runner = runner
+        self._project = project
+        self._timeout_s = timeout_s
+
+    def ready(self, secret_id: str) -> None:
+        """Raises CommandError when the container does not exist (bootstrap not applied)."""
+        self._runner(
+            ["gcloud", "secrets", "describe", secret_id, f"--project={self._project}"],
+            None,
+            self._timeout_s,
+        )
+
+    def has_value(self, secret_id: str) -> bool:
+        out = self._runner(
+            [
+                "gcloud",
+                "secrets",
+                "versions",
+                "list",
+                secret_id,
+                f"--project={self._project}",
+                "--filter=state:ENABLED",
+                "--limit=1",
+                "--format=value(name)",
+            ],
+            None,
+            self._timeout_s,
+        )
+        return bool(out.strip())
+
+    def put(self, secret_id: str, value: SecretStr) -> None:
+        push_secret(self._runner, self._project, secret_id, value, self._timeout_s)
 
 
 def service_url(number: str, region: str) -> str:

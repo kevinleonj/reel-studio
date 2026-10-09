@@ -10,6 +10,7 @@ from datetime import timedelta
 import httpx
 import pytest
 from google.api_core import exceptions as google_exceptions
+from google.auth import exceptions as google_auth_exceptions
 from google.cloud import firestore_admin_v1, run_v2
 
 from reel_studio.core import config
@@ -137,7 +138,7 @@ def test_healthy_deploy_passes_every_check() -> None:
         ({"jobs": FakeJobs(timeout_s=600)}, "job timeout"),
         ({"jobs": FakeJobs(retries=None)}, "job max retries"),
         ({"jobs": FakeJobs(retries=3)}, "job max retries"),
-        ({"admin": FakeAdmin(state=State.CREATING)}, "orders TTL active"),
+        ({"admin": FakeAdmin(state=State.NEEDS_REPAIR)}, "orders TTL active"),
     ],
 )
 def test_each_defect_fails_exactly_its_check(kwargs: dict[str, object], name: str) -> None:
@@ -159,3 +160,26 @@ def test_an_api_error_is_a_failed_check_not_a_crash() -> None:
 def test_main_exit_codes(capsys: pytest.CaptureFixture[str]) -> None:
     assert smoke.main(["--url", "https://example.test"]) == smoke.EXIT_ERROR
     assert "run.app" in capsys.readouterr().out
+
+
+def test_ttl_still_creating_after_a_first_deploy_is_pending_not_red() -> None:
+    results = check(site(), admin=FakeAdmin(state=State.CREATING))
+
+    [ttl] = [r for r in results if r.name == "orders TTL active"]
+    assert ttl.ok
+    assert "pending" in ttl.detail
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        google_exceptions.RetryError("deadline", cause=None),  # type: ignore[no-untyped-call]
+        google_auth_exceptions.RefreshError("token"),  # type: ignore[no-untyped-call]
+    ],
+    ids=["retry", "refresh"],
+)
+def test_retry_and_auth_errors_fail_the_check_without_losing_the_others(error: Exception) -> None:
+    results = check(site(), admin=FakeAdmin(raises=error))
+
+    assert failed(results) == ["orders TTL active"]
+    assert len(results) == 8

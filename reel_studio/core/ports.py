@@ -44,7 +44,8 @@ class Orders(Protocol):
 
 class Launcher(Protocol):
     # run_token: the worker exits unless the order is running with this token (ARCHITECTURE.md §4,
-    # "One run per order"); settled in STEP-08 with the Cloud Run adapter.
+    # "One run per order"); settled in STEP-08 with the Cloud Run adapter. At most once: never
+    # retry launch for one run_token (a lost response may hide a started execution).
     def launch(self, order_id: str, run_token: str) -> str: ...
 
 

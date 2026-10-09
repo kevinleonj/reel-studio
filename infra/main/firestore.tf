@@ -42,7 +42,7 @@ resource "google_firestore_field" "orders_ttl" {
   ttl_config {}
 
   # Enabling TTL takes ten minutes or more; waiting would outlive the 15-minute apply job
-  # (docs/INFRA.md §4). Terraform then cannot see the TTL state, so `make smoke` checks it with
-  # `gcloud firestore fields ttls list --collection-group=orders` (expects ACTIVE).
+  # (docs/INFRA.md §4). Terraform then cannot see the TTL state, so `make smoke` reads it through
+  # the Firestore admin API (CREATING right after a first deploy, then ACTIVE).
   skip_wait = true
 }

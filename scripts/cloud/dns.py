@@ -18,12 +18,13 @@ from pydantic import SecretStr
 from reel_studio.adapters.resend_mailer import Backoff
 from reel_studio.core.config import load_cloud
 from reel_studio.settings import CloudSettings
-from scripts.cloud._shell import CommandError, SecretSink, run, say, secret_sink
+from scripts.cloud._shell import CommandError, GcloudSecrets, SecretStore, run, say
 
 RESEND_API = "https://api.resend.com"  # hardcode-ok: vendor base URL (doc ledger: resend)
 CLOUDFLARE_API = "https://api.cloudflare.com/client/v4"  # hardcode-ok: vendor base URL (doc ledger)
 SENDING_KEY_SECRET_ID = "resend-api-key"  # noqa: S105 - container name (infra/bootstrap)
 VERIFIED = "verified"  # Resend domain status once DNS checks pass
+FAILED = "failed"  # terminal: Resend gave up on the records
 
 
 class DnsError(Exception):
@@ -80,14 +81,25 @@ class Settings:
     key_name: str
 
 
-def items(body: dict[str, object], key: str) -> list[dict[str, object]]:
-    value = body.get(key)
-    return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+def items(body: object, key: str) -> list[dict[str, object]]:
+    """The list under `key`; any other shape stops the run (an existence check must not
+    silently read "absent" and create a duplicate)."""
+    value = body.get(key) if isinstance(body, dict) else None
+    if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+        raise DnsError(f"unexpected response shape: no list under {key!r}")
+    return value
 
 
-def qualified(name: str, domain: str) -> str:
-    """Resend returns most record names relative to the domain; Cloudflare wants them full."""
-    return name if name == domain or name.endswith(f".{domain}") else f"{name}.{domain}"
+def qualified(name: str, domain: str, zone: str) -> str:
+    """Full record name for Cloudflare. Resend's apex example gives names relative to the domain
+    (F407); for a subdomain it may give them relative to the zone (`send.reels`). Both map to
+    the same full name; a name already ending in the domain is kept."""
+    if name == domain or name.endswith(f".{domain}"):
+        return name
+    sub = domain.removesuffix(f".{zone}")
+    if sub != domain and (name == sub or name.endswith(f".{sub}")):
+        return f"{name}.{zone}"
+    return f"{name}.{domain}"
 
 
 def unquoted(value: str) -> str:
@@ -99,11 +111,13 @@ def ensure_domain(apis: Apis, domain: str, region: str) -> dict[str, object]:
         if found.get("name") == domain:
             say(f"dns: Resend domain {domain} exists")
             return apis.resend.call("GET", f"/domains/{found['id']}")
+    created = apis.resend.call("POST", "/domains", body={"name": domain, "region": region})
     say(f"dns: Resend domain {domain} created in {region}")
-    return apis.resend.call("POST", "/domains", body={"name": domain, "region": region})
+    return created
 
 
-def zone_id(apis: Apis, domain: str) -> str:
+def find_zone(apis: Apis, domain: str) -> tuple[str, str]:
+    """(zone id, zone name) of the closest Cloudflare zone holding `domain`."""
     labels = domain.split(".")
     for start in range(len(labels) - 1):
         candidate = ".".join(labels[start:])
@@ -112,18 +126,19 @@ def zone_id(apis: Apis, domain: str) -> str:
             "result",
         )
         if zones:
-            return str(zones[0]["id"])
+            return str(zones[0]["id"]), candidate
     raise DnsError(f"no Cloudflare zone found for {domain}")
 
 
 def ensure_records(
-    apis: Apis, zone: str, domain: str, records: list[dict[str, object]], ttl: int
+    apis: Apis, zone: tuple[str, str], domain: str, records: list[dict[str, object]], ttl: int
 ) -> int:
     created = 0
+    zone_id, zone_name = zone
     for record in records:
-        kind, name = str(record["type"]), qualified(str(record["name"]), domain)
+        kind, name = str(record["type"]), qualified(str(record["name"]), domain, zone_name)
         content = unquoted(str(record["value"]))
-        path = f"/zones/{zone}/dns_records"
+        path = f"/zones/{zone_id}/dns_records"
         existing = items(
             apis.cloudflare.call("GET", path, params={"type": kind, "name": name}),
             "result",
@@ -148,39 +163,51 @@ def ensure_records(
 def wait_verified(
     apis: Apis, domain_id: str, settings: Settings, clock: Callable[[], float]
 ) -> None:
-    apis.resend.call("POST", f"/domains/{domain_id}/verify")
-    started, status = clock(), ""
+    started, asked = clock(), False
     while True:
         status = str(apis.resend.call("GET", f"/domains/{domain_id}").get("status"))
         if status == VERIFIED:
             say("dns: domain verified")
             return
+        if status == FAILED and asked:
+            raise DnsError("Resend marked the domain failed; check the records in Cloudflare")
+        if not asked:
+            apis.resend.call("POST", f"/domains/{domain_id}/verify")
+            asked = True
         if clock() - started >= settings.timeout_s:
             raise DnsError(f"domain not verified after {settings.timeout_s} s, status {status}")
         apis.sleep(settings.poll_s)
 
 
-def ensure_sending_key(apis: Apis, domain_id: str, name: str, store: SecretSink) -> bool:
+def ensure_sending_key(apis: Apis, domain_id: str, name: str, store: SecretStore) -> bool:
+    """The token is shown only at creation: the container must exist first, and an existing
+    key without a stored value stops the run instead of reporting success."""
     for key in items(apis.resend.call("GET", "/api-keys"), "data"):
         if key.get("name") == name:
-            say(f"dns: sending key {name} exists; its token was stored when it was created")
+            if not store.has_value(SENDING_KEY_SECRET_ID):
+                raise DnsError(
+                    f"sending key {name} exists but {SENDING_KEY_SECRET_ID} holds no value;"
+                    " delete the key in the Resend dashboard and run make dns again"
+                )
+            say(f"dns: sending key {name} exists and its token is stored")
             return False
+    store.ready(SENDING_KEY_SECRET_ID)
     created = apis.resend.call(
         "POST",
         "/api-keys",
         body={"name": name, "permission": "sending_access", "domain_id": domain_id},
     )
-    store(SENDING_KEY_SECRET_ID, SecretStr(str(created["token"])))
+    store.put(SENDING_KEY_SECRET_ID, SecretStr(str(created["token"])))
     say(f"dns: sending key {name} created and stored")
     return True
 
 
 def configure(
-    apis: Apis, domain: str, settings: Settings, store: SecretSink, clock: Callable[[], float]
+    apis: Apis, domain: str, settings: Settings, store: SecretStore, clock: Callable[[], float]
 ) -> None:
     found = ensure_domain(apis, domain, settings.region)
     domain_id = str(found["id"])
-    ensure_records(apis, zone_id(apis, domain), domain, items(found, "records"), settings.ttl)
+    ensure_records(apis, find_zone(apis, domain), domain, items(found, "records"), settings.ttl)
     wait_verified(apis, domain_id, settings, clock)
     ensure_sending_key(apis, domain_id, settings.key_name, store)
 
@@ -213,7 +240,7 @@ def main() -> int:
             apis,
             env.email_domain,
             settings,
-            secret_sink(run, env.gcp_project, cfg.gcloud.timeout_s),
+            GcloudSecrets(run, env.gcp_project, cfg.gcloud.timeout_s),
             time.monotonic,
         )
     except (DnsError, CommandError, ValueError) as exc:

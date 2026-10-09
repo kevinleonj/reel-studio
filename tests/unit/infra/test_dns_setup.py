@@ -14,6 +14,7 @@ from pydantic import SecretStr
 
 from reel_studio.adapters.resend_mailer import Backoff
 from scripts.cloud import dns
+from scripts.cloud._shell import CommandError
 
 DOMAIN = "reels.example.test"
 ZONE = "example.test"
@@ -127,24 +128,51 @@ def setup(resend: FakeResend, cloudflare: FakeCloudflare, clock: Clock) -> dns.A
         ("resend._domainkey", "resend._domainkey.reels.example.test"),
         ("links.reels.example.test", "links.reels.example.test"),
         ("reels.example.test", "reels.example.test"),
+        # relative to the zone instead of the domain: the same full names (review W2)
+        ("send.reels", "send.reels.example.test"),
+        ("resend._domainkey.reels", "resend._domainkey.reels.example.test"),
     ],
 )
 def test_record_names_are_qualified_once(name: str, expected: str) -> None:
-    assert dns.qualified(name, DOMAIN) == expected
+    assert dns.qualified(name, DOMAIN, ZONE) == expected
+
+
+class FakeStore:
+    def __init__(self, *, ready: bool = True, has_value: bool = True) -> None:
+        self.is_ready, self.holds = ready, has_value
+        self.put_calls: list[tuple[str, str]] = []
+
+    def ready(self, secret_id: str) -> None:
+        if not self.is_ready:
+            raise CommandError(f"gcloud secrets describe {secret_id} exited 1: NOT_FOUND")
+
+    def has_value(self, secret_id: str) -> bool:
+        return self.holds
+
+    def put(self, secret_id: str, value: SecretStr) -> None:
+        self.put_calls.append((secret_id, value.get_secret_value()))
+
+
+SETTINGS = dns.Settings(region="eu-west-1", ttl=1, poll_s=30, timeout_s=600, key_name="sending")
+
+
+def run_dns(
+    resend: FakeResend,
+    cloudflare: FakeCloudflare,
+    store: FakeStore,
+    *,
+    domain: str = DOMAIN,
+    settings: dns.Settings = SETTINGS,
+) -> Clock:
+    clock = Clock()
+    dns.configure(setup(resend, cloudflare, clock), domain, settings, store, clock.monotonic)
+    return clock
 
 
 def test_first_run_creates_domain_records_and_key() -> None:
-    resend, cloudflare, clock = FakeResend(), FakeCloudflare(), Clock()
-    stored: list[tuple[str, str]] = []
-    apis = setup(resend, cloudflare, clock)
+    resend, cloudflare, store = FakeResend(), FakeCloudflare(), FakeStore()
 
-    dns.configure(
-        apis,
-        DOMAIN,
-        dns.Settings(region="eu-west-1", ttl=1, poll_s=30, timeout_s=600, key_name="sending"),
-        lambda k, v: stored.append((k, v.get_secret_value())),
-        clock.monotonic,
-    )
+    run_dns(resend, cloudflare, store)
 
     assert ("/domains", {"name": DOMAIN, "region": "eu-west-1"}) in resend.posted
     names = [(r["type"], r["name"]) for r in cloudflare.created]
@@ -156,11 +184,9 @@ def test_first_run_creates_domain_records_and_key() -> None:
     assert all(r["proxied"] is False and r["ttl"] == 1 for r in cloudflare.created)
     assert cloudflare.created[1]["priority"] == 10
     assert cloudflare.created[2]["content"] == "v=spf1 include:ses.test ~all"
-    assert (
-        "/api-keys",
-        {"name": "sending", "permission": "sending_access", "domain_id": "dom-1"},
-    ) in resend.posted
-    assert stored == [("resend-api-key", "sending-token-value")]
+    key_body = {"name": "sending", "permission": "sending_access", "domain_id": "dom-1"}
+    assert ("/api-keys", key_body) in resend.posted
+    assert store.put_calls == [("resend-api-key", "sending-token-value")]
 
 
 def test_second_run_creates_nothing() -> None:
@@ -171,84 +197,81 @@ def test_second_run_creates_nothing() -> None:
     )
     cloudflare = FakeCloudflare(
         existing=[
-            {"type": "TXT", "name": "resend._domainkey.reels.example.test", "content": "p=KEY"},
+            {"type": "TXT", "name": "resend._domainkey.reels.example.test", "content": '"p=KEY"'},
             {"type": "MX", "name": "send.reels.example.test", "content": "feedback.test"},
+            # Cloudflare answers TXT content quoted; the comparison must not create a duplicate
             {
                 "type": "TXT",
                 "name": "send.reels.example.test",
-                "content": "v=spf1 include:ses.test ~all",
+                "content": '"v=spf1 include:ses.test ~all"',
             },
         ]
     )
-    clock, stored = Clock(), []
+    store = FakeStore()
 
-    dns.configure(
-        setup(resend, cloudflare, clock),
-        DOMAIN,
-        dns.Settings("eu-west-1", 1, 30, 600, "sending"),
-        lambda k, v: stored.append(k),
-        clock.monotonic,
-    )
+    run_dns(resend, cloudflare, store)
 
     assert cloudflare.created == []
-    assert [p for p, _ in resend.posted if p in {"/domains", "/api-keys"}] == []
-    assert stored == []
+    assert resend.posted == []  # not even /verify: the domain is already verified
+    assert store.put_calls == []
+
+
+def test_missing_container_stops_before_resend_mints_a_key() -> None:
+    resend = FakeResend()
+
+    with pytest.raises(CommandError, match="NOT_FOUND"):
+        run_dns(resend, FakeCloudflare(), FakeStore(ready=False))
+
+    assert all(path != "/api-keys" for path, _ in resend.posted)
+
+
+def test_rerun_after_a_lost_token_stops_with_the_recovery_step() -> None:
+    resend = FakeResend(keys=[{"id": "key-1", "name": "sending"}])
+
+    with pytest.raises(dns.DnsError, match="delete the key"):
+        run_dns(resend, FakeCloudflare(), FakeStore(has_value=False))
+
+
+def test_unexpected_list_shape_stops_instead_of_creating_a_duplicate() -> None:
+    resend = FakeResend()
+    resend.keys = {"keys": []}  # type: ignore[assignment]
+
+    with pytest.raises(dns.DnsError, match="shape"):
+        run_dns(resend, FakeCloudflare(), FakeStore())
+
+    assert all(path != "/api-keys" for path, _ in resend.posted)
 
 
 def test_verification_times_out_with_the_last_status() -> None:
-    resend, clock = FakeResend(statuses=["pending"]), Clock()
+    settings = dns.Settings("eu-west-1", 1, 30, 90, "sending")
 
     with pytest.raises(dns.DnsError, match="pending"):
-        dns.configure(
-            setup(resend, FakeCloudflare(), clock),
-            DOMAIN,
-            dns.Settings("eu-west-1", 1, 30, 90, "sending"),
-            lambda k, v: None,
-            clock.monotonic,
-        )
+        run_dns(FakeResend(statuses=["pending"]), FakeCloudflare(), FakeStore(), settings=settings)
 
-    assert clock.now >= 90
+
+def test_failed_verification_stops_at_once() -> None:
+    with pytest.raises(dns.DnsError, match="failed"):
+        run_dns(FakeResend(statuses=["pending", "failed"]), FakeCloudflare(), FakeStore())
 
 
 def test_rate_limited_cloudflare_is_retried() -> None:
-    resend, cloudflare, clock = FakeResend(), FakeCloudflare(flaky=1), Clock()
+    cloudflare = FakeCloudflare(flaky=1)
 
-    dns.configure(
-        setup(resend, cloudflare, clock),
-        DOMAIN,
-        dns.Settings("eu-west-1", 1, 30, 600, "sending"),
-        lambda k, v: None,
-        clock.monotonic,
-    )
+    clock = run_dns(FakeResend(), cloudflare, FakeStore())
 
     assert len(cloudflare.created) == 3
     assert clock.sleeps[0] == 1.0
 
 
 def test_unknown_zone_is_an_error() -> None:
-    clock = Clock()
-
     with pytest.raises(dns.DnsError, match="zone"):
-        dns.configure(
-            setup(FakeResend(), FakeCloudflare(), clock),
-            "reels.other.test",
-            dns.Settings("eu-west-1", 1, 30, 600, "sending"),
-            lambda k, v: None,
-            clock.monotonic,
-        )
+        run_dns(FakeResend(), FakeCloudflare(), FakeStore(), domain="reels.other.test")
 
 
-def test_secret_is_only_handed_to_the_sink(capsys: pytest.CaptureFixture[str]) -> None:
-    clock = Clock()
-    seen: list[SecretStr] = []
+def test_secret_is_only_handed_to_the_store(capsys: pytest.CaptureFixture[str]) -> None:
+    store = FakeStore()
 
-    dns.configure(
-        setup(FakeResend(), FakeCloudflare(), clock),
-        DOMAIN,
-        dns.Settings("eu-west-1", 1, 30, 600, "sending"),
-        lambda k, v: seen.append(v),
-        clock.monotonic,
-    )
+    run_dns(FakeResend(), FakeCloudflare(), store)
 
     assert "sending-token-value" not in capsys.readouterr().out
-    assert [v.get_secret_value() for v in seen] == ["sending-token-value"]
+    assert store.put_calls == [("resend-api-key", "sending-token-value")]

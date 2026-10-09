@@ -179,3 +179,34 @@ def test_run_timeout_is_a_command_error() -> None:
 def test_run_missing_binary_is_a_command_error() -> None:
     with pytest.raises(_shell.CommandError, match="could not start"):
         _shell.run(["/nonexistent/gcloud", "version"], None, TIMEOUT_S)
+
+
+# ---------------------------------------------------------------- the secret store
+
+
+def test_gcloud_secrets_checks_the_container_and_enabled_versions() -> None:
+    runner = FakeRunner(answers={"versions list": "projects/p/secrets/x/versions/3\n"})
+    store = _shell.GcloudSecrets(runner, PROJECT, TIMEOUT_S)
+
+    store.ready("resend-api-key")
+    assert store.has_value("resend-api-key") is True
+    store.put("resend-api-key", SecretStr("token-1"))
+
+    describe, listing, add = (c[0] for c in runner.calls)
+    assert describe[:4] == ["gcloud", "secrets", "describe", "resend-api-key"]
+    assert "--filter=state:ENABLED" in listing
+    assert add[:4] == ["gcloud", "secrets", "versions", "add"]
+    assert runner.calls[2][1] == "token-1"
+
+
+def test_gcloud_secrets_without_versions_has_no_value() -> None:
+    store = _shell.GcloudSecrets(FakeRunner(), PROJECT, TIMEOUT_S)
+
+    assert store.has_value("resend-api-key") is False
+
+
+def test_gcloud_secrets_missing_container_raises() -> None:
+    store = _shell.GcloudSecrets(FakeRunner(fail="secrets describe"), PROJECT, TIMEOUT_S)
+
+    with pytest.raises(_shell.CommandError):
+        store.ready("resend-api-key")

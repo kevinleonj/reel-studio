@@ -67,8 +67,20 @@ class FakeRunner:
         return "123\n" if "projects" in args else ""
 
 
-def sink(runner: FakeRunner) -> _shell.SecretSink:
-    return _shell.secret_sink(runner, PROJECT, TIMEOUT_S)
+class FakeStore:
+    def __init__(self, *, ready: bool = True, has_value: bool = True) -> None:
+        self.is_ready, self.holds = ready, has_value
+        self.put_calls: list[tuple[str, str]] = []
+
+    def ready(self, secret_id: str) -> None:
+        if not self.is_ready:
+            raise _shell.CommandError(f"gcloud secrets describe {secret_id} exited 1: NOT_FOUND")
+
+    def has_value(self, secret_id: str) -> bool:
+        return self.holds
+
+    def put(self, secret_id: str, value: SecretStr) -> None:
+        self.put_calls.append((secret_id, value.get_secret_value()))
 
 
 def cfg() -> config.StripeSetup:
@@ -76,17 +88,19 @@ def cfg() -> config.StripeSetup:
 
 
 def test_first_run_creates_product_price_and_webhook() -> None:
-    client, runner = FakeStripe(), FakeRunner()
+    client, store = FakeStripe(), FakeStore()
 
     price_id = stripe_setup.ensure_price(client, cfg())
-    created = stripe_setup.ensure_webhook(client, URL, cfg(), sink(runner))
+    created = stripe_setup.ensure_webhook(client, URL, cfg(), store)
 
     assert price_id == "price_1"
     [(product, product_options)] = client.v1.products.created
     assert product == {"name": cfg().product_name}
     assert product_options is not None
     assert "idempotency_key" in product_options
-    [(price, _)] = client.v1.prices.created
+    [(price, price_options)] = client.v1.prices.created
+    assert price_options is not None
+    assert "idempotency_key" in price_options
     assert price["unit_amount"] == cfg().unit_amount_minor
     assert price["currency"] == cfg().currency
     assert price["product"] == "prod_1"
@@ -96,22 +110,44 @@ def test_first_run_creates_product_price_and_webhook() -> None:
     assert endpoint["url"] == URL
     assert endpoint["enabled_events"] == cfg().events
     assert endpoint["api_version"] == stripe_setup.STRIPE_API_VERSION
-    [(args, stdin)] = runner.calls
-    assert args[:5] == ["gcloud", "secrets", "versions", "add", "stripe-webhook-secret"]
-    assert stdin == SIGNING
-    assert SIGNING not in " ".join(args)
+    assert store.put_calls == [("stripe-webhook-secret", SIGNING)]
 
 
 def test_second_run_changes_nothing() -> None:
-    client, runner = FakeStripe(), FakeRunner()
+    client, store = FakeStripe(), FakeStore()
     client.v1.prices.existing = [Obj(id="price_old")]
     client.v1.webhook_endpoints.existing = [Obj(id="we_old", url=URL)]
 
     assert stripe_setup.ensure_price(client, cfg()) == "price_old"
-    assert stripe_setup.ensure_webhook(client, URL, cfg(), sink(runner)) is False
+    assert stripe_setup.ensure_webhook(client, URL, cfg(), store) is False
     assert client.v1.products.created == []
     assert client.v1.webhook_endpoints.created == []
-    assert runner.calls == []
+    assert store.put_calls == []
+
+
+def test_an_endpoint_for_another_url_does_not_count() -> None:
+    client, store = FakeStripe(), FakeStore()
+    client.v1.webhook_endpoints.existing = [Obj(id="we_other", url="https://other.test/hook")]
+
+    assert stripe_setup.ensure_webhook(client, URL, cfg(), store) is True
+    assert len(client.v1.webhook_endpoints.created) == 1
+
+
+def test_missing_container_stops_before_stripe_mints_a_secret() -> None:
+    client = FakeStripe()
+
+    with pytest.raises(_shell.CommandError, match="NOT_FOUND"):
+        stripe_setup.ensure_webhook(client, URL, cfg(), FakeStore(ready=False))
+
+    assert client.v1.webhook_endpoints.created == []
+
+
+def test_rerun_after_a_lost_secret_stops_with_the_recovery_step() -> None:
+    client = FakeStripe()
+    client.v1.webhook_endpoints.existing = [Obj(id="we_old", url=URL)]
+
+    with pytest.raises(stripe_setup.SetupError, match="delete that endpoint"):
+        stripe_setup.ensure_webhook(client, URL, cfg(), FakeStore(has_value=False))
 
 
 @pytest.mark.parametrize(

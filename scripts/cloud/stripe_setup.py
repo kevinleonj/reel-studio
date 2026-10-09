@@ -17,11 +17,11 @@ from reel_studio.core.config import StripeSetup, load_cloud
 from reel_studio.settings import CloudSettings, WebSettings
 from scripts.cloud._shell import (
     CommandError,
+    GcloudSecrets,
     Runner,
-    SecretSink,
+    SecretStore,
     run,
     say,
-    secret_sink,
     service_url,
 )
 
@@ -29,6 +29,11 @@ STRIPE_API_VERSION = "2026-09-30.endive"  # F19
 WEBHOOK_SECRET_ID = "stripe-webhook-secret"  # noqa: S105 - a container name (infra/bootstrap)
 # Secret and restricted key prefixes per mode (Stripe API keys documentation).
 KEY_PREFIXES = {"test": ("sk_test_", "rk_test_"), "live": ("sk_live_", "rk_live_")}
+
+
+class SetupError(Exception):
+    """The vendor side and Secret Manager disagree; the message says how to recover."""
+
 
 # Any: StripeClient's v1 services are dynamically typed objects; the fake in the tests mirrors
 # only the calls used here (list and create with params/options dicts).
@@ -78,16 +83,28 @@ def ensure_price(client: Client, cfg: StripeSetup) -> str:
     return str(price.id)
 
 
-def ensure_webhook(client: Client, url: str, cfg: StripeSetup, store: SecretSink) -> bool:
-    """True when a new endpoint was created and its secret stored."""
-    existing = client.v1.webhook_endpoints.list(params={"limit": 100}).data
-    if any(endpoint.url == url for endpoint in existing):
-        say("stripe-setup: webhook endpoint exists; its secret is already stored")
+def ensure_webhook(client: Client, url: str, cfg: StripeSetup, store: SecretStore) -> bool:
+    """True when a new endpoint was created and its secret stored.
+
+    The signing secret is shown only at creation, so the container must exist first, and an
+    existing endpoint without a stored secret stops the run instead of reporting success.
+    """
+    existing = [
+        e for e in client.v1.webhook_endpoints.list(params={"limit": 100}).data if e.url == url
+    ]
+    if existing:
+        if not store.has_value(WEBHOOK_SECRET_ID):
+            raise SetupError(
+                f"webhook endpoint {existing[0].id} exists but {WEBHOOK_SECRET_ID} holds no value;"
+                " delete that endpoint in the Stripe dashboard and run make stripe-setup again"
+            )
+        say("stripe-setup: webhook endpoint exists and its secret is stored")
         return False
+    store.ready(WEBHOOK_SECRET_ID)
     endpoint = client.v1.webhook_endpoints.create(
         params={"url": url, "enabled_events": cfg.events, "api_version": STRIPE_API_VERSION}
     )
-    store(WEBHOOK_SECRET_ID, SecretStr(endpoint.secret))
+    store.put(WEBHOOK_SECRET_ID, SecretStr(endpoint.secret))
     say("stripe-setup: webhook endpoint created, signing secret stored")
     return True
 
@@ -114,9 +131,9 @@ def main(argv: list[str] | None = None) -> int:
             run, cloud_settings.gcp_project, cloud_settings.gcp_region, cfg.stripe, timeout_s
         )
         ensure_price(client, cfg.stripe)
-        store = secret_sink(run, cloud_settings.gcp_project, timeout_s)
+        store = GcloudSecrets(run, cloud_settings.gcp_project, timeout_s)
         ensure_webhook(client, url, cfg.stripe, store)
-    except (ValueError, CommandError, stripe.StripeError) as exc:
+    except (ValueError, CommandError, SetupError, stripe.StripeError) as exc:
         say(f"stripe-setup: {exc}")
         return 1
     return 0

@@ -6,7 +6,8 @@
 The URL alone is enough: its F61 shape names the service, the project number and the region.
 Checks: GET /health is 200; GET / serves the built site; GET /api/config is a JSON object; the
 live service has max instances 2 and cpu_idle; the job has a 3600 s timeout and 0 retries; the
-orders TTL policy is ACTIVE (Terraform does not wait for it, infra/main/firestore.tf). Reads use
+orders TTL policy is ACTIVE, or CREATING right after a first deploy (Terraform does not
+wait for it, infra/main/firestore.tf). Reads use
 Application Default Credentials (the deploy job's Workload Identity, or `gcloud auth
 application-default login` on the laptop). Exit 0 when every check passes, 1 otherwise, 2 for
 an unusable URL.
@@ -22,7 +23,8 @@ from datetime import timedelta
 from typing import Protocol
 
 import httpx
-from google.api_core.exceptions import GoogleAPICallError
+from google.api_core.exceptions import GoogleAPIError
+from google.auth.exceptions import GoogleAuthError
 from google.cloud import firestore_admin_v1, run_v2
 
 from reel_studio.core.config import Smoke, load_cloud
@@ -92,7 +94,7 @@ def guarded(name: str, check: Callable[[], tuple[bool, str]]) -> Result:
     """One check; an HTTP or API error is that check's failure, reported, never a crash."""
     try:
         ok, detail = check()
-    except (httpx.HTTPError, GoogleAPICallError, ValueError) as exc:
+    except (httpx.HTTPError, GoogleAPIError, GoogleAuthError, ValueError) as exc:
         return Result(name, False, f"{type(exc).__name__}: {exc}")
     return Result(name, ok, detail)
 
@@ -159,7 +161,10 @@ def cloud_checks(clients: Clients, target: Target, cfg: Smoke) -> list[Result]:
             name=f"projects/{target.number}/{TTL_FIELD}", timeout=timeout
         )
         state = TtlState(field.ttl_config.state)
-        return state == TtlState.ACTIVE, f"state={state.name}"
+        # Terraform does not wait for TTL (skip_wait); enabling takes ten minutes or more, so
+        # CREATING right after a first deploy is pending, not broken.
+        pending = " (pending: enabling takes 10+ min)" if state == TtlState.CREATING else ""
+        return state in {TtlState.ACTIVE, TtlState.CREATING}, f"state={state.name}{pending}"
 
     return [
         guarded("service max instances", max_instances),
@@ -189,12 +194,18 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_ERROR
     cfg = load_cloud().smoke
     with httpx.Client(base_url=target.base_url, timeout=cfg.http_timeout_s) as http:
-        clients = Clients(
-            http=http,
-            services=run_v2.ServicesClient(),
-            jobs=run_v2.JobsClient(),
-            admin=firestore_admin_v1.FirestoreAdminClient(),
-        )
+        try:
+            clients = Clients(
+                http=http,
+                services=run_v2.ServicesClient(),
+                jobs=run_v2.JobsClient(),
+                admin=firestore_admin_v1.FirestoreAdminClient(),
+            )
+        except GoogleAuthError as exc:
+            say(
+                f"FAIL credentials: {type(exc).__name__}; run gcloud auth application-default login"
+            )
+            return EXIT_FOUND
         results = run_all(clients, target, cfg)
     for result in results:
         say(f"{'PASS' if result.ok else 'FAIL'} {result.name}: {result.detail}")
