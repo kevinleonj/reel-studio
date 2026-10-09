@@ -186,6 +186,66 @@ class Styles(_Strict):
     text_languages: Languages
 
 
+# ---------------------------------------------------------------- cloud.toml
+
+
+class Gcp(_Strict):
+    call_timeout_s: float
+    retry_deadline_s: float
+    retry_initial_s: float
+    retry_multiplier: float
+    retry_max_s: float
+    signed_url_max_minutes: int
+
+
+class Resend(_Strict):
+    timeout_s: float
+    retries: int
+    backoff_s: float
+
+
+class Gcloud(_Strict):
+    timeout_s: float
+
+
+class Dns(_Strict):
+    resend_region: str
+    http_timeout_s: float
+    http_retries: int
+    backoff_s: float
+    verify_poll_s: float
+    verify_timeout_s: float
+    record_ttl: int
+    sending_key_name: str
+
+
+class StripeSetup(_Strict):
+    product_name: str
+    unit_amount_minor: int
+    currency: str
+    webhook_path: str
+    events: list[str]
+    timeout_s: float
+    max_network_retries: int
+
+
+class Smoke(_Strict):
+    http_timeout_s: float
+    expected_max_instances: int
+    expected_job_timeout_s: int
+    expected_job_max_retries: int
+    root_marker: str
+
+
+class Cloud(_Strict):
+    gcp: Gcp
+    resend: Resend
+    gcloud: Gcloud
+    dns: Dns
+    stripe: StripeSetup
+    smoke: Smoke
+
+
 # ---------------------------------------------------------------- loading
 
 
@@ -219,3 +279,8 @@ def load(folder: Path = CONFIG_DIR) -> Config:
             "styles": _read(folder / "styles.toml"),
         }
     )
+
+
+def load_cloud(folder: Path = CONFIG_DIR) -> Cloud:
+    """Read and validate cloud.toml: only the cloud adapters and the STEP-08 scripts need it."""
+    return Cloud.model_validate(_read(folder / "cloud.toml"))

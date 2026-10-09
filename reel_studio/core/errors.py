@@ -30,6 +30,8 @@ class ErrorCode(StrEnum):
     TOO_LARGE = "too_large"
     BAD_TYPE = "bad_type"
     NO_FILES = "no_files"
+    # cloud adapters (STEP-08): Cloud Storage, Cloud Run, Resend after our retries
+    CLOUD_UNAVAILABLE = "cloud_unavailable"
 
 
 class ReelError(Exception):
@@ -61,12 +63,17 @@ class ApiError(ReelError):
     """A website request was refused; the API maps each code to an HTTP status."""
 
 
+class CloudError(ReelError):
+    """A Google Cloud or Resend call failed after our retries (storage, launcher, mailer)."""
+
+
 BOUNDARIES: tuple[type[ReelError], ...] = (
     InputError,
     EditorError,
     ProviderError,
     MediaError,
     ApiError,
+    CloudError,
 )
 
 # ---------------------------------------------------------------- editor job
@@ -133,3 +140,10 @@ class BadType(ApiError):
 
 class NoFiles(ApiError):
     code = ErrorCode.NO_FILES
+
+
+# ---------------------------------------------------------------- cloud adapters
+
+
+class CloudUnavailable(CloudError):
+    code = ErrorCode.CLOUD_UNAVAILABLE

@@ -8,10 +8,18 @@ Messages use lazy %s formatting. Never log a key, a token, an email body or a qu
 import json
 import logging
 import sys
+import time
 from datetime import UTC, datetime
 from typing import TextIO
 
+from reel_studio.core.constants import MS_PER_SECOND
+
 D74_FIELDS = ("order_id", "stage", "event", "latency_ms", "outcome")
+
+
+def latency_ms(started: float) -> int:
+    """Milliseconds since `started`, a `time.monotonic()` reading (a duration, not the clock)."""
+    return round((time.monotonic() - started) * MS_PER_SECOND)
 
 
 class JsonLineFormatter(logging.Formatter):

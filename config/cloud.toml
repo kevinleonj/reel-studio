@@ -1,0 +1,49 @@
+# Google Cloud, Resend, Cloudflare and Stripe setup tunables (STEP-08). Loaded and validated by
+# reel_studio/core/config.py; an unknown or missing key fails at load time.
+
+[gcp]
+# Every Cloud Storage and Cloud Run call: a per-call timeout and a bounded retry with backoff.
+call_timeout_s = 30
+retry_deadline_s = 120   # google.api_core default, written out (doc ledger: google-cloud-storage)
+retry_initial_s = 1.0
+retry_multiplier = 2.0
+retry_max_s = 30.0
+signed_url_max_minutes = 10080   # V4 signed URLs live at most 7 days (doc ledger)
+
+[resend]
+timeout_s = 15
+retries = 3
+backoff_s = 1.0
+
+[gcloud]
+# `make gcp-project` and `make secrets-push` shell out to Kevin's gcloud login.
+timeout_s = 180
+
+[dns]
+# make dns: Resend domain in eu-west-1 (docs/INFRA.md §3), records added in Cloudflare.
+resend_region = "eu-west-1"
+http_timeout_s = 20
+http_retries = 3
+backoff_s = 2.0
+verify_poll_s = 30
+verify_timeout_s = 1800   # DNS propagation can take a while; stop and report after 30 min
+record_ttl = 1   # Cloudflare: 1 = automatic (doc ledger: cloudflare-dns-rest)
+sending_key_name = "reel-studio-cloud-sending"
+
+[stripe]
+# make stripe-setup: product, one-time price and the cloud webhook endpoint (D58).
+product_name = "Reel"
+unit_amount_minor = 1900   # €19.00 in cents (D58)
+currency = "eur"
+webhook_path = "/api/stripe/webhook"   # docs/ARCHITECTURE.md §7
+events = ["checkout.session.completed", "checkout.session.expired"]   # F23
+timeout_s = 30
+max_network_retries = 2
+
+[smoke]
+# make smoke: the live service and job against D51, D52 and docs/INFRA.md §4.
+http_timeout_s = 30   # the first request may hit a cold start
+expected_max_instances = 2   # D51
+expected_job_timeout_s = 3600   # D52
+expected_job_max_retries = 0   # D52
+root_marker = "<html"   # GET / must serve the built site; web lane may tighten this
