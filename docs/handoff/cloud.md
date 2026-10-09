@@ -4,14 +4,17 @@ Written by the cloud lane only. Newest entry on top.
 
 ## Status board
 - Done: STEP-08 phase A — policy data (`infra/policy/`), Terraform `infra/bootstrap/` and `infra/main/`
-  (fmt, init `-backend=false` and validate pass on Terraform 1.16.5 with provider 8.6.0),
-  `.github/workflows/deploy.yml`. Committed locally on `step-08-cloud`, not pushed.
-- Partly: STEP-08 task 1 (policy files exist; `scripts/check_policy.py`, its bad fixtures and the
-  `ci-install.d/cloud.sh` tools wait for STEP-01).
-- Blocked: push and pull request, until STEP-01 is merged to main (Kevin's instruction).
+  (fmt, init `-backend=false`, validate, tflint and an offline `terraform test` pass on Terraform
+  1.16.5 with provider 8.6.0), `infra/.tflint.hcl`, `.github/workflows/deploy.yml`. Senior review
+  round 2: PASS at 90c3a9a. Doc-ledger entries for the task 0 libraries are in
+  `infra/doc-ledger.pending.json` (8 entries, Context7-checked). Committed locally, not pushed.
+- Partly: STEP-08 task 1 (policy data and tflint config exist; `scripts/check_policy.py`, its bad
+  fixtures, `mk/cloud.mk` and `ci-install.d/cloud.sh` wait for STEP-01).
+- Blocked: push and pull request, until STEP-01 (PR #1, `step-01-skeleton`) is merged to main.
 - Not started: tasks 0, 2, 3 (plan/apply), 5, 7, 8, 9.
-- Next: after STEP-01 merges — `git merge origin/main`, then `scripts/check_policy.py` test first,
-  `mk/cloud.mk`, `scripts/ci-install.d/cloud.sh`, tflint config, `make ci`, push.
+- Next: after STEP-01 merges — `git merge origin/main`, `make setup`, then task 0 with fakes,
+  `scripts/check_policy.py` test first, `mk/cloud.mk`, `scripts/ci-install.d/cloud.sh`, task 5
+  targets (written, not run), `scripts/smoke.py`, `make ci`, push, PR.
 
 ## Needs Kevin
 - **Where the deployer's `roles/iam.serviceAccountUser` lives.** `docs/ARCHITECTURE.md` §5 says the
@@ -31,8 +34,13 @@ Written by the cloud lane only. Newest entry on top.
 - **Create the `beta` environment before deploy.yml reaches main** (task 6): you as required
   reviewer, deployment branches limited to main. GitHub auto-creates a missing environment without
   protection, so the first dispatch would apply unreviewed. Today `gh api` shows 0 environments.
-- **`.gitignore` lacks `*.tfvars`, `*.tfvars.json`, `tfplan.json`, `crash.log`** (outside the cloud
-  lane). The repository is public; until added, pass bootstrap values with `-var` only.
+- **First deploy may need a second dispatch.** The service, job and scheduler now wait for the
+  deployer's actAs grant in the plan graph, but IAM propagation takes about 2 and up to 7 minutes,
+  and the provider does not sleep after an IAM write. A permission-denied on the first run is
+  expected to heal on re-dispatch. Clean fix: create the three runtime accounts and the actAs grant in
+  bootstrap (ARCHITECTURE §5 wording), see the first item. Your call.
+- **Root `.gitignore`** could also carry `*.tfvars`, `tfplan.json`, `crash.log` (outside the lane);
+  `infra/.gitignore` now covers everything under `infra/`.
 - **A hook auto-commits every Write/Edit as `chore(auto): ...`.** It skipped files the hardcode hooks
   flagged, leaving a half-committed tree. I squashed the 14+ auto-commits into logical commits
   (local only, never pushed). Worth turning off for lane worktrees.
@@ -82,12 +90,21 @@ Before: no `infra/`, no deploy workflow. After:
   `enable_object_retention`, Firestore index `density`/`multikey`, Cloud Run `execution_environment`,
   service-level `scaling` (revision-level `template.scaling` carries min 0 / max 2), resource-manager
   `tags`, encryption (Google-managed keys).
-- Not run: `terraform plan` (no project yet), tflint, trivy, `make ci` (STEP-01), any apply.
+- Not run: `terraform plan` (no project yet), `make ci` (STEP-01), any apply. Run later (90c3a9a):
+  tflint 0.64.0 0 issues (F404); the reviewer ran Trivy 0.74.0: GCP-0078 MEDIUM, GCP-0066 LOW x2,
+  all by design; CI threshold HIGH,CRITICAL to be set in `make ci`.
 - Senior review round 1: FAIL, 2 critical, both fixed. C1: the Cloud Run service and job now depend on
   the deployer's actAs grant (only the scheduler did). C2: `skip_wait = true` on the TTL field,
   because Google documents ten minutes or more to enable TTL and the apply job has 15. Warnings fixed:
   tfvars comment, `credit_types_treatment = "INCLUDE_ALL_CREDITS"` written, env-secret timing
   comment, deploy.yml variable comment. Round 2 pending at the time of commit.
+- Review round 2 (90c3a9a): PASS, 0 critical. Fixed after it: `terraform test` with mock_provider in
+  `infra/main/tests/` (IAM matrix, D62 key split, F61 URL, job limits, skip_wait; mutants with
+  `skip_wait = false` and `max_retries = 1` fail it), TTL comment now names `make smoke` as the check
+  (no STEP-08 task records it), `infra/.gitignore` covers tfvars and plans, bootstrap deployer
+  account and roles depend on the bootstrap APIs, commit messages cite F400-F403.
+- Waits for `scripts/check_policy.py`: require `depends_on` on the service, job and scheduler (not
+  testable in `terraform test`); `make smoke` must check TTL ACTIVE.
 - Review follow-ups (not done): confirm the three UNCONFIRMED rows in `locations.toml` and the F401
   currency rule in FACTS (the reviewer read all four pages as confirming); FACTS rows for GitHub OIDC
   claims, Scheduler OIDC, env-secret timing and TTL duration; pin secret versions for reel-api;
