@@ -115,6 +115,9 @@ class Ffmpeg:
         except subprocess.TimeoutExpired as exc:
             outcome = "timeout"
             raise RenderError(f"{what} timed out after {timeout_s} s") from exc
+        except OSError as exc:  # missing or not executable: FFMPEG_PATH/FFPROBE_PATH are wrong
+            outcome = "cannot_start"
+            raise RenderError(f"{what}: cannot start {argv[0]} ({exc.strerror})") from exc
         finally:
             latency_ms = round((time.monotonic() - started) * constants.MS_PER_S)
             extra = {

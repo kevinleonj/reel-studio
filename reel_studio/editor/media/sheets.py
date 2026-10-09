@@ -140,6 +140,8 @@ def build(
         shots += [Shot(proxy.id, t, f) for t, f in drop_near_duplicates(readable, limits, media.qa)]
     images, legend = draw(shots, limits, media)
     out_dir.mkdir(parents=True, exist_ok=True)
+    for old in out_dir.glob("sheet*.jpg"):  # a rerun with fewer clips (kit prep.py:170-171)
+        old.unlink()
     paths = []
     for number, image in enumerate(images, start=1):
         path = out_dir / f"sheet{number:02d}.jpg"

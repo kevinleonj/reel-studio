@@ -30,7 +30,7 @@ def test_render_writes_outputs_and_leaves_the_input_identical(
     )
     assert isinstance(settings, EditorSettings)
     before = _tree(clips_dir)
-    out = tmp_path / "out"
+    out = tmp_path / "Sofia's reel: v2"  # a quote and a colon once broke the LUT filter
 
     code = reel.main(["render", "--edl", str(BASIC), str(clips_dir), "--out", str(out)], settings)
 

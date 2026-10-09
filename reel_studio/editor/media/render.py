@@ -7,6 +7,7 @@ No music is ever added (D02): the natural sound stays, music is picked inside In
 """
 
 import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -88,19 +89,23 @@ def _luts(job: Job, shots: Shots, edl: Edl, folder: Path) -> dict[str, Path]:
         strength=g.strength if g is not None and g.strength is not None else cfg.default_strength,
         match=g.match if g is not None and g.match is not None else cfg.default_match,
     )
-    return grade.build_luts(
-        shots, choice, grade.reference_of(shots, job.input_dir, job.media), folder, cfg
-    )
+    ref = grade.reference_of(shots, job.input_dir, job.media)
+    if choice.look == "reference" and ref.ref is None:  # kit grade.py:196-197 warned here too
+        log.warning(
+            "look 'reference' without a style photo (vsco/look/ref in its name): natural vibrance",
+            extra={"stage": STAGE, "event": "no_style_photo"},
+        )
+    return grade.build_luts(shots, choice, ref, folder, cfg)
 
 
 def render(job: Job, shots: Shots, edl: Edl) -> Timeline:
     """Render text.mp4 and clean.mp4 from a checked EDL; returns the timeline."""
-    if edl.audio.music is not None:
+    if edl.audio.music:
         raise RenderError("music is not supported: music is chosen inside Instagram (D02)")
     version = edl.versions[0]
-    tmp = job.work / "render_tmp"
-    shutil.rmtree(tmp, ignore_errors=True)
-    tmp.mkdir(parents=True)
+    # Intermediates live in a system temp folder, not under --out: LUT paths are spliced into an
+    # ffmpeg filtergraph, where a quote, colon or backslash in the customer's path would break it.
+    tmp = Path(tempfile.mkdtemp(prefix="reel-render-"))
     try:
         luts = _luts(job, shots, edl, tmp / "luts")
         events, starts, total = text_events(version, job.media)

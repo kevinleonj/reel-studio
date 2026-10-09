@@ -16,6 +16,7 @@ from PIL import Image
 from pydantic import BaseModel
 
 from reel_studio.core import constants
+from reel_studio.core.errors import RenderError
 from reel_studio.core.media_config import Qa
 from reel_studio.editor.media.colour import ssim
 from reel_studio.editor.media.qa_frames import Cut, Frames, SegmentStats
@@ -82,6 +83,9 @@ def measure_audio(ffmpeg: Ffmpeg, path: Path, cfg: Qa) -> AudioResult:
     ]
     err = ffmpeg.measure(args, f"QA measure {path.name}")
     lufs = LUFS.findall(err)
+    if not lufs:  # fail closed: no measurement must never read as clean (phase B review W5)
+        last = err.strip().rpartition("\n")[2]
+        raise RenderError(f"QA could not measure loudness of {path.name}: {last}")
     return AudioResult(
         lufs=float(lufs[-1]) if lufs else None,
         black=[(float(a), float(b)) for a, b in BLACK.findall(err)],

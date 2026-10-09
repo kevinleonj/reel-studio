@@ -5,10 +5,15 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from reel_studio.core import constants
+from reel_studio.core.errors import RenderError
 from reel_studio.core.media_config import Media
 from reel_studio.core.media_config import Segment as SegmentConfig
 from reel_studio.editor.media.edl_models import GradeBlock, Resolved, Version, seg_dur
 from reel_studio.editor.media.shots import Clip
+
+# Characters that end or escape a quoted filter argument in an ffmpeg filtergraph (ffmpeg-filters
+# "Notes on filtergraph escaping"); reproduced in the phase B review with ' : and \.
+FILTERGRAPH_SPECIALS = ("'", ":", "\\")
 
 
 class TextEvent(BaseModel):
@@ -51,6 +56,8 @@ def grade_filter(block: GradeBlock | None, lut: Path | None, media: Media) -> st
     """Per-clip LUT then an optional eq fine-tune (kit render.py:179-186)."""
     out = ""
     if lut is not None:
+        if any(ch in str(lut) for ch in FILTERGRAPH_SPECIALS):
+            raise RenderError(f"LUT path {lut} holds a character ffmpeg's filtergraph cannot take")
         out = f",format=rgb24,lut3d=file='{lut}':interp={media.grade.lut_interp},format=yuv420p"
     if block is not None and any(
         v is not None for v in (block.brightness, block.contrast, block.saturation)

@@ -72,6 +72,12 @@ def footage(folder: Path, reference_words: tuple[str, ...]) -> list[Path]:
         if suffix not in constants.VIDEO_EXT | constants.IMAGE_EXT:
             continue
         if suffix in constants.IMAGE_EXT and any(word in stem for word in reference_words):
+            # Substring match as in the kit; say so, since "refried.jpg" matches too (Needs Kevin).
+            log.info(
+                "style photo, not footage: %s",
+                path.name,
+                extra={"stage": STAGE, "event": "style_photo"},
+            )
             continue
         files.append(path)
     return files
@@ -172,7 +178,7 @@ def photo_proxy(src: Path, dst: Path, ffmpeg: Ffmpeg, cfg: Photo) -> tuple[int, 
     try:
         with Image.open(src) as opened:
             image = ImageOps.exif_transpose(opened).convert("RGB")
-    except (OSError, UnidentifiedImageError) as exc:
+    except (OSError, UnidentifiedImageError, Image.DecompressionBombError) as exc:
         raise MediaError(f"Cannot open photo {src.name}: {exc}") from exc
     width, height = cover_size(*image.size)
     still = dst.with_suffix(".png")
@@ -249,6 +255,7 @@ def prepare_folder(folder: Path, work: Path, ffmpeg: Ffmpeg, media: Media) -> li
     (work / ORIGINALS).mkdir(parents=True, exist_ok=True)
     (work / CLIPS).mkdir(parents=True, exist_ok=True)
     files = footage(folder, media.grade.reference_words)
+    found = len(files)
     probes: dict[Path, Probe] = {}
     for path in files:
         if path.suffix.lower() in constants.VIDEO_EXT:
@@ -280,5 +287,5 @@ def prepare_folder(folder: Path, work: Path, ffmpeg: Ffmpeg, media: Media) -> li
         )
         proxies.append(proxy)
     if not proxies:
-        raise NoUsableInput(f"no usable video or photo in {len(files)} file(s)")
+        raise NoUsableInput(f"no usable video or photo in {found} file(s)")
     return proxies
