@@ -6,15 +6,17 @@ import re
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from reel_studio.core import config, constants
-from reel_studio.editor.media import edl, pipeline, render, tools
+from reel_studio.editor.media import edl, pipeline, qa, render, tools
 from reel_studio.editor.media.edl_models import Edl
 from reel_studio.editor.media.shots import Shots
 
 BASIC = Path(__file__).resolve().parents[2] / "fixtures" / "edl" / "basic.json"
 LUFS_TOLERANCE = 1.0  # the STEP-02 gate's tolerance
 LUFS = re.compile(r"I:\s+(-?[\d.]+) LUFS")
+Rendered = tuple[Path, Shots, render.Timeline, dict[str, str], render.Job]
 
 
 def _hashes(folder: Path) -> dict[str, str]:
@@ -24,7 +26,7 @@ def _hashes(folder: Path) -> dict[str, str]:
 @pytest.fixture(scope="module")
 def rendered(
     clips_dir: Path, ffmpeg: tools.Ffmpeg, tmp_path_factory: pytest.TempPathFactory
-) -> tuple[Path, Shots, render.Timeline, dict[str, str]]:
+) -> Rendered:
     before = _hashes(clips_dir)
     work, out = tmp_path_factory.mktemp("work"), tmp_path_factory.mktemp("out")
     media = config.load_media()
@@ -34,13 +36,13 @@ def rendered(
     assert isinstance(report.edl, Edl)
     job = render.Job(work=work, input_dir=clips_dir, out_dir=out, ffmpeg=ffmpeg, media=media)
     timeline = render.render(job, shots, report.edl)
-    return out, shots, timeline, before
+    return out, shots, timeline, before, job
 
 
 def test_shots_json_numbers_windows_and_lists_sheets(
-    rendered: tuple[Path, Shots, render.Timeline, dict[str, str]],
+    rendered: Rendered,
 ) -> None:
-    _, shots, _, _ = rendered
+    _, shots, _, _, _ = rendered
 
     assert [c.id for c in shots.clips] == ["c01", "c02", "c03", "c04", "c05"]
     assert shots.windows[0].id == "w001"
@@ -48,10 +50,8 @@ def test_shots_json_numbers_windows_and_lists_sheets(
 
 
 @pytest.mark.parametrize("name", [render.TEXT, render.CLEAN])
-def test_output_matches_the_reel_spec(
-    rendered: tuple[Path, Shots, render.Timeline, dict[str, str]], ffmpeg: tools.Ffmpeg, name: str
-) -> None:
-    out, _, timeline, _ = rendered
+def test_output_matches_the_reel_spec(rendered: Rendered, ffmpeg: tools.Ffmpeg, name: str) -> None:
+    out, _, timeline, _, _ = rendered
     info = ffmpeg.probe(out / name)
 
     assert (info.width, info.height) == (constants.OUT_W, constants.OUT_H)
@@ -62,10 +62,8 @@ def test_output_matches_the_reel_spec(
 
 
 @pytest.mark.parametrize("name", [render.TEXT, render.CLEAN])
-def test_loudness_is_minus_14_lufs(
-    rendered: tuple[Path, Shots, render.Timeline, dict[str, str]], ffmpeg: tools.Ffmpeg, name: str
-) -> None:
-    out, _, _, _ = rendered
+def test_loudness_is_minus_14_lufs(rendered: Rendered, ffmpeg: tools.Ffmpeg, name: str) -> None:
+    out, _, _, _, _ = rendered
     args = [
         "-hide_banner",
         "-nostats",
@@ -86,24 +84,36 @@ def test_loudness_is_minus_14_lufs(
     assert abs(float(found[-1]) - constants.TARGET_LUFS) <= LUFS_TOLERANCE
 
 
-def test_input_folder_is_byte_identical(
-    rendered: tuple[Path, Shots, render.Timeline, dict[str, str]], clips_dir: Path
-) -> None:
-    _, _, _, before = rendered
+def test_input_folder_is_byte_identical(rendered: Rendered, clips_dir: Path) -> None:
+    _, _, _, before, _ = rendered
 
     assert _hashes(clips_dir) == before
 
 
 def test_timeline_places_every_segment_and_text(
-    rendered: tuple[Path, Shots, render.Timeline, dict[str, str]],
+    rendered: Rendered,
 ) -> None:
-    _, _, timeline, _ = rendered
+    _, _, timeline, _, _ = rendered
 
     assert len(timeline.segments) == 7
-    assert [t["text"] for t in timeline.text] == [
+    assert [t.text for t in timeline.text] == [
         "Self test title card",
         "Slow motion",
         "Landscape crop",
         "Long take 4x",
     ]
-    assert all(t["inside_safe_zone"] for t in timeline.text)
+    assert all(t.inside_safe_zone for t in timeline.text)
+
+
+def test_qa_hard_checks_are_all_true_on_the_basic_render(rendered: Rendered) -> None:
+    out, _, timeline, _, job = rendered
+    limit = config.load().limits.sheets.max_image_side_px
+
+    result = qa.run(job, timeline, limit)
+
+    assert result.hard_checks.model_dump() == dict.fromkeys(result.hard_checks.model_dump(), True)
+    written = json.loads((out / qa.QA_JSON).read_text(encoding="utf-8"))
+    assert all(v is True for v in written["hard_checks"].values())
+    for sheet in result.sheets:
+        with Image.open(sheet) as image:
+            assert max(image.size) <= limit
