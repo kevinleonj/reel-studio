@@ -3,7 +3,7 @@
 
 .DEFAULT_GOAL := help
 
-UV := uv run --locked
+UV := uv run --locked --all-extras
 PY313 := uv run --quiet --no-project --python 3.13 python
 FAST := not paid and not slow and not race and not e2e and not emulator
 GITLEAKS_TIMEOUT_S := 300
