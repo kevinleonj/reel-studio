@@ -47,13 +47,41 @@ Written by the cloud lane only. Newest entry on top.
 - **Hooks:** the `chore(auto)` hook skips files other hooks flag, leaving half-committed trees (I
   squash before every push); `gate-hardcode.sh` has no suppression marker and flags named constants
   in `infra/*/locals.tf`, `core/constants.py` and the scripts' vendor base URLs.
-- **First run of `make dns` to watch:** Resend record names are qualified as `<name>.<domain>`
-  (F407); the `GET /api-keys` list shape is UNCONFIRMED (assumed like `/domains`).
+- **First run of `make dns` to watch:** Resend record names for a subdomain may be relative to the
+  domain or to the zone; `make dns` maps both to the same full name (F407 UNCONFIRMED for a
+  subdomain), and the `GET /api-keys` list shape is UNCONFIRMED (an unexpected shape now stops the
+  run instead of creating a duplicate key).
+- **Launcher is at-most-once (review W5).** No caller may retry `launch` for one run token; on
+  CloudUnavailable leave the order running and let the lease sweep fail it. Two executions with the
+  same token both pass ARCHITECTURE §4's worker check, so the worker should claim the token
+  atomically (set `queue.started_at` in a transaction, exit if already set). Affects the web lane's
+  Dispatcher and the engine lane (the editor job starts the next order). ARCHITECTURE §3 row 86
+  still reads `launch(order_id)`: docs are yours.
+- **Editor image needs the cloud libraries (review W10).** `pyproject.toml` `[editor]` lacks
+  google-cloud-storage, google-cloud-run and google-cloud-firestore, but the editor job uses the
+  Storage and Launcher adapters. Either `[editor]` lists them or `docker/editor.Dockerfile` installs
+  `[api]` too (main and engine lanes).
+- **Mailer on the request path (review W7):** worst case 4 attempts x 15 s + backoff exceeds the
+  30 s Cloud Run request timeout; when wiring the order-link email in reel-api, send it in the
+  background or with one retry. Nothing consumes `[resend]` yet.
+- **Review gate file:** the global Stop gate wants `.claude/review-verdict.json`, but
+  `guard_paths.py` blocks every write to `.claude/` from a lane worktree (three reviewers hit it).
+  Add the file to `lanes.json` shared paths or exempt it.
 
 ## What waits for a real project (STEP-08 tasks)
 - Task 2 `make gcp-project`, task 3 `make bootstrap-plan` then your apply and the state migration,
   task 5 runs, task 6 `beta` environment and repository variables, task 7 runtime facts F30/F32/F34,
-  task 8 smoke and the phone order, task 9 budget check. The Gemini terms note for FACTS (task 5).
+  task 8 smoke and the phone order, task 9 budget check. (Task 5's Gemini terms note is done: F409.)
+
+## Open follow-ups (no project needed)
+- `scripts/check_policy.py` false negatives (review W8): a `dynamic` block with `for_each = []`
+  counts as present (e.g. a budget with no threshold rules), the `service.uri` ban is a text regex
+  (misses `[0].uri`), and only direct children of `infra/` are roots. Fix by reading
+  `terraform show -json` of a mocked plan.
+- `make dns`: `GET /domains` ignores `has_more` (fine below 100 domains); a lost response to
+  `POST /api-keys` retried could orphan a key (rare; the rerun then stops and asks for cleanup).
+- cloud.toml values are key-strict but not range-checked (review S1); SigningIdentity repr shows the
+  token (S2); `signed_url` signs any key: callers must authorise (S2).
 
 ## Evidence lines (the gates read these)
 
@@ -75,6 +103,14 @@ Before: phase A only. After (commits 41b3feb, 14b6ec8, 91da52e on top of the mer
   key), smoke (8 checks from the URL alone).
 - Doc ledger: 17 entries in `infra/doc-ledger.pending.json`, Context7 or vendor page each.
 - Not run: anything against Google Cloud, Stripe, Resend or Cloudflare (budget $0, no project).
+- Senior review of cd66765..005d131: PASS, 0 critical, 11 warnings. Fixed before push: W1 (show-once
+  secrets: container checked before Stripe or Resend mints one; an existing endpoint or key with no
+  stored value stops with the recovery step), W2 (record names relative to zone or domain), W3
+  (unexpected list shape stops, no /verify on a verified domain, `failed` stops at once), W4
+  (RetryError and google-auth errors become CloudUnavailable; messages keep only the exception type),
+  W6 (TTL CREATING is pending; auth and retry errors fail one check, not the run), W9 (price
+  idempotency key and endpoint URL match now pinned), W11 (F407 status, F409 Gemini terms). Open:
+  W5, W7, W8, W10 under Needs Kevin / follow-ups.
 
 ### 9 Oct 2026 — STEP-08 phase A
 Before: no `infra/`, no deploy workflow. After:
