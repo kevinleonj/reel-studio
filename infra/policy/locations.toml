@@ -1,0 +1,43 @@
+# Allowed locations per Google Cloud service. D50: every regional resource lives in europe-west1.
+# scripts/check_policy.py fails on any location, region or location_id in infra/ that is not listed
+# for its service. `source` is where availability in that location was read (FACTS id + URL);
+# "UNCONFIRMED" means nobody has opened the page yet, so the row rests on D50 alone.
+# Lesson L5: Cloud Scheduler is not offered in Madrid, which is why this file exists.
+
+[cloud_run]
+resources = ["google_cloud_run_v2_service", "google_cloud_run_v2_job"]
+allowed = ["europe-west1"]
+source = "F27 https://docs.cloud.google.com/run/docs/locations"  # hardcode-ok: citation of where availability was read
+
+[cloud_scheduler]
+resources = ["google_cloud_scheduler_job"]
+allowed = ["europe-west1"]
+source = "F26 https://docs.cloud.google.com/scheduler/docs/locations"  # hardcode-ok: citation of where availability was read
+
+[firestore]
+resources = ["google_firestore_database"]
+allowed = ["europe-west1"]
+source = "F28 https://docs.cloud.google.com/firestore/native/docs/locations"  # hardcode-ok: citation of where availability was read
+
+[cloud_storage]
+resources = ["google_storage_bucket"]
+# Bucket locations are written in upper case by the API; the check compares case-insensitively.
+allowed = ["EUROPE-WEST1"]
+source = "UNCONFIRMED https://docs.cloud.google.com/storage/docs/locations"  # hardcode-ok: citation of where availability was read
+
+[artifact_registry]
+resources = ["google_artifact_registry_repository"]
+allowed = ["europe-west1"]
+source = "UNCONFIRMED https://docs.cloud.google.com/artifact-registry/docs/repositories/repo-locations"  # hardcode-ok: citation of where availability was read
+
+[secret_manager]
+# User-managed replication: the replica location is the one checked.
+resources = ["google_secret_manager_secret"]
+allowed = ["europe-west1"]
+source = "UNCONFIRMED https://docs.cloud.google.com/secret-manager/docs/locations"  # hardcode-ok: citation of where availability was read
+
+[cloud_logging]
+# Log buckets: _Default is a global bucket and cannot move.
+resources = ["google_logging_project_bucket_config"]
+allowed = ["global"]
+source = "Context7 /hashicorp/terraform-provider-google logging_project_bucket_config (_Default example uses global)"
