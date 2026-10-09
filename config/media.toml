@@ -1,0 +1,332 @@
+# Media tunables ported from the kit (D46, D76). Code under reel_studio/editor/media/ reads these.
+# Every line cites `<file>:<line>` in $OLD_KIT_DIR/scripts/ (kit snapshot of 7 Oct 2026, read 9 Oct 2026).
+# Units are in the key suffix and the comment: _s seconds, _ms milliseconds, _px pixels, _db decibels,
+# _kbps kilobits per second, _hz hertz. Lab values: L 0..100, a/b roughly -128..127 (OpenCV float Lab).
+#
+# Not here, on purpose:
+# - Format facts (output 1080x1920 @ 30 fps, H.264/AAC, -14 LUFS, 48 kHz stereo, text safe zone, file
+#   extensions, HDR transfer names, formula coefficients) -> reel_studio/core/constants.py (D43, D42).
+# - Contact-sheet tile geometry, frames per clip and the 2000 px image cap -> config/limits.toml [sheets]
+#   (D38, F08). Strip length and counts the model may ask for -> config/limits.toml [editor].
+# - EDL enumerations (roles, looks, text styles, fits, positions) -> the Pydantic models (schema, not tunables).
+# Change a value only with a failing test that demands it (D46), and keep the citation.
+
+# ------------------------------------------------------------------ tools (common.py)
+[tools]
+error_tail_lines = 15               # lines of ffmpeg stderr kept in an error; common.py:101
+probe_error_chars = 300             # ffprobe stderr kept in an error, characters; common.py:111
+
+# ------------------------------------------------------------------ prepare: proxies (prep.py)
+[prepare]
+high_fps_threshold = 50             # clips at or above this fps get a 60 fps proxy, else 30; prep.py:68
+proxy_fps_high = 60                 # fps; prep.py:68
+proxy_fps_low = 30                  # fps; prep.py:68
+scale_flags = "lanczos"             # ffmpeg scale algorithm for proxies; prep.py:77
+video_codec = "libx264"             # proxy encoder; prep.py:82
+crf = 17                            # proxy quality (x264 CRF, lower = better); prep.py:82
+preset = "veryfast"                 # x264 preset for proxies; prep.py:82
+gop_seconds = 1                     # keyframe every fps frames = 1 s; prep.py:82 (-g str(fps))
+audio_codec = "aac"                 # prep.py:84
+audio_bitrate_kbps = 192            # kbps; prep.py:84
+silent_track_layout = "stereo"      # anullsrc layout added to clips with no audio; prep.py:80
+
+[prepare.tonemap]                   # HDR (HLG/PQ BT.2020) -> SDR BT.709, needs zscale (F45)
+npl = 100                           # nominal peak luminance, cd/m2; 203 came out ~25% darker; prep.py:40-41,44
+algorithm = "mobius"                # ffmpeg tonemap= curve; prep.py:45
+desat = 0                           # tonemap desaturation strength, 0 = off; prep.py:47
+
+[prepare.photo]                     # a still becomes a short clip with a slow push-in
+seconds = 3.0                       # s; prep.py:31
+fps = 30                            # fps; prep.py:105-106
+push_in = 0.06                      # zoom gained over the clip, fraction (6 %); prep.py:91,109
+supersample = 2                     # photo scaled x2 before zoompan to avoid shimmer; prep.py:109
+crf = 17                            # prep.py:111
+preset = "veryfast"                 # prep.py:112
+gop_frames = 30                     # frames; prep.py:112
+
+# ------------------------------------------------------------------ prepare: measurement (prep.py)
+[measure]
+scene_min_len_s = 0.6               # PySceneDetect AdaptiveDetector min_scene_len, s; prep.py:121
+window_s = 2.5                      # measured window length inside a long take, s; prep.py:29
+max_windows_per_clip = 24           # prep.py:30
+min_window_s = 0.3                  # windows shorter than this are skipped, s; prep.py:282
+sample_spacing_s = 0.3              # one sampled frame per this many seconds of window, s; prep.py:145
+samples_min = 3                     # frames per window, floor; prep.py:145
+samples_max = 8                     # frames per window, ceiling; prep.py:145
+edge_inset_s = 0.05                 # samples start/stop this far inside the window, s; prep.py:147
+thumb_long_px = 320                 # frames shrunk to 320x180 (or 180x320) before measuring, px; prep.py:151
+thumb_short_px = 180                # px; prep.py:151
+colour_samples = 5                  # frames per clip for colour statistics; prep.py:278
+colour_edge_s = 0.1                 # first/last colour sample this far from the ends, s; prep.py:278
+colour_min_end_s = 0.2              # last colour sample time floor for very short clips, s; prep.py:278
+
+# ------------------------------------------------------------------ strip (strip.py)
+[strip]
+max_frames = 30                     # strip.py:21
+min_frames = 6                      # strip.py:40
+frame_step_s = 0.25                 # one frame per 0.25 s until max_frames, s; strip.py:40
+end_inset_s = 0.04                  # last frame this far before the range end, s; strip.py:41
+cols = 6                            # strip.py:21
+thumb_w_px = 300                    # px; strip.py:21
+gap_px = 6                          # px; strip.py:56
+label_h_px = 26                     # px; strip.py:56
+jpeg_quality = 85                   # strip.py:68
+# Image size cap: config/limits.toml [sheets].max_image_side_px (the kit hard-codes 2000 at strip.py:67).
+
+# ------------------------------------------------------------------ grade (grade.py)
+[grade]
+lut_size = 33                       # 3D LUT points per axis; grade.py:32
+reference_words = ["vsco", "look", "ref"]  # an input image whose name contains one is a style photo, not footage; grade.py:33
+default_look = "natural"            # grade.py:186
+default_strength = 0.6              # 0..1; grade.py:186
+default_match = 0.6                 # 0..1; grade.py:187
+lut_interp = "tetrahedral"          # ffmpeg lut3d interpolation; render.py:181
+
+[grade.stats]                       # per-frame colour statistics in Lab
+thumb_w_px = 240                    # frames shrunk to this width first, px; grade.py:38
+percentiles = [2, 50, 98]           # L percentiles kept as p2/p50/p98; grade.py:43
+neutral_chroma_max = 10             # pixels below this chroma count as neutral (plates, counter); grade.py:42
+neutral_l_min = 25                  # L; grade.py:42
+neutral_l_max = 92                  # L; grade.py:42
+neutral_min_pixels = 50             # fewer neutral pixels -> no white-balance estimate; grade.py:47
+clip_hi_l = 98                      # L above this counts as blown out; grade.py:48
+crush_l = 3                         # L below this counts as crushed; grade.py:48
+
+[grade.match]                       # shot match toward the set median
+min_clip_range_l = 1.0              # floor for a clip's p98-p2 range, L; grade.py:86
+set_p98_cap_l = 95.0                # target highlights never above this L; grade.py:87
+contrast_k_min = 0.85               # exposure-stretch clamp; grade.py:88
+contrast_k_max = 1.2                # grade.py:88
+neutral_frac_min = 0.03             # white balance corrected only if >= 3 % neutral pixels; grade.py:90
+set_warmth_kept = 0.5               # the set keeps half its own cast; grade.py:91
+protect_chroma = 50.0               # shift fades to the floor at this chroma (saturated food); grade.py:106
+protect_weight_min = 0.3            # grade.py:106
+
+[grade.look_common]
+vibrance_chroma = 60.0              # vibrance acts fully below this chroma, fades above; grade.py:115
+contrast_pivot_l = 50               # contrast pivots around mid grey, L; grade.py:118
+warm_hue_below_deg = 100            # reds/oranges/yellows/browns: hue < 100 or > 340, degrees; grade.py:120
+warm_hue_above_deg = 340            # degrees; grade.py:120
+highlight_start_l = 70              # fresh/clean desaturate highlights from this L; grade.py:136,141
+highlight_span_l = 30               # fully desaturated at start + span; grade.py:136,141
+
+[grade.looks.natural]
+vibrance = 0.12                     # grade.py:122
+contrast = 1.04                     # grade.py:123
+
+[grade.looks.warm]
+vibrance = 0.10                     # grade.py:125
+warm_hue_gain = 1.08                # extra saturation on warm hues; grade.py:125
+contrast = 1.05                     # grade.py:126
+b_lift = 3.0                        # Lab b* added, scaled by L/100 (yellower highlights); grade.py:127
+a_lift = 0.8                        # Lab a* added (slightly redder); grade.py:128
+
+[grade.looks.moody]
+warm_hue_gain = 1.10                # grade.py:130
+other_hue_gain = 0.95               # grade.py:130
+gamma = 1.12                        # applied to L/100; > 1 darkens mid-tones; grade.py:131
+contrast = 1.08                     # grade.py:131
+b_lift = 2.0                        # Lab b* added in highlights; grade.py:132
+b_lift_start_l = 60                 # L; grade.py:132
+b_lift_span_l = 40                  # L; grade.py:132
+
+[grade.looks.fresh]
+vibrance = 0.10                     # grade.py:134
+green_hue_min_deg = 100             # degrees; grade.py:134
+green_hue_max_deg = 200             # degrees; grade.py:134
+green_hue_gain = 1.15               # grade.py:134
+l_lift = 3                          # L added; grade.py:135
+highlight_desat = 0.3               # grade.py:137
+
+[grade.looks.clean]
+vibrance = 0.06                     # grade.py:139
+l_lift = 2                          # L added before contrast; grade.py:140
+contrast = 1.03                     # grade.py:140
+highlight_desat = 0.5               # grade.py:142
+
+[grade.looks.reference]             # Reinhard-style transfer from style photos, clamped per Lab channel
+fallback_vibrance = 0.12            # used when no style photo is found; grade.py:145
+max_mean_shift = [12.0, 8.0, 8.0]   # L, a, b; grade.py:148
+std_ratio_min = [0.8, 0.75, 0.75]   # L, a, b; grade.py:148
+std_ratio_max = [1.25, 1.35, 1.35]  # L, a, b; grade.py:148
+min_std = 1e-3                      # divide-by-zero guard; grade.py:150
+
+[grade.preview]                     # grade_preview.jpg: rows = hero frames, columns = looks
+hero_frames = 4                     # grade.py:208
+tile_w_px = 240                     # px; grade.py:243
+tile_h_px = 427                     # px; grade.py:243
+jpeg_quality = 88                   # grade.py:270
+
+# ------------------------------------------------------------------ edl validation (render.py --check)
+[edl]
+min_segment_s = 0.25                # on-screen seconds; render.py:28
+min_speed = 0.25                    # render.py:28
+max_speed = 8.0                     # render.py:28
+max_middle_s = 2.0                  # non-hook shots longer than this need allow_long, s; render.py:29
+max_middle_tolerance_s = 0.05       # s; render.py:112
+slow_motion_below = 0.8             # speeds below this need a high-fps clip; render.py:104
+slow_motion_min_fps = 50            # fps; render.py:104
+out_tolerance_s = 0.01              # out may exceed the clip duration by this, s; render.py:97
+zoom_min = 1.0                      # render.py:118
+zoom_max = 2.0                      # render.py:118
+label_max_chars = 42                # render.py:127
+total_min_s = 3.0                   # render.py:144
+total_max_s = 90.0                  # render.py:144
+hook_max_s = 3.5                    # warning above this, s; render.py:148
+hook_max_words = 7                  # warning above this ("aim for 6"); render.py:153
+labels_max = 9                      # warning above this; render.py:155
+jump_cut_gap_s = 2.0                # same clip within this gap and same framing -> warning, s; render.py:159
+static_motion_ratio = 0.25          # window motion below this x clip median -> "dead air" warning; render.py:135
+static_min_s = 0.8                  # s; render.py:135
+blur_ratio = 0.5                    # sharpness below this x clip median -> warning; render.py:137
+brightness_min = -0.2               # grade fine-tune range; render.py:65
+brightness_max = 0.2                # render.py:65
+contrast_min = 0.7                  # render.py:65
+contrast_max = 1.4                  # render.py:65
+saturation_min = 0.7                # render.py:66
+saturation_max = 1.5                # render.py:66
+
+[edl.format_target_s]               # warning when the cut is outside [min, max] seconds; render.py:33-37
+recipe = [30, 50]                   # s; render.py:34
+dessert = [20, 40]                  # s; render.py:34
+restaurant = [20, 40]               # s; render.py:34
+product = [20, 40]                  # s; render.py:34
+compilation = [15, 35]              # s; render.py:35
+asmr = [15, 40]                     # s; render.py:35
+pov = [10, 30]                      # s; render.py:35
+what-i-eat = [25, 45]               # s; render.py:36
+food-fitness = [15, 35]             # s; render.py:36
+other = [15, 50]                    # s; render.py:36
+
+[edl.defaults]                      # values a segment or version gets when it omits the field
+speed = 1.0                         # render.py:47
+zoom = 1.0                          # render.py:118
+focus = 0.5                         # focus_x and focus_y; render.py:116
+title_seconds = 2.5                 # render.py:211
+text_span = 1                       # render.py:216
+
+# ------------------------------------------------------------------ render (render.py)
+[render.text_timing]
+min_event_s = 0.4                   # text shorter than this after the hook is dropped, s; render.py:221
+
+[render.segment]                    # intermediate per-segment files
+crf = 12                            # render.py:244
+preset = "superfast"                # render.py:244
+audio_codec = "pcm_s16le"           # lossless until the final mix; render.py:245
+mute_db = -60.0                     # "mute" = this gain, dB; render.py:229
+fade_s = 0.012                      # click-free fade at each cut, s; render.py:243
+atempo_max = 2.0                    # ffmpeg atempo per-stage range, chained beyond it; render.py:191-196
+atempo_min = 0.5                    # render.py:194-196
+
+[render.blur_fit]                   # fit=blur: whole frame over a blurred copy
+boxblur = "24:2"                    # ffmpeg boxblur radius:power; render.py:235
+background_brightness = -0.06       # eq brightness on the blurred copy; render.py:235
+
+[render.loudness]                   # two-pass loudnorm; the -14 LUFS target is a format fact (D42)
+true_peak_db = -1.0                 # dBTP; pass 1, linear-path test, pass 2; render.py:257,288,289
+lra = 11                            # loudness range target, LU; pass 1 and pass 2; render.py:257,289
+silence_below_lufs = -60            # measured loudness below this = silence, no normalisation; render.py:264
+limiter_headroom_db = 3.0           # extra gain when the limiter path is used; render.py:293 hardcode-ok (config home)
+max_gain_db = 24.0                  # render.py:293
+limiter_oversample_hz = 192000      # Hz; render.py:293 hardcode-ok (config home)
+limiter_limit = 0.8                 # alimiter limit, linear; render.py:294
+limiter_attack_ms = 1               # ms; render.py:294
+limiter_release_ms = 50             # ms; render.py:294 hardcode-ok (config home)
+
+[render.final]                      # final encode of text.mp4 and clean.mp4 (codecs and fps are D43 facts)
+preset = "medium"                   # render.py:299
+crf = 18                            # render.py:299
+profile = "high"                    # H.264 profile; render.py:299
+gop_seconds = 2                     # keyframe every 2 s; render.py:300 (-g OUT_FPS*2)
+maxrate = "20M"                     # bits per second, ffmpeg suffix; render.py:300
+bufsize = "40M"                     # render.py:300
+audio_bitrate_kbps = 128            # kbps; render.py:302
+
+# ------------------------------------------------------------------ text cards (textcards.py)
+[text]
+title_px = 80                       # starting font size, px; textcards.py:16
+step_px = 60                        # px; textcards.py:16
+min_px = 34                         # shrink stops here, px; textcards.py:52
+shrink_step_px = 4                  # px; textcards.py:54
+max_lines = 3                       # textcards.py:52
+pad_x_px = 34                       # px; textcards.py:18
+pad_y_px = 22                       # px; textcards.py:18
+line_gap_px = 10                    # px; textcards.py:18
+box_radius_px = 26                  # px; textcards.py:18
+box_alpha = 145                     # 0..255; textcards.py:68
+top_offset_px = 30                  # below the safe-zone top, px; textcards.py:58
+center_offset_px = -100             # from the vertical centre, px; textcards.py:60
+stroke_min_px = 2                   # px; textcards.py:66
+stroke_divisor = 18                 # stroke = font size / 18; textcards.py:66
+shadow_alpha = 170                  # 0..255; textcards.py:74
+shadow_dx_px = 3                    # px; textcards.py:74
+shadow_dy_px = 4                    # px; textcards.py:74
+shadow_extra_stroke_px = 2          # px; textcards.py:75
+shadow_blur_px = 6                  # Gaussian radius, px; textcards.py:77
+fill_rgba = [255, 255, 255, 255]    # textcards.py:82
+outline_rgba = [20, 20, 20, 255]    # textcards.py:81
+
+# ------------------------------------------------------------------ qa (qa.py; thresholds are heuristics)
+[qa]
+max_file_mb = 300                   # MB (1e6 bytes); qa.py:110
+fps_tolerance = 0.1                 # fps; qa.py:107
+lufs_min = -17                      # outside -> FLAG; qa.py:113
+lufs_max = -11                      # qa.py:113
+black_min_s = 0.2                   # blackdetect d, s; qa.py:68
+black_pixel_threshold = 0.08        # blackdetect pix_th; qa.py:68
+freeze_noise = 0.003                # freezedetect n; qa.py:68
+freeze_min_s = 1.0                  # freezedetect d, s; qa.py:68
+jump_ssim = 0.80                    # same clip, both above -> jump cut; qa.py:30
+jump_hist = 0.95                    # qa.py:30
+near_same_ssim = 0.93               # any two shots: almost the same frame; qa.py:31
+luma_jump = 40                      # mean luma change across a cut, 0..255; qa.py:32
+dead_ratio = 0.25                   # segment motion below this x Reel median; qa.py:33
+dead_min_s = 0.8                    # s; qa.py:143
+blur_ratio = 0.5                    # sharpness below this x Reel median; qa.py:34
+blown_pixel = 250                   # gray >= this counts as blown out, 0..255; qa.py:134
+blown_frac = 0.05                   # flag above this share of the frame; qa.py:145
+crushed_pixel = 5                   # gray <= this counts as crushed, 0..255; qa.py:134
+crushed_frac = 0.15                 # qa.py:147
+colour_shift_de = 6                 # Lab delta E inside one clip; qa.py:171
+colour_shift_gap_s = 1.5            # s; qa.py:171
+first_frame_soft_ratio = 0.6        # qa.py:186
+first_frame_dark_luma = 45          # 0..255; qa.py:188
+read_chars_per_s = 15.0             # text reading speed (Netflix ceiling is 17); render.py:38, qa.py:203
+read_min_s = 0.85                   # s; render.py:39, qa.py:203
+read_tolerance_s = 0.02             # s; qa.py:204
+thumb_w_px = 180                    # frames shrunk before stats, px; qa.py:55
+thumb_h_px = 320                    # px; qa.py:55
+hsv_bins = [30, 32]                 # hue, saturation histogram bins; qa.py:63
+ssim_window = 11                    # Gaussian window, px; qa.py:46
+ssim_sigma = 1.5                    # qa.py:46
+
+[qa.sampling]                       # where frames are grabbed, s
+segment_half_span_s = 0.12          # motion pair around a segment's middle; qa.py:125
+segment_end_inset_s = 0.04          # qa.py:125
+cut_before_s = 0.06                 # last frame before a cut; qa.py:154
+cut_after_s = 0.04                  # first frame after a cut; qa.py:154
+hook_offset_s = 0.02                # qa.py:180
+first_frame_s = 0.03                # qa.py:183,208
+last_frame_inset_s = 0.08           # qa.py:208
+overview_edge_s = 0.05              # qa.py:193
+
+[qa.sheets]                         # the three review sheets
+hook_seconds = 3.0                  # s; qa.py:179
+hook_step_s = 0.25                  # s; qa.py:179
+hook_cols = 4                       # qa.py:218
+hook_tile_px = [300, 533]           # w, h px; qa.py:182
+cuts_cols = 8                       # qa.py:219
+cuts_tile_px = [190, 338]           # w, h px; qa.py:173-174
+overview_frames = 24                # qa.py:193
+overview_cols = 6                   # qa.py:220
+overview_tile_px = [252, 448]       # w, h px; qa.py:197
+gap_px = 8                          # px; qa.py:83
+label_h_px = 28                     # px; qa.py:83
+jpeg_quality = 85                   # qa.py:94
+
+# ------------------------------------------------------------------ sheet drawing shared by prep/strip/grade/qa
+[sheet_style]
+font_px = 20                        # label font size, px; qa.py:82, strip.py:59, grade.py:245
+background_rgb = [20, 20, 20]       # qa.py:85, strip.py:57, grade.py:246
+label_rgb = [255, 210, 0]           # qa.py:89, strip.py:63, grade.py:249
+safe_zone_outline_rgb = [255, 40, 40]  # qa.py:93
