@@ -4,7 +4,7 @@ The main checkout's log and the status of every lane. Lanes write their own file
 Newest entry on top.
 
 ## Status board
-- Done: starter kit v1.1; STEP-01 skeleton, guardrails, CI (PR `step-01-skeleton`, Kevin merges)
+- Done: starter kit v1.1; STEP-01 skeleton, guardrails, CI (branch `step-01-skeleton`; PR and ruleset: see the log)
 - Partly: STEP-00 on the Mac (ffmpeg-full and node@24 not on PATH, see Needs Kevin)
 - Blocked: —
 - Not started: STEP-02 to STEP-09
@@ -23,6 +23,8 @@ Newest entry on top.
 - STEP-00 leftovers on the Mac, needed from STEP-02 (ffmpeg) and STEP-06 (node): `command -v ffmpeg` is
   `/opt/homebrew/bin/ffmpeg` (plain, no zscale), and `node` is Homebrew Node 26, which fails to start
   (`libsimdjson.33.dylib` missing). Fix: the PATH line in STEP-00 §1 for `ffmpeg-full` and `node@24`.
+- Turn on private vulnerability reporting (SECURITY.md points reporters to it; it is off):
+  `gh api -X PUT repos/kevinleonj/reel-studio/private-vulnerability-reporting`.
 - `.env` names were not checked in STEP-01 discovery (the names-only grep was denied); STEP-01 needs no key.
 - `reel_studio/settings.py` is not in any lane's paths, so STEP-01 declared every `.env.example` variable
   (one class per consumer; a test keeps the two in step). A lane that needs a new variable asks here.
@@ -36,7 +38,12 @@ Newest entry on top.
   `core/errors.py` (boundaries and user-message keys); `core/logging.py` (D74 JSON lines); `SystemClock`
   and `FrozenClock`; `tests/conftest.py` blocks sockets and `.env`. Makefile for make 3.81 with
   `mk/<lane>.mk`; `scripts/ci-install.sh` (uv, Node, gitleaks pinned by SHA-256; Debian ffmpeg);
-  pre-commit (gitleaks, ruff); `ci.yml`; ruleset on `main`; LICENSE, README, SECURITY, .gitattributes.
+  pre-commit (gitleaks, ruff); `ci.yml` (full-history checkout for gitleaks); LICENSE, README, SECURITY,
+  .gitattributes.
+- Senior review (CHANGES-REQUIRED on 0800ab4) fixed: `make ci` now syncs every extra first (CI would have
+  had no ruff); blank `KEY=` lines count as missing (`env_ignore_empty`, F81); config rejects a model id
+  with no price; tests also block UDP, name lookups and gRPC channels and scrub Google credential variables;
+  logs carry `severity` and RFC 3339 UTC `time` (F86); README lists gitleaks.
 - Proven red then green: scanner reports R1 `40` and R2 `claude-sonnet-5-5` from a planted module;
   pre-commit refuses a commit holding an Anthropic-shaped key (built at runtime in a throwaway repo).
 - Choices: error keys other than `cost_cap` are named by us (EDITOR.md §10 names none); `make ci` also runs
