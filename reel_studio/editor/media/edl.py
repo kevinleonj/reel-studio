@@ -144,7 +144,7 @@ class _Checker:
             self.err(f"{tag}: fit must be crop or blur")
         if frame.rotate not in ROTATIONS:
             self.err(f"{tag}: rotate must be 0 or 180")
-        if seg.text is not None and not seg.text.strip():
+        if seg.text and not seg.text.strip():  # "" is no text, as in the kit
             self.err(f"{tag}: label is blank")
         if seg.text and len(seg.text) > cfg.label_max_chars:
             self.err(f"{tag}: label over {cfg.label_max_chars} characters")
@@ -200,7 +200,7 @@ class _Checker:
     def shape(self, v: Version, vn: str) -> None:
         """Hook, ending, clutter and jump-cut warnings (kit render.py:146-162)."""
         cfg, segs = self.media.edl, v.segments
-        if v.hook_text is not None and not v.hook_text.strip():
+        if v.hook_text and not v.hook_text.strip():
             self.err(f"version {vn}: hook_text is blank")
         if segs[0].role != "hook":
             self.warn(f"version {vn}: first segment role is not hook")

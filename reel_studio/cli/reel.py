@@ -5,11 +5,13 @@
 Prepares the folder's clips, checks the hand-written edit list against them, renders text.mp4
 and clean.mp4 and writes qa.json, all into --out. The folder is only read (D02); proxies, sheets
 and review images go to <out>/work. Exit codes: 0 rendered and every hard check passed,
-1 rendered or failed in ffmpeg, 2 bad arguments or an EDL with errors.
+1 rendered but a hard check failed, or ffmpeg failed; 2 bad arguments, an EDL with errors, or a
+folder with nothing usable in it.
 """
 
 import argparse
 import json
+import os
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -46,8 +48,15 @@ def default_out(folder: Path) -> Path:
 
 
 def _overlaps(folder: Path, out: Path) -> bool:
-    """True when writing to `out` (or its work/ folder) would write inside `folder` (D02)."""
-    return out == folder or folder in out.parents
+    """True when `out` or its work/ folder is `folder` or inside it (D02).
+
+    Compares files, not spellings (`os.path.samefile`): a case-insensitive volume would let
+    `IN/out` past a text comparison with `in`.
+    """
+    for candidate in (out / WORK, *(out / WORK).parents):
+        if candidate.exists() and os.path.samefile(candidate, folder):
+            return True
+    return False
 
 
 def _bad(message: str) -> int:

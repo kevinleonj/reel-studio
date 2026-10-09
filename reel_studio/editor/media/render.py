@@ -38,7 +38,7 @@ TEXT, CLEAN, TIMELINE = "text.mp4", "clean.mp4", "timeline.json"
 
 @dataclass(frozen=True)
 class Job:
-    work: Path  # holds clips/ and receives review/ and render_tmp/
+    work: Path  # holds clips/ and receives review/ (intermediates go to a system temp folder)
     input_dir: Path | None  # read for style photos only (D02)
     out_dir: Path  # receives text.mp4 and clean.mp4
     ffmpeg: Ffmpeg

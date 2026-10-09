@@ -157,6 +157,16 @@ class Ffmpeg:
             raise RenderError(f"Cannot read {path.name}: {detail}")
         return parse_probe(json.loads(done.stdout), path.name)
 
+    def check(self) -> None:
+        """Both binaries start, before any file is judged: a broken install is a deployment
+        fault, and must never read as the customer's files being unusable."""
+        for tool in (self.ffmpeg, self.ffprobe):
+            done = self._call(
+                [str(tool), "-version"], f"check {tool.name}", self.cfg.probe_timeout_s
+            )
+            if done.returncode != 0:
+                raise RenderError(f"{tool} -version exited {done.returncode}")
+
     def has_filter(self, name: str) -> bool:
         argv = [str(self.ffmpeg), "-hide_banner", "-filters"]
         done = self._call(argv, "list filters", self.cfg.probe_timeout_s)

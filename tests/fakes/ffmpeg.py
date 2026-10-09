@@ -39,5 +39,8 @@ class FakeFfmpeg:
             raise RenderError(f"Cannot read {path.name}")
         return self.probes.get(path.name, PORTRAIT)
 
+    def check(self) -> None:
+        return None
+
     def has_filter(self, name: str) -> bool:
         return True

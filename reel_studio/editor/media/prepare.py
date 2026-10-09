@@ -256,6 +256,7 @@ def prepare_folder(folder: Path, work: Path, ffmpeg: Ffmpeg, media: Media) -> li
     (work / CLIPS).mkdir(parents=True, exist_ok=True)
     files = footage(folder, media.grade.reference_words)
     found = len(files)
+    ffmpeg.check()  # a broken install fails here, not as "no usable input" below
     probes: dict[Path, Probe] = {}
     for path in files:
         if path.suffix.lower() in constants.VIDEO_EXT:

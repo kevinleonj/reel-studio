@@ -87,7 +87,7 @@ def measure_audio(ffmpeg: Ffmpeg, path: Path, cfg: Qa) -> AudioResult:
         last = err.strip().rpartition("\n")[2]
         raise RenderError(f"QA could not measure loudness of {path.name}: {last}")
     return AudioResult(
-        lufs=float(lufs[-1]) if lufs else None,
+        lufs=float(lufs[-1]),
         black=[(float(a), float(b)) for a, b in BLACK.findall(err)],
         freeze=[float(f) for f in FREEZE.findall(err)],
     )
