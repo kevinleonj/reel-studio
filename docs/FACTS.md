@@ -68,6 +68,8 @@ Snapshot: 9 Oct 2026 unless the row says otherwise.
 | F51 | Firestore transactions | Lock the documents they read and retry on contention | https://docs.cloud.google.com/firestore/native/docs/transaction-data-contention | 9 Oct 2026 | verified |
 | F61 | Cloud Run deterministic URL | `https://SERVICE_NAME-PROJECT_NUMBER.REGION.run.app`, "lets you predict the service URL before the service is created", if the DNS segment is ≤ 63 characters | https://docs.cloud.google.com/run/docs/triggering/https-request | 9 Oct 2026 | verified |
 | F52 | Max instances | Google describes max instances as a cost-safety limit | https://docs.cloud.google.com/run/docs/configuring/max-instances | 9 Oct 2026 | verified |
+| F76 | `hashicorp/google` 8.6.0 argument names and defaults used in `infra/` | Every argument in both roots exists in the provider schema (`terraform validate` passes on 1.16.5). Defaults from the schema: `deletion_policy` = `DELETE` on buckets, services and Cloud Run (`ABANDON` on Firestore); Cloud Run v2 service and job `deletion_protection` = true; job `max_retries` = 3; bucket soft delete 604800 s; Artifact Registry `tag_state` = `ANY`, `mode` = `STANDARD_REPOSITORY`; budget `spend_basis` = `CURRENT_SPEND`; secret `deletion_protection` = false. An empty `index_config` on `google_firestore_field` disables all its indexes. `most_recent_versions` only with a KEEP action | `terraform providers schema -json` (provider 8.6.0), Context7 `/hashicorp/terraform-provider-google` (artifact_registry_repository, iam_workload_identity_pool_provider, logging_project_bucket_config) | 9 Oct 2026 | verified |
+| F77 | Budget alert recipients | Default emails go to Billing Account Administrators and Billing Account Users. In provider 8.6.0 an `all_updates_rule` block requires a Pub/Sub topic or a monitoring channel (validate error), so the budget has none. Whether `currency_code` must equal the billing account's currency is not stated: set it to that currency | https://docs.cloud.google.com/billing/docs/how-to/budgets-notification-recipients | 9 Oct 2026 | verified (currency rule UNCONFIRMED) |
 
 ## Tooling
 
@@ -99,6 +101,7 @@ Snapshot: 9 Oct 2026 unless the row says otherwise.
 | F55 | Claude Code permission rules | `Bash(git push *)`, `Read(./.env)`, `Edit(path)`; deny beats allow; path rules for `Write` are ignored, use `Edit(...)` | https://code.claude.com/docs/en/permissions | 9 Oct 2026 | verified |
 | F56 | Subagent files | Frontmatter `name`, `description` required; `tools`, `model`, `effort` optional | https://code.claude.com/docs/en/sub-agents | 9 Oct 2026 | verified |
 | F57 | Context7 MCP | Server URL `https://mcp.context7.com/mcp`; API key in the `Authorization: Bearer` header | https://github.com/upstash/context7 (README) | 9 Oct 2026 | verified |
+| F79 | Terraform 1.16.5 darwin_arm64 binary | SHA256 matches `terraform_1.16.5_SHA256SUMS`; the Mac's Homebrew Terraform is 1.16.1, so `required_version = "= 1.16.5"` rejects it until upgraded | https://releases.hashicorp.com/terraform/1.16.5/ | 9 Oct 2026 | verified |
 
 ## Product and craft
 
