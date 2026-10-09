@@ -115,5 +115,5 @@ def test_qa_hard_checks_are_all_true_on_the_basic_render(rendered: Rendered) -> 
     written = json.loads((out / qa.QA_JSON).read_text(encoding="utf-8"))
     assert all(v is True for v in written["hard_checks"].values())
     for sheet in result.sheets:
-        with Image.open(sheet) as image:
+        with Image.open(out / sheet) as image:  # relative to out_dir unless outside it
             assert max(image.size) <= limit

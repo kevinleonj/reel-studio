@@ -136,7 +136,7 @@ def render(job: Job, shots: Shots, edl: Edl) -> Timeline:
         shutil.rmtree(tmp, ignore_errors=True)
     kinds = {c.id: c.kind for c in shots.clips}
     timeline = Timeline(
-        files={"text": str(texted), "clean": str(clean)},
+        files={"text": TEXT, "clean": CLEAN},  # names inside out_dir, never the cwd
         duration=round(job.ffmpeg.probe(texted).duration, 2),
         planned_duration=round(total, 2),
         segments=[

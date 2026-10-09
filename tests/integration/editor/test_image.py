@@ -19,10 +19,11 @@ from reel_studio.editor.media import qa, render
 
 ROOT = Path(__file__).resolve().parents[3]
 IMAGE = "reel-studio-editor:test"
-BUILD_TIMEOUT_S = 1800
-RUN_TIMEOUT_S = 1200
+BUILD_TIMEOUT_S = 600  # both well inside the 20-minute CI job, so a hang fails the test itself
+RUN_TIMEOUT_S = 300
 INSPECT_TIMEOUT_S = 60
 WRITABLE_BY_ANY_UID = 0o777  # the image's user (uid 10001) writes into a host temp folder
+READABLE_BY_ANY_UID = 0o755  # and reads the clips, which pytest creates 0o700
 
 DOCKER = shutil.which("docker")
 pytestmark = pytest.mark.skipif(
@@ -52,7 +53,7 @@ def test_reel_render_runs_inside_the_image(clips_dir: Path, tmp_path: Path) -> N
         "--platform",
         "linux/amd64",
         "-f",
-        "docker/editor.Dockerfile",
+        str(ROOT / "docker" / "editor.Dockerfile"),  # tests run in their own cwd
         "-t",
         IMAGE,
         str(ROOT),
@@ -68,6 +69,7 @@ def test_reel_render_runs_inside_the_image(clips_dir: Path, tmp_path: Path) -> N
     out = tmp_path / "out"
     out.mkdir()
     out.chmod(WRITABLE_BY_ANY_UID)
+    clips_dir.chmod(READABLE_BY_ANY_UID)
     edl = ROOT / "tests" / "fixtures" / "edl"
     run = _docker(
         "run",

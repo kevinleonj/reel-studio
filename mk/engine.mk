@@ -1,8 +1,8 @@
 # Lane engine owns this file (STEP-02 to 05).
 .PHONY: ci-engine image-editor
 
-# The media tests need an ffmpeg with zscale (F45). Say so plainly instead of failing deep in a
-# test: on the Mac that is Homebrew's keg-only ffmpeg-full, in CI Ubuntu's ffmpeg (F201).
+# The media tests need an ffmpeg with zscale (F45); this prints which one they found: on the Mac
+# Homebrew's keg-only ffmpeg-full, in CI Ubuntu's ffmpeg (F201). make ci runs it after the tests.
 ci-engine:
 	$(UV) python -c "from tests.fixtures.make_clips import find_tools; print('ci-engine: ffmpeg with zscale:', find_tools().ffmpeg)"
 

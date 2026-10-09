@@ -20,15 +20,15 @@ COPY --from=uv /uv /usr/local/bin/uv
 
 RUN useradd --create-home --uid 10001 reel
 WORKDIR /app
-RUN chown reel:reel /app
-USER reel
+RUN chown 10001:10001 /app
+USER 10001:10001
 
 # Dependencies first, so a code change does not reinstall them; uv.lock decides every version.
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PROJECT_ENVIRONMENT=/app/.venv
-COPY --chown=reel:reel pyproject.toml uv.lock README.md ./
+COPY --chown=10001:10001 pyproject.toml uv.lock README.md ./
 RUN uv sync --locked --extra editor --no-install-project
-COPY --chown=reel:reel reel_studio ./reel_studio
-COPY --chown=reel:reel config ./config
+COPY --chown=10001:10001 reel_studio ./reel_studio
+COPY --chown=10001:10001 config ./config
 RUN uv sync --locked --extra editor
 
 ENV PATH="/app/.venv/bin:${PATH}" \

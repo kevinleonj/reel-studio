@@ -93,6 +93,11 @@ def measure_audio(ffmpeg: Ffmpeg, path: Path, cfg: Qa) -> AudioResult:
     )
 
 
+def _beside(path: Path, base: Path) -> str:
+    """`path` relative to `base` when inside it, so qa.json never depends on the cwd."""
+    return str(path.relative_to(base)) if path.is_relative_to(base) else str(path)
+
+
 def all_inside(boxes: list[PlacedText]) -> bool:
     """Every text box inside the safe zone; a Reel without text passes."""
     return all(b.inside_safe_zone for b in boxes)
@@ -247,7 +252,7 @@ def run(job: Job, timeline: Timeline, max_side: int) -> QaResult:
         median_motion=frames.median_motion,
         median_sharpness=frames.median_sharpness,
         loop=loop,
-        sheets=[str(p) for p in sheets],
+        sheets=[_beside(p, job.out_dir) for p in sheets],
     )
     (job.out_dir / QA_JSON).write_text(result.model_dump_json(indent=1), encoding="utf-8")
     return result
