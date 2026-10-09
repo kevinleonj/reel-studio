@@ -121,3 +121,23 @@ def colourfulness(bgr: Image) -> float:
     spread = np.hypot(rg.std(), yb.std())
     centre = np.hypot(rg.mean(), yb.mean())
     return float(spread + constants.COLOURFULNESS_MEAN_WEIGHT * centre)
+
+
+def ssim(a: NDArray[np.uint8], b: NDArray[np.uint8], window: int, sigma: float) -> float:
+    """Mean structural similarity of two grey images (kit qa.py:43-51, Wang et al. 2004)."""
+    x, y = a.astype(np.float64), b.astype(np.float64)
+    c1 = (constants.SSIM_K1 * constants.U8_MAX) ** 2
+    c2 = (constants.SSIM_K2 * constants.U8_MAX) ** 2
+    kernel = (window, window)
+    mu_x, mu_y = cv2.GaussianBlur(x, kernel, sigma), cv2.GaussianBlur(y, kernel, sigma)
+    var_x = cv2.GaussianBlur(x * x, kernel, sigma) - mu_x**2
+    var_y = cv2.GaussianBlur(y * y, kernel, sigma) - mu_y**2
+    cov = cv2.GaussianBlur(x * y, kernel, sigma) - mu_x * mu_y
+    num = (2 * mu_x * mu_y + c1) * (2 * cov + c2)
+    den = (mu_x**2 + mu_y**2 + c1) * (var_x + var_y + c2)
+    return float((num / den).mean())
+
+
+def grey_thumb(bgr: Image, size: tuple[int, int]) -> NDArray[np.uint8]:
+    """Small grey copy for comparisons (kit qa.py:55-56); `size` is (width, height)."""
+    return cv2.cvtColor(cv2.resize(bgr, size), cv2.COLOR_BGR2GRAY).astype(np.uint8)

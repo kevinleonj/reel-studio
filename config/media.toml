@@ -338,3 +338,9 @@ font_px = 20                        # label font size, px; qa.py:82, strip.py:59
 background_rgb = [20, 20, 20]       # qa.py:85, strip.py:57, grade.py:246
 label_rgb = [255, 210, 0]           # qa.py:89, strip.py:63, grade.py:249
 safe_zone_outline_rgb = [255, 40, 40]  # qa.py:93
+
+# ------------------------------------------------------------------ contact sheets (D38 layout, kit drawing)
+[contact_sheet]                     # tile geometry and frame counts: config/limits.toml [sheets]
+jpeg_quality = 85                   # prep.py:198
+label_h_px = 24                     # label box height on a tile, px; prep.py:216
+label_pad_px = 4                    # text inset inside the label box, px; prep.py:217

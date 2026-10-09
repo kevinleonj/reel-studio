@@ -373,6 +373,12 @@ class SheetStyle(_Strict):
     safe_zone_outline_rgb: Rgb
 
 
+class ContactSheet(_Strict):
+    jpeg_quality: int
+    label_h_px: int
+    label_pad_px: int
+
+
 class Media(_Strict):
     tools: Tools
     prepare: Prepare
@@ -384,3 +390,4 @@ class Media(_Strict):
     text: Text
     qa: Qa
     sheet_style: SheetStyle
+    contact_sheet: ContactSheet
