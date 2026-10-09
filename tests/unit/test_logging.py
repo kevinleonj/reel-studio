@@ -3,9 +3,12 @@
 import io
 import json
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
-from reel_studio.core.logging import D74_FIELDS, configure, get_logger
+from reel_studio.core.logging import D74_FIELDS, JsonLineFormatter, configure, get_logger
+
+# A frozen instant: 9 Oct 2026 12:00:00.250 UTC.
+FROZEN = datetime(2026, 10, 9, 12, 0, 0, 250000, tzinfo=UTC)
 
 
 def _capture() -> tuple[logging.Logger, io.StringIO]:
@@ -45,15 +48,13 @@ def test_missing_fields_are_null() -> None:
     assert line["severity"] == "WARNING"
 
 
-def test_time_is_rfc3339_utc() -> None:
-    log, stream = _capture()
+def test_time_is_the_record_instant_in_rfc3339_utc() -> None:
+    record = logging.LogRecord("reel_studio.test", logging.INFO, __file__, 1, "now", None, None)
+    record.created = FROZEN.timestamp()
 
-    log.info("now")
+    line = json.loads(JsonLineFormatter().format(record))
 
-    [line] = _lines(stream)
-    stamp = datetime.fromisoformat(str(line["time"]))
-    assert stamp.utcoffset() == timedelta(0)
-    assert abs(stamp - datetime.now(tz=UTC)) < timedelta(minutes=1)
+    assert line["time"] == "2026-10-09T12:00:00.250000+00:00"
 
 
 def test_many_events_are_one_line_each() -> None:

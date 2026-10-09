@@ -2,8 +2,10 @@
 
 import re
 import shutil
+import tomllib
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -62,14 +64,26 @@ def test_price_without_fact_fails(tmp_path: Path) -> None:
         config.load(folder)
 
 
-def test_model_without_a_price_fails(tmp_path: Path) -> None:
-    folder = _copy_config(tmp_path)
-    limits = folder / "limits.toml"
-    body = limits.read_text(encoding="utf-8")
-    limits.write_text(body.replace('cheap_model = "', 'cheap_model = "unpriced-', 1))
+@pytest.mark.parametrize(
+    ("section", "key"),
+    [
+        ("editor", "model"),
+        ("editor", "critic_model"),
+        ("editor", "cheap_model"),
+        ("speech", "model"),
+    ],
+)
+def test_model_without_a_price_fails(section: str, key: str) -> None:
+    raw = {name: _raw(name) for name in ("limits", "prices", "styles")}
+    raw["limits"][section][key] = "unpriced-model"
 
-    with pytest.raises(ValidationError, match="unpriced-"):
-        config.load(folder)
+    with pytest.raises(ValidationError, match="unpriced-model"):
+        config.Config.model_validate(raw)
+
+
+def _raw(name: str) -> dict[str, Any]:
+    with (config.CONFIG_DIR / f"{name}.toml").open("rb") as handle:
+        return tomllib.load(handle, parse_float=Decimal)
 
 
 def test_missing_file_fails(tmp_path: Path) -> None:
