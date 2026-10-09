@@ -1,6 +1,6 @@
 # No defaults: every value is chosen per project (docs/INFRA.md §1). Pass them with -var on the
-# command line `make bootstrap-plan` prints. Do not write a *.tfvars file: .gitignore does not cover
-# it yet and the repository is public.
+# command line `make bootstrap-plan` prints, or in a *.tfvars file here (infra/.gitignore keeps it
+# out of the public repository).
 
 variable "project_id" {
   description = "Google Cloud project id created by `make gcp-project` (reel-studio-beta plus a suffix)."

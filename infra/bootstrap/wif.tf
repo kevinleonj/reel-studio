@@ -42,6 +42,8 @@ resource "google_service_account" "deployer" {
   display_name = "GitHub deployer"
   description  = "Applies infra/main from deploy.yml after a manual approval"
   disabled     = false
+
+  depends_on = [google_project_service.bootstrap]
 }
 
 # Only identities from the provider above whose repository id matches may act as the deployer.
@@ -57,4 +59,6 @@ resource "google_project_iam_member" "deployer" {
   project = var.project_id
   role    = each.value
   member  = google_service_account.deployer.member
+
+  depends_on = [google_project_service.bootstrap]
 }

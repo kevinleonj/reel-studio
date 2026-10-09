@@ -93,7 +93,8 @@ locals {
   }
   # Environment secrets resolve when an instance starts: the editor job gets a new value on its next
   # execution, but warm reel-api instances keep the old one until a new revision or a restart.
-  # Rotating a reel-api secret therefore also needs a redeploy (Google recommends pinned versions;
+  # Rotating a reel-api secret therefore also needs a new revision: a new image tag or a pinned
+  # version (Google recommends pinned versions;
   # pinning is a follow-up in docs/handoff/cloud.md).
   secret_version = "latest"
 
