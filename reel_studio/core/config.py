@@ -103,6 +103,16 @@ class Upload(_Strict):
     chunk_mib: int
     parallel_files: int
     chunk_retries: int
+    backoff_ms: int
+
+
+class Web(_Strict):
+    request_timeout_ms: int
+    chunk_timeout_ms: int
+    signed_url_minutes: int
+    rating_max: int
+    comment_max_chars: int
+    google_tag_url: str
 
 
 class Limits(_Strict):
@@ -115,6 +125,7 @@ class Limits(_Strict):
     speech: Speech
     codes: Codes
     upload: Upload
+    web: Web
 
 
 # ---------------------------------------------------------------- prices.toml
