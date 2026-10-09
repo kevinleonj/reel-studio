@@ -11,8 +11,8 @@ from reel_studio.core.media_config import Segment as SegmentConfig
 from reel_studio.editor.media.edl_models import GradeBlock, Resolved, Version, seg_dur
 from reel_studio.editor.media.shots import Clip
 
-# Characters that end or escape a quoted filter argument in an ffmpeg filtergraph (ffmpeg-filters
-# "Notes on filtergraph escaping"); reproduced in the phase B review with ' : and \.
+# Characters that end or escape a quoted filter argument in an ffmpeg filtergraph (F206);
+# reproduced in the phase B review with ' : and \.
 FILTERGRAPH_SPECIALS = ("'", ":", "\\")
 
 
