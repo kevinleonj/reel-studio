@@ -1,0 +1,53 @@
+---
+import "@/styles/global.css"
+import { copy } from "@/lib/copy"
+
+interface Props {
+  title: string
+  description: string
+  /** Route template for page_view (docs/UX.md §5); none for the 404 page. */
+  route?: "/" | "/new" | "/o/:id" | "/privacy"
+  /** /new and /o/* are not for search engines (docs/UX.md §2, F69). */
+  noindex?: boolean
+}
+
+const { title, description, route, noindex = false } = Astro.props
+const canonical = new URL(Astro.url.pathname, Astro.site)
+const ogImage = new URL("/og.png", Astro.site)
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Before token.ts moves ?t= behind #, the landing URL would ride along as Referer on every
+         asset and API request (D18 allows the token in one request log line, not six). -->
+    <meta name="referrer" content={copy.site.referrerPolicy} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    {noindex && <meta name="robots" content={copy.site.robotsNoindex} />}
+    {!noindex && <link rel="canonical" href={canonical} />}
+    <meta property="og:type" content={copy.site.ogType} />
+    <meta property="og:site_name" content={copy.site.name} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:alt" content={copy.meta.ogImageAlt} />
+    <meta name="twitter:card" content={copy.site.twitterCard} />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+  </head>
+  <body data-route={route} class="min-h-svh">
+    <main class="mx-auto flex w-full max-w-page flex-col gap-6 px-4 py-8">
+      <slot />
+    </main>
+    <script>
+      import { startPageAnalytics } from "@/lib/config"
+      void startPageAnalytics()
+    </script>
+  </body>
+</html>

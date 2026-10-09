@@ -1,0 +1,35 @@
+---
+import Layout from "@/layouts/main.astro"
+import { copy } from "@/lib/copy"
+
+const t = copy.privacy
+const sections = [
+  { heading: t.storedHeading, items: t.stored },
+  { heading: t.howLongHeading, items: t.howLong },
+  { heading: t.processorsHeading, items: t.processors },
+]
+---
+
+<Layout title={copy.meta.privacy.title} description={copy.meta.privacy.description} route="/privacy">
+  <a href="/" class="inline-flex min-h-target items-center text-sm underline underline-offset-4">{copy.site.homeLink}</a>
+  <h1 class="text-3xl font-semibold tracking-tight">{t.heading}</h1>
+  <p>{t.intro}</p>
+  {
+    sections.map((section) => (
+      <section class="flex flex-col gap-2">
+        <h2 class="text-xl font-semibold">{section.heading}</h2>
+        <ul class="list-disc space-y-1 pl-6">
+          {section.items.map((item) => <li>{item}</li>)}
+        </ul>
+      </section>
+    ))
+  }
+  <section class="flex flex-col gap-2">
+    <h2 class="text-xl font-semibold">{t.cookiesHeading}</h2>
+    <p>{t.cookies}</p>
+  </section>
+  <section class="flex flex-col gap-2">
+    <h2 class="text-xl font-semibold">{t.deleteHeading}</h2>
+    <p>{t.delete}</p>
+  </section>
+</Layout>

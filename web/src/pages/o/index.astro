@@ -1,0 +1,13 @@
+---
+import Layout from "@/layouts/main.astro"
+import { OrderPage } from "@/components/order/OrderPage"
+import { copy } from "@/lib/copy"
+
+// One static shell for every /o/<order_id>; the API serves it for any id (docs/ARCHITECTURE.md §7).
+---
+
+<Layout title={copy.meta.order.title} description={copy.meta.order.description} route="/o/:id" noindex>
+  <OrderPage client:only="react">
+    <p slot="fallback" class="text-muted-foreground">{copy.site.loading}</p>
+  </OrderPage>
+</Layout>
