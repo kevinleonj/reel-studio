@@ -8,12 +8,14 @@ whose name marks it as a colour reference, not footage (kit grade.py:33).
     uv run python tests/fixtures/make_clips.py <empty folder>
 """
 
+import json
 import os
 import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from PIL import Image
 
@@ -190,6 +192,27 @@ def make(folder: Path, tools: Tools) -> list[Path]:
         (folder / name).touch()
         os.utime(folder / name, (stamp, stamp))
     return [folder / name for name in NAMES]
+
+
+def probe(tools: Tools, path: Path) -> dict[str, Any]:  # Any: ffprobe JSON
+    done = subprocess.run(  # noqa: S603 - fixed argv built here, no shell
+        [
+            str(tools.ffprobe),
+            "-v",
+            "error",
+            "-print_format",
+            "json",
+            "-show_streams",
+            "-show_format",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=FILTERS_TIMEOUT_S,
+    )
+    data: dict[str, Any] = json.loads(done.stdout)
+    return data
 
 
 def make_sdr_twin(dst: Path, tools: Tools) -> Path:
