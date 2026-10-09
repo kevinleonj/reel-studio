@@ -176,6 +176,14 @@ class GradePreview(_Strict):
     tile_w_px: int
     tile_h_px: int
     jpeg_quality: int
+    gap_px: int
+    header_h_px: int
+    caption_h_px: int
+    text_inset_px: int
+    header_text_y_px: int
+    caption_x_px: int
+    caption_rgb: Rgb
+    sharpness_exponent: float
 
 
 class Grade(_Strict):
