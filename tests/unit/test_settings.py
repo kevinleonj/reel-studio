@@ -25,11 +25,22 @@ def test_missing_required_value_fails(make_settings: MakeSettings) -> None:
         make_settings(EditorSettings, anthropic_api_key=None)
 
 
+def test_editor_requires_ffmpeg_paths_with_no_default() -> None:
+    with pytest.raises(ValidationError) as caught:
+        EditorSettings(_env_file=None, anthropic_api_key="k")
+
+    missing = {(e["loc"], e["type"]) for e in caught.value.errors()}
+    assert missing == {(("ffmpeg_path",), "missing"), (("ffprobe_path",), "missing")}
+
+
 @pytest.mark.parametrize("field", ["ffmpeg_path", "ffprobe_path"])
-def test_editor_needs_explicit_ffmpeg_paths(make_settings: MakeSettings, field: str) -> None:
-    # Homebrew's ffmpeg-full is keg-only, so PATH lookup cannot be trusted on the Mac.
-    with pytest.raises(ValidationError, match=field):
-        make_settings(EditorSettings, **{field: None})
+@pytest.mark.parametrize("value", ["ffmpeg", "bin/ffmpeg", "~/bin/ffmpeg", "."])
+def test_editor_ffmpeg_paths_must_be_absolute(
+    make_settings: MakeSettings, field: str, value: str
+) -> None:
+    # Homebrew's ffmpeg-full is keg-only, so a PATH lookup on the Mac finds the wrong binary.
+    with pytest.raises(ValidationError, match="absolute"):
+        make_settings(EditorSettings, **{field: value})
 
 
 def test_secret_never_appears_in_repr(make_settings: MakeSettings) -> None:

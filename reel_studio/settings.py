@@ -8,7 +8,7 @@ the process at startup with the variable's name. Every default says why it exist
 from pathlib import Path
 from typing import Literal, Self
 
-from pydantic import SecretStr, model_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_FILE = ".env"
@@ -32,10 +32,17 @@ class EditorSettings(_Base):
 
     anthropic_api_key: SecretStr
     gemini_api_key: SecretStr | None = None  # default-because: optional; no key = voice off (D14)
-    # Explicit paths, no PATH lookup: Homebrew's ffmpeg-full (zscale) is keg-only on the Mac,
-    # the image uses Debian's ffmpeg (D72).
+    # Absolute paths, no PATH lookup: Homebrew's ffmpeg-full (zscale) is keg-only on the Mac,
+    # the image uses Debian's ffmpeg (D72). Whether the file runs is checked where it is used.
     ffmpeg_path: Path
     ffprobe_path: Path
+
+    @field_validator("ffmpeg_path", "ffprobe_path")
+    @classmethod
+    def _absolute(cls, value: Path) -> Path:
+        if not value.is_absolute():
+            raise ValueError(f"must be an absolute path to the binary, not {value}")
+        return value
 
 
 class BuildSettings(_Base):
