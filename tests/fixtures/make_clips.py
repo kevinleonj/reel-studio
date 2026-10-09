@@ -8,6 +8,7 @@ whose name marks it as a colour reference, not footage (kit grade.py:33).
     uv run python tests/fixtures/make_clips.py <empty folder>
 """
 
+import os
 import shutil
 import subprocess
 import sys
@@ -26,6 +27,7 @@ NAMES = (HDR, SIXTY_FPS, LANDSCAPE, LONG_TAKE, PHOTO, STYLE_PHOTO)
 
 LONG_TAKE_S = 90  # STEP-02 task 1
 CUT_AT_S = LONG_TAKE_S // 2  # the hard cut: testsrc, then smptehdbars
+CAPTURED_AT = 1_767_261_600  # 2026-01-01 10:00 UTC: the fixture "capture" time, in epoch seconds
 ENCODE_TIMEOUT_S = 600
 FILTERS_TIMEOUT_S = 30
 # Fixture encodes only: speed over quality, the product's encoder settings live in media.toml.
@@ -181,6 +183,12 @@ def make(folder: Path, tools: Tools) -> list[Path]:
     # selftest.py:49-50
     Image.new("RGB", (1200, 1600), (200, 120, 60)).save(folder / PHOTO)
     Image.new("RGB", (800, 1000), (150, 90, 70)).save(folder / STYLE_PHOTO)
+    # These files carry no capture time, so prepare orders them by file time; fix it one second
+    # apart in NAMES order so the clip ids (c01 = HDR ... c05 = photo) never depend on encode speed.
+    for offset, name in enumerate(NAMES):
+        stamp = CAPTURED_AT + offset
+        (folder / name).touch()
+        os.utime(folder / name, (stamp, stamp))
     return [folder / name for name in NAMES]
 
 

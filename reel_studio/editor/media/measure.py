@@ -41,6 +41,7 @@ class MeasuredClip:
     windows: list[Window]
     color_stats: ColourStats | None
     median_sharpness: float
+    cuts: list[tuple[float, float]]  # scenes PySceneDetect found; empty for a photo or one shot
 
 
 def detect_cuts(path: Path, cfg: Measure) -> list[tuple[float, float]]:
@@ -126,4 +127,4 @@ def measure_clip(work: Path, proxy: Proxy, media: Media) -> MeasuredClip:
     finally:
         cap.release()
     sharp = float(np.median([w.sharpness for w in windows])) if windows else 0.0
-    return MeasuredClip(windows, stats, sharp)
+    return MeasuredClip(windows, stats, sharp, cuts)
