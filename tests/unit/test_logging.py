@@ -1,8 +1,9 @@
-"""Logs are JSON lines with the D74 fields."""
+"""Logs are JSON lines with the D74 fields, in the shape Cloud Logging reads (F86)."""
 
 import io
 import json
 import logging
+from datetime import UTC, datetime, timedelta
 
 from reel_studio.core.logging import D74_FIELDS, configure, get_logger
 
@@ -41,7 +42,18 @@ def test_missing_fields_are_null() -> None:
 
     [line] = _lines(stream)
     assert all(line[k] is None for k in D74_FIELDS)
-    assert line["level"] == "WARNING"
+    assert line["severity"] == "WARNING"
+
+
+def test_time_is_rfc3339_utc() -> None:
+    log, stream = _capture()
+
+    log.info("now")
+
+    [line] = _lines(stream)
+    stamp = datetime.fromisoformat(str(line["time"]))
+    assert stamp.utcoffset() == timedelta(0)
+    assert abs(stamp - datetime.now(tz=UTC)) < timedelta(minutes=1)
 
 
 def test_many_events_are_one_line_each() -> None:
@@ -62,5 +74,6 @@ def test_exception_is_named_not_dumped() -> None:
         log.exception("failed", extra={"event": "crash", "outcome": "error"})
 
     [line] = _lines(stream)
+    assert line["severity"] == "ERROR"
     assert line["error_type"] == "ValueError"
     assert "Traceback" in str(line["traceback"])

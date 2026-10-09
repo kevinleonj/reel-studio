@@ -21,7 +21,7 @@ class ErrorCode(StrEnum):
     PROVIDER_UNAVAILABLE = "provider_unavailable"
     RENDER_ERROR = "render_error"
     JOB_KILLED = "job_killed"  # set by the sweep when a lease expires; no exception
-    # website API (ARCHITECTURE.md §6, UX.md)
+    # website API (ARCHITECTURE.md §7, UX.md)
     CODE_INVALID = "code_invalid"
     CODE_INACTIVE = "code_inactive"
     WEEK_FULL = "week_full"
