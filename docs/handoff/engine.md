@@ -5,47 +5,32 @@ Written by the engine lane only. Newest entry on top.
 ## Status board
 - Done: STEP-02 phase A (kit inventory, `config/media.toml`, port plan below)
 - Partly: STEP-02 (phase B, the package code, waits for STEP-01's skeleton: `pyproject.toml`, `reel_studio/core/ports.py`, `config.py`)
-- Blocked: the `prepare` luma test (see Needs Kevin 1)
+- Blocked: phase B waits for STEP-01 to merge (background wait running); deps in Needs Kevin 6
 - Not started: STEP-02 phase B; STEP-03 onward
-- Next: when STEP-01 merges, `git merge origin/main`, then write the failing tests below in the order given
+- Next: when STEP-01 merges, `git merge origin/main`, `make setup`, then the failing tests below in order
+- Ledger: Context7 entries for numpy, cv2, scenedetect, PIL, pillow_heif in `eval/doc-ledger.pending.json`
 
 ## Needs Kevin
-1. **STEP-02 asks for "mean luma inside the kit's range" for the tonemapped HDR proxy. The kit has
-   no such range.** Searched `scripts/`, `tests/`, `references/colour.md`, `README.md`, `CLAUDE.md`:
-   the only related evidence is the comment at `prep.py:40-41` (npl=203 came out about 25 % darker
-   than npl=100). Proposal: render the synthetic HLG clip and the same `testsrc2` pattern encoded
-   SDR, and require the proxy's mean luma (0-255) within ±15 % of the SDR render's. The reviewer
-   measured the unchanged kit (Homebrew ffmpeg-full 9.0.2, not yet the Debian image): SDR 126.9,
-   HDR npl=100/mobius 111.7 (−12.0 %), npl=203 94.2 (−25.8 %); ±10 % would fail the kit itself.
-   A new threshold, so it needs your yes; the test stays `xfail(strict=True)` until then.
-4. **I wrote into the old kit by accident.** `$OLD_KIT_DIR/.ruff_cache/` (3 cache files, 21:44:00)
-   was created by the post-edit ruff hook while this session's shell sat in the kit directory.
-   No kit source changed (snapshot of 2,651 files, `__pycache__` and `.env*` excluded, identical),
-   but the snapshot was taken 4 s after that cache appeared, so it does not prove the cache away.
-   I did not delete it (that would be another write there). To restore: `rm -rf "$OLD_KIT_DIR/.ruff_cache"`.
+Answered 9 Oct 2026 (TONIGHT.md): 1. luma reference = SDR render of the same pattern, ±15 %
+(changed from 10 % at 22:56; `media.toml [prepare.tonemap].sdr_luma_tolerance`); 2. new `sheets.py` per D38,
+`limits.toml [sheets].near_duplicate_ssim = 0.93` (origin `qa.py:31`); 3. `hardcode-ok` markers stay;
+4. kit `.ruff_cache` deleted by Claude at 22:50, kit equals the pre-session snapshot again (2,648 files,
+byte-identical; read with Read/`rg` only from now on); 7. main adds `ffmpeg_path`/`ffprobe_path` to
+`EditorSettings`, Kevin's env file has both. Open:
+
+9. **Merge STEP-01.** Phase B needs its `Makefile`, `pyproject.toml`, `ports.py` and `config.py`. A
+   background wait in this session (`until git fetch … origin/main:Makefile …; echo STEP01_MERGED`)
+   starts phase B as soon as the merge lands; if the session has ended, start a new one on this lane.
 5. **EDITOR.md §1 says tonemap "zscale + hable"; the kit uses mobius** (`prep.py:45`,
    `media.toml [prepare.tonemap]`). The port keeps mobius per D46. Correct EDITOR §1, or say hable is wanted.
 6. **Dependencies the lane cannot add.** STEP-01's `[editor]` extra lists anthropic, google-genai,
    pillow only; `pyproject.toml`/`uv.lock` are outside this lane. Phase B needs numpy 2.5.3,
    opencv-python-headless 5.0.0.93 (no libGL in slim), scenedetect 0.7.1; pillow-heif 1.8.0 only if
    HEIC is accepted (`limits.toml` allowed_types has none). Versions confirmed on PyPI by the reviewer.
-7. **ffmpeg path setting.** Claude Code's PATH hides keg-only `ffmpeg-full`, so `settings.py` gets
-   `ffmpeg_path`/`ffprobe_path` without defaults; you set absolute paths in `.env` (I cannot), and
-   phase B adds the names to `.env.example`. Fonts: Poppins-Bold.ttf + OFL.txt ship as package data
-   under `reel_studio/editor/media/fonts/`, no host-font fallbacks.
-2. **Contact sheets: the kit algorithm must change (STOP rule of STEP-02, failing case written here
-   first).** Kit `prep.py:167-221` (`build_sheets`) draws a flow layout on 1980×1980 sheets with
-   340 px rows and 2-8 evenly spaced frames per clip. D38 (locked) requires 4×4 tiles of 384×216 =
-   1536×864, 2-6 frames per clip at scene changes, a tile → clip/time legend and near-duplicates
-   removed. Failing case: `test_sheet_is_1536x864_with_16_tiles` fails against a port of
-   `build_sheets` (its sheet is 1980 px wide). Plan: new `sheets.py` per D38, reusing the kit's scene
-   detection (`prep.py:119-122`) for frame times and the kit's SSIM (`qa.py:43-51`) with
-   `[qa].near_same_ssim = 0.93` (`qa.py:31`) as the near-duplicate threshold. Reusing that kit
-   threshold for a new purpose is my choice, not a kit fact; say if you want a separate value.
-3. Three lines in `config/media.toml` carry `hardcode-ok (config home)`: the global hardcode hook
-   flagged `limiter_headroom_db`, `limiter_oversample_hz`, `limiter_release_ms` in the config file
-   itself (a false positive: config is their home). I used the hook's own marker rather than adding
-   a root `.hardcode-allowlist` outside this lane. Say if you prefer the allowlist.
+Plan notes kept from the answered items: fonts (Poppins-Bold.ttf + OFL.txt) ship as package data
+under `reel_studio/editor/media/fonts/`, no host-font fallbacks. Sheets failing case:
+`test_sheet_is_1536x864_with_16_tiles` fails against a port of kit `build_sheets` (`prep.py:167-221`,
+1980 px wide); `sheets.py` reuses the kit's scene detection (`prep.py:119-122`) and SSIM (`qa.py:43-51`).
 
 ## Evidence lines (the gates read these)
 

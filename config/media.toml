@@ -34,6 +34,10 @@ silent_track_layout = "stereo"      # anullsrc layout added to clips with no aud
 npl = 100                           # nominal peak luminance, cd/m2; 203 came out ~25% darker; prep.py:40-41,44
 algorithm = "mobius"                # ffmpeg tonemap= curve; prep.py:45
 desat = 0                           # tonemap desaturation strength, 0 = off; prep.py:47
+# Test acceptance, not a kit value: the HDR proxy's mean luma (0-255) must sit within this fraction of an
+# SDR render of the same test pattern. Kevin chose 15 % on 9 Oct 2026: the unchanged kit measured -12.0 %
+# (npl=100, mobius) and the failure this test exists to catch, npl=203, measured -25.8 % (prep.py:40-41).
+sdr_luma_tolerance = 0.15           # fraction of the SDR reference's mean luma
 
 [prepare.photo]                     # a still becomes a short clip with a slow push-in
 seconds = 3.0                       # s; prep.py:31

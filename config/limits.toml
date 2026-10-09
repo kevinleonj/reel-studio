@@ -53,6 +53,7 @@ rows = 4
 frames_per_clip_min = 2
 frames_per_clip_max = 6
 max_image_side_px = 2000            # F08
+near_duplicate_ssim = 0.93          # D38 near-duplicates removed; origin kit qa.py:31 (NEAR_SAME), Kevin 9 Oct 2026
 
 [gates]
 hook_min = 4                        # D36
