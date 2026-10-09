@@ -20,6 +20,8 @@ from tests.fakes import environment, network
 TEST_VALUES: dict[str, Any] = {
     "anthropic_api_key": "test-anthropic-key",
     "gemini_api_key": "test-gemini-key",
+    "ffmpeg_path": "/nonexistent/bin/ffmpeg",
+    "ffprobe_path": "/nonexistent/bin/ffprobe",
     "old_kit_dir": "/nonexistent/old-kit",
     "reel_fixtures_dir": "/nonexistent/fixtures",
     "payments": "off",

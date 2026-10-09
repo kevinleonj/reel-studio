@@ -9,6 +9,8 @@
 .claude/state/
 # Kevin's user-level documentation gate; the project's record is docs/FACTS.md
 .claude/doc-ledger.json
+# Per-machine Claude Code permissions
+.claude/settings.local.json
 # Python
 __pycache__/
 .venv/

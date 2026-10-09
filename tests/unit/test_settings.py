@@ -25,6 +25,13 @@ def test_missing_required_value_fails(make_settings: MakeSettings) -> None:
         make_settings(EditorSettings, anthropic_api_key=None)
 
 
+@pytest.mark.parametrize("field", ["ffmpeg_path", "ffprobe_path"])
+def test_editor_needs_explicit_ffmpeg_paths(make_settings: MakeSettings, field: str) -> None:
+    # Homebrew's ffmpeg-full is keg-only, so PATH lookup cannot be trusted on the Mac.
+    with pytest.raises(ValidationError, match=field):
+        make_settings(EditorSettings, **{field: None})
+
+
 def test_secret_never_appears_in_repr(make_settings: MakeSettings) -> None:
     built = make_settings(CloudSettings)
 
@@ -79,7 +86,13 @@ def test_fresh_env_example_copy_reports_only_missing_values(
 
 def test_blank_optional_key_is_none(tmp_path: Path) -> None:
     dotenv = tmp_path / ".env"
-    dotenv.write_text("ANTHROPIC_API_KEY=k\nGEMINI_API_KEY=\n", encoding="utf-8")
+    lines = [
+        "ANTHROPIC_API_KEY=k",
+        "GEMINI_API_KEY=",
+        f"FFMPEG_PATH={TEST_VALUES['ffmpeg_path']}",
+        f"FFPROBE_PATH={TEST_VALUES['ffprobe_path']}",
+    ]
+    dotenv.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     built = EditorSettings(_env_file=dotenv)
 

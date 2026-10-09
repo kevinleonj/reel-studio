@@ -32,6 +32,10 @@ class EditorSettings(_Base):
 
     anthropic_api_key: SecretStr
     gemini_api_key: SecretStr | None = None  # default-because: optional; no key = voice off (D14)
+    # Explicit paths, no PATH lookup: Homebrew's ffmpeg-full (zscale) is keg-only on the Mac,
+    # the image uses Debian's ffmpeg (D72).
+    ffmpeg_path: Path
+    ffprobe_path: Path
 
 
 class BuildSettings(_Base):
