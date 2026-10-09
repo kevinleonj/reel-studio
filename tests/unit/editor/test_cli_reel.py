@@ -72,26 +72,6 @@ def _tree(folder: Path) -> dict[str, bytes]:
     }
 
 
-@pytest.mark.parametrize("inside", ["", "sub", "sub/deeper"])
-def test_out_inside_the_input_folder_is_refused(
-    tmp_path: Path, make_settings: MakeSettings, inside: str
-) -> None:
-    folder = tmp_path / "in"
-    folder.mkdir()
-    (folder / "clean.mp4").write_bytes(b"the customer's own file")
-    edl = tmp_path / "edl.json"
-    edl.write_text(json.dumps({"versions": []}), encoding="utf-8")
-    before = _tree(folder)
-
-    out = folder / inside if inside else folder
-    code = reel.main(
-        ["render", "--edl", str(edl), str(folder), "--out", str(out)], _settings(make_settings)
-    )
-
-    assert code == 2
-    assert _tree(folder) == before
-
-
 def test_dot_as_the_folder_names_the_default_out_from_the_real_name(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

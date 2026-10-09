@@ -47,16 +47,23 @@ def default_out(folder: Path) -> Path:
     return real.with_name(f"{real.name}-reel")
 
 
-def _overlaps(folder: Path, out: Path) -> bool:
-    """True when `out` or its work/ folder is `folder` or inside it (D02).
+def _same(a: Path, b: Path) -> bool:
+    return os.path.exists(a) and os.path.exists(b) and os.path.samefile(a, b)
 
-    Compares files, not spellings (`os.path.samefile`): a case-insensitive volume would let
-    `IN/out` past a text comparison with `in`.
+
+def _overlaps(folder: Path, out: Path) -> bool:
+    """True when the run would write into `folder` (D02): `out/work` is the folder, inside it,
+    or holds it (a previous run's clips/ used as input). Compares files, not spellings
+    (`os.path.samefile`), since a case-insensitive volume lets `IN/out` past `in`. A path that
+    cannot be checked counts as overlapping.
     """
-    for candidate in (out / WORK, *(out / WORK).parents):
-        if candidate.exists() and os.path.samefile(candidate, folder):
-            return True
-    return False
+    work = out / WORK
+    try:
+        upward = any(_same(c, folder) for c in (work, *work.parents))
+        downward = any(_same(work, c) for c in (folder, *folder.parents))
+    except OSError:  # an ancestor we may not search: refuse rather than guess
+        return True
+    return upward or downward
 
 
 def _bad(message: str) -> int:

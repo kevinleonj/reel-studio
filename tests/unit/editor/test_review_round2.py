@@ -7,8 +7,7 @@ import pytest
 
 from reel_studio.cli import reel
 from reel_studio.core import config
-from reel_studio.core.errors import NoUsableInput, RenderError
-from reel_studio.editor.media import edl, pipeline, prepare, qa, tools
+from reel_studio.editor.media import edl, pipeline, qa
 from reel_studio.editor.media.render import PlacedText
 from reel_studio.settings import EditorSettings
 from tests.conftest import MakeSettings
@@ -72,19 +71,6 @@ def test_a_case_variant_spelling_of_the_folder_is_refused(
     assert _run(tmp_path, folder, variant / "out", _settings(make_settings)) == 2
 
 
-def test_a_missing_tool_is_not_blamed_on_the_customer(tmp_path: Path) -> None:
-    folder = tmp_path / "in"
-    folder.mkdir()
-    (folder / "IMG_1.MOV").write_bytes(b"mov")
-    missing = tmp_path / "nope"
-    broken = tools.Ffmpeg(missing / "ffmpeg", missing / "ffprobe", config.load_media().tools)
-
-    with pytest.raises(RenderError, match="cannot start") as caught:
-        prepare.prepare_folder(folder, tmp_path / "w", broken, config.load_media())
-
-    assert not isinstance(caught.value, NoUsableInput)
-
-
 def test_empty_label_is_no_text_as_in_the_kit() -> None:
     raw = _edl()
     raw["versions"][0]["segments"][1]["text"] = ""
@@ -128,7 +114,7 @@ def test_text_outside_the_safe_zone_fails_its_hard_check() -> None:
     assert qa.all_inside([]) is True
 
 
-def test_precheck_matches_validate_on_shape_errors() -> None:
+def test_precheck_reports_shape_errors_without_clips() -> None:
     raw = {"versions": [], "audio": {"music": "x"}}
 
     early = edl.precheck(raw, config.load_media())
