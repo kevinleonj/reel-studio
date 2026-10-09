@@ -26,7 +26,15 @@ async def put_chunk(session: str, request: Request) -> Response:
     declared = request.headers.get("Content-Length")
     if declared is not None and declared.isdigit() and int(declared) > max_body:
         raise Refused("chunk_too_large", HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
-    body = await request.body()
+    # Count the bytes as they arrive: a chunked body has no Content-Length to check up front.
+    parts: list[bytes] = []
+    received = 0
+    async for part in request.stream():
+        received += len(part)
+        if received > max_body:
+            raise Refused("chunk_too_large", HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
+        parts.append(part)
+    body = b"".join(parts)
     try:
         answer = deps.local_storage.put_chunk(
             session, request.headers.get("Content-Range", ""), body

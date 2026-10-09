@@ -85,6 +85,30 @@ def test_delete_order_removes_in_work_and_out_of_that_order_only(
     assert [f["name"] for f in harness.storage.list_inputs(OTHER)] == ["f"]
 
 
+def test_same_name_twice_the_last_completed_upload_wins(
+    harness: StorageHarness, tmp_path: Path
+) -> None:
+    meta = {"name": "a.mp4", "size": 6, "type": "video/mp4"}
+    first = harness.storage.create_upload_session(ORDER, meta)
+    second = harness.storage.create_upload_session(ORDER, meta)
+    harness.complete(first, b"AAAAAA")
+    harness.complete(second, b"BBBBBB")
+    assert list(harness.storage.list_inputs(ORDER)) == [
+        {"name": "a.mp4", "size": 6, "key": f"in/{ORDER}/a.mp4"}
+    ]
+    out = tmp_path / "read-back"
+    harness.storage.download(f"in/{ORDER}/a.mp4", out)
+    assert out.read_bytes() == b"BBBBBB"  # Cloud Storage keeps the last finished object
+
+
+def test_a_file_named_like_a_partial_is_still_listed(harness: StorageHarness) -> None:
+    target = harness.storage.create_upload_session(
+        ORDER, {"name": "x.part", "size": 1, "type": "video/mp4"}
+    )
+    harness.complete(target, b"x")
+    assert [f["name"] for f in harness.storage.list_inputs(ORDER)] == ["x.part"]
+
+
 @pytest.mark.parametrize("name", ["../escape.mp4", "a/b.mp4", "", ".hidden"])
 def test_unsafe_file_names_are_refused(harness: StorageHarness, name: str) -> None:
     with pytest.raises(ValueError, match="file name"):

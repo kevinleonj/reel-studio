@@ -9,6 +9,7 @@ import pytest
 
 from reel_studio.adapters.mailer_smtp import SmtpMailer
 from reel_studio.core.ports import Mailer
+from tests.contract.firestore_emulator import REQUIRE_ENV
 from tests.fakes.mailer import FakeMailer
 
 MAILPIT_ENV = "MAILPIT_HOST"  # host:smtp_port,http_port, set by tests/contract/run_emulator.py
@@ -35,6 +36,8 @@ def inbox(request: pytest.FixtureRequest) -> Iterator[Inbox]:
         return
     spec = os.environ.get(MAILPIT_ENV)
     if not spec:
+        if os.environ.get(REQUIRE_ENV) == "1":  # make test-emulator: a skip would be a failure
+            pytest.fail(f"{MAILPIT_ENV} is not set but the emulators are required")
         pytest.skip(f"{MAILPIT_ENV} is not set: run `make test-emulator`")
     host, ports = spec.split(":")
     smtp_port, http_port = (int(p) for p in ports.split(","))

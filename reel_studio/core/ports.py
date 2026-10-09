@@ -40,6 +40,7 @@ class QueueLimits:
     paid_not_started_days: int
     # The sweep expires an unconfirmed checkout this long after it should have expired.
     expiry_grace_minutes: int
+    order_days: int  # orders.expires_at for Firestore's TTL (ARCHITECTURE.md §4)
 
 
 class SweepReport(TypedDict):
@@ -87,6 +88,8 @@ class OrderUpkeep(Protocol):
     def mark_deleted(self, order_id: str) -> None: ...
     def sweep(self) -> SweepReport: ...
     def queue_position(self, order_id: str) -> int | None: ...  # orders ahead; None unless queued
+    # One email per outcome (§4): True once per (order, kind), set in the deciding transaction.
+    def claim_email(self, order_id: str, kind: str) -> bool: ...
 
 
 class OrderStore(Orders, OrderUpkeep, Protocol):

@@ -12,6 +12,7 @@ import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Protocol
 
 from reel_studio.core.errors import ErrorCode
 from reel_studio.core.logging import get_logger
@@ -24,15 +25,30 @@ STAGES = ("reading", "listening", "planning", "rendering", "checking", "saving")
 FIXTURE_BYTES = b"fake editor output, not a video"
 
 
+class FailureNotifier(Protocol):
+    def order_failed(self, order_id: str, code: ErrorCode, stage: str) -> None: ...
+
+
 class Dispatcher:
     def __init__(
-        self, orders: OrderStore, launcher: Launcher, clock: Clock, *, sweep_every_s: int
+        self,
+        orders: OrderStore,
+        launcher: Launcher,
+        clock: Clock,
+        *,
+        sweep_every_s: int,
+        notifier: FailureNotifier | None = None,
     ) -> None:
         self._orders = orders
         self._launcher = launcher
         self._clock = clock
         self._sweep_every = timedelta(seconds=sweep_every_s)
         self._last_sweep: datetime | None = None
+        self._notifier = notifier
+
+    def _failed(self, order_id: str, stage: str) -> None:
+        if self._notifier is not None:
+            self._notifier.order_failed(order_id, ErrorCode.JOB_KILLED, stage)
 
     def tick(self) -> None:
         """One pass: sweep when due, then start queued orders while slots are free."""
@@ -43,12 +59,16 @@ class Dispatcher:
             log.info(
                 "sweep", extra={"event": "sweep", "stage": "dispatcher", "outcome": str(report)}
             )
+            for failed in report["failed"]:
+                self._failed(failed, "running")
         while (order_id := self._orders.next_queued()) is not None:
             if not self._orders.take_slot(order_id):
                 return
             try:
                 execution = self._launcher.launch(order_id)
-            except OSError:
+            except Exception:
+                # Any launch error: the order must fail and free its slot now, not hold it for
+                # the 70-minute lease. Logged with its traceback.
                 log.exception(
                     "launch failed",
                     extra={
@@ -59,6 +79,7 @@ class Dispatcher:
                     },
                 )
                 self._orders.fail(order_id, code=ErrorCode.JOB_KILLED)
+                self._failed(order_id, "launch")
                 continue
             log.info(
                 "launched %s",
@@ -73,7 +94,15 @@ class Dispatcher:
 
     def run_forever(self, poll_s: float, stop: threading.Event) -> None:
         while not stop.is_set():
-            self.tick()
+            try:
+                self.tick()
+            except Exception:
+                # One bad tick (the emulator not up yet, a timeout) must not end the dispatcher:
+                # log it with its traceback and try again on the next tick.
+                log.exception(
+                    "dispatcher tick failed",
+                    extra={"stage": "dispatcher", "event": "tick", "outcome": "error"},
+                )
             stop.wait(poll_s)
 
 

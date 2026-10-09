@@ -2,7 +2,7 @@
 
 import threading
 from collections import deque
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from reel_studio.core.ports import Clock
 
@@ -15,15 +15,18 @@ class SlidingWindow:
     def __init__(self, limit: int, clock: Clock) -> None:
         self._limit = limit
         self._clock = clock
-        self._calls: dict[str, deque[object]] = {}
+        self._calls: dict[str, deque[datetime]] = {}
         self._lock = threading.Lock()
 
     def allow(self, address: str) -> bool:
         now = self._clock.now()
         with self._lock:
             calls = self._calls.setdefault(address, deque())
-            while calls and now - calls[0] >= WINDOW:  # type: ignore[operator]
+            while calls and now - calls[0] >= WINDOW:
                 calls.popleft()
+            if not calls:
+                del self._calls[address]  # an address seen once is not kept forever
+                calls = self._calls.setdefault(address, deque())
             if len(calls) >= self._limit:
                 return False
             calls.append(now)

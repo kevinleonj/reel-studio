@@ -14,6 +14,7 @@ from email.message import EmailMessage
 from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescape
 
 from reel_studio.core.constants import EMAIL_MAX_BYTES, MS_PER_SECOND
+from reel_studio.core.errors import DeliveryFailed
 from reel_studio.core.logging import get_logger
 
 log = get_logger(__name__)
@@ -71,14 +72,15 @@ class SmtpMailer:
         try:
             with smtplib.SMTP(self._host, self._port, timeout=self._timeout_s) as smtp:
                 smtp.send_message(message)
-        except (OSError, smtplib.SMTPException):
+        except (OSError, smtplib.SMTPException, ValueError) as error:
             latency = round((time.monotonic() - started) * MS_PER_SECOND)
-            log.exception(
-                "email %s not sent",
+            log.warning(
+                "email %s not sent: %s",
                 template,
+                type(error).__name__,
                 extra={**extra, "latency_ms": latency, "outcome": "error"},
             )
-            raise
+            raise DeliveryFailed(template) from error
         # Never the address or the body (D74, CLAUDE.md): template and latency only.
         latency = round((time.monotonic() - started) * MS_PER_SECOND)
         log.info("email %s sent", template, extra={**extra, "latency_ms": latency, "outcome": "ok"})

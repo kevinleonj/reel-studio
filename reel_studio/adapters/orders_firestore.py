@@ -15,7 +15,7 @@ from google.cloud import firestore
 
 from reel_studio.core import order_rules as rules
 from reel_studio.core.constants import MS_PER_SECOND, RUN_TOKEN_BYTES
-from reel_studio.core.errors import ErrorCode
+from reel_studio.core.errors import ErrorCode, WeekFull
 from reel_studio.core.logging import get_logger
 from reel_studio.core.ports import Clock, NewOrder, QueueLimits, Record, SweepReport
 
@@ -64,6 +64,14 @@ class FirestoreOrders:
         extra: dict[str, Any] = {"order_id": order_id, "stage": "orders", "event": event}
         try:
             result = call()
+        except (WeekFull, rules.WrongState) as refusal:
+            # Expected refusals, not failures: one INFO line, no traceback (D74).
+            extra.update(
+                latency_ms=round((time.monotonic() - started) * MS_PER_SECOND),
+                outcome=f"refused: {type(refusal).__name__}",
+            )
+            log.info("firestore %s refused", event, extra=extra)
+            raise
         except Exception:
             extra.update(
                 latency_ms=round((time.monotonic() - started) * MS_PER_SECOND), outcome="error"
@@ -105,7 +113,9 @@ class FirestoreOrders:
         def body(tx: firestore.Transaction) -> str:
             week = rules.reserve_place(self._read(week_ref, tx), self._limits.weekly_cap)
             tx.set(week_ref, week)
-            tx.create(self._order(order.order_id), rules.new_order(order, now))
+            tx.create(
+                self._order(order.order_id), rules.new_order(order, now, self._limits.order_days)
+            )
             return order.order_id
 
         return self._transaction("create_awaiting_payment", order.order_id, body)
@@ -229,13 +239,14 @@ class FirestoreOrders:
             capacity = self._capacity(tx)
             week = self._week_of(tx, before)
             after = rule(before)
-            if before is None or after is None:
-                return
-            tx.set(ref, after)
-            if before["place_held"] and not after["place_held"]:
-                self._give_place_back(tx, week, before)
+            if before is not None and after is not None:
+                tx.set(ref, after)
+                if before["place_held"] and not after["place_held"]:
+                    self._give_place_back(tx, week, before)
             released = rules.release_slot(capacity, order_id) or capacity
-            tx.set(capacity_ref, {**released, "paused": True} if pause else released)
+            # D26: a spend-limit report pauses the service even when the order already moved on.
+            if pause or released is not capacity:
+                tx.set(capacity_ref, {**released, "paused": True} if pause else released)
 
         self._transaction(event, order_id, body)
 
@@ -273,10 +284,26 @@ class FirestoreOrders:
         self._single("mark_deleted", order_id, rules.mark_deleted)
 
     def _ids(self, status: str) -> list[str]:
-        query = self._db.collection(ORDERS).where(
-            filter=firestore.FieldFilter("status", "==", status)
-        )
-        return sorted(str(s.id) for s in query.stream(timeout=self._timeout_s))
+        def run() -> list[str]:
+            query = self._db.collection(ORDERS).where(
+                filter=firestore.FieldFilter("status", "==", status)
+            )
+            return sorted(str(s.id) for s in query.stream(timeout=self._timeout_s))
+
+        return self._logged(f"list_{status}", None, run)
+
+    def claim_email(self, order_id: str, kind: str) -> bool:
+        ref = self._order(order_id)
+        now = self._clock.now()
+
+        def body(tx: firestore.Transaction) -> bool:
+            changed = rules.claim_email(self._read(ref, tx), kind, now)
+            if changed is None:
+                return False
+            tx.set(ref, changed)
+            return True
+
+        return self._transaction(f"claim_email_{kind}", order_id, body)
 
     def sweep(self) -> SweepReport:
         """Dead leases fail, missed checkouts expire, stale paid orders are abandoned. Each order

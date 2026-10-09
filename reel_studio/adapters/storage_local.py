@@ -99,7 +99,7 @@ class LocalStorage:
         folder = self._path(f"in/{order_id}")
         if not folder.is_dir():
             return []
-        files = sorted(p for p in folder.iterdir() if p.is_file() and not p.name.endswith(PARTIAL))
+        files = sorted(p for p in folder.iterdir() if p.is_file())  # partials live with sessions
         return [
             {"name": p.name, "size": p.stat().st_size, "key": f"in/{order_id}/{p.name}"}
             for p in files
@@ -126,10 +126,15 @@ class LocalStorage:
         return f"{self._download_path}/{quoted}?{query}"
 
     def delete_order(self, order_id: str) -> None:
+        """Removes in/, work/ and out/ of the order; any other failure propagates, so a caller
+        never reports files as deleted that are still there."""
         for prefix in PREFIXES:
-            shutil.rmtree(self._path(f"{prefix}/{order_id}"), ignore_errors=True)
+            folder = self._path(f"{prefix}/{order_id}")
+            if folder.exists():
+                shutil.rmtree(folder)
         for session in self._sessions.glob("*.json"):
             if json.loads(session.read_text()).get("order_id") == order_id:
+                self.partial_of(session.stem).unlink(missing_ok=True)
                 session.unlink(missing_ok=True)
 
     # ------------------------------------------------------------ laptop-only transport
@@ -142,7 +147,10 @@ class LocalStorage:
         try:
             expires = int(params["exp"])
             expected = self._sign(quoted_key, params["name"], expires)
-            return hmac.compare_digest(expected, params["sig"]) and now_s <= expires
+            # Bytes, not str: compare_digest refuses non-ASCII strings with a TypeError.
+            return (
+                hmac.compare_digest(expected.encode(), params["sig"].encode()) and now_s <= expires
+            )
         except (KeyError, ValueError):
             return False
 
@@ -152,44 +160,53 @@ class LocalStorage:
             raise FileNotFoundError(quoted_key)
         return path
 
+    def partial_of(self, session: str) -> Path:
+        """The session's own bytes so far: never the final file, never shared by two sessions."""
+        return self._sessions / f"{session}{PARTIAL}"
+
     def put_chunk(self, session: str, content_range: str, body: bytes) -> ChunkAnswer:
         record = self._load(session)
         size, received = int(str(record["size"])), int(str(record["received"]))
-        final = self._path(str(record["key"]))
-        partial = final.with_name(final.name + PARTIAL)
+        partial = self.partial_of(session)
         query, chunk = QUERY.match(content_range), CHUNK.match(content_range)
         if query is not None:
             if int(query["total"]) != size:
                 raise ValueError(
                     f"Content-Range total {query['total']} is not the session size {size}"
                 )
-            if received == size:
-                self._finalise(partial, final)
-            return self._answer(received, size)
-        if chunk is None:
+        elif chunk is None:
             raise ValueError(f"malformed Content-Range: {content_range!r}")
-        start, end, total = int(chunk["start"]), int(chunk["end"]), int(chunk["total"])
-        if total != size or end >= size or end < start or len(body) != end - start + 1:
-            raise ValueError(
-                f"Content-Range {content_range!r} does not match the session or the body"
-            )
-        if start <= received <= end:
-            # Bytes before `received` are already persisted and ignored, as Cloud Storage does.
-            partial.parent.mkdir(parents=True, exist_ok=True)
-            with partial.open("ab") as handle:
-                handle.write(body[received - start :])
-            received = end + 1
-            self._session_file(session).write_text(json.dumps({**record, "received": received}))
-        if received == size:
-            self._finalise(partial, final)
+        elif not record.get("complete"):
+            start, end, total = int(chunk["start"]), int(chunk["end"]), int(chunk["total"])
+            if total != size or end >= size or end < start or len(body) != end - start + 1:
+                raise ValueError(
+                    f"Content-Range {content_range!r} does not match the session or the body"
+                )
+            if start <= received <= end:
+                # Bytes before `received` are already persisted and ignored, as Cloud Storage
+                # does. The record is the truth: anything past it on disk (a write that crashed
+                # before the record moved on) is cut off before appending.
+                partial.touch()
+                with partial.open("r+b") as handle:
+                    handle.truncate(received)
+                    handle.seek(received)
+                    handle.write(body[received - start :])
+                received = end + 1
+                record = {**record, "received": received}
+                self._session_file(session).write_text(json.dumps(record))
+        if received == size and not record.get("complete"):
+            self._finalise(partial, self._path(str(record["key"])), size)
+            self._session_file(session).write_text(json.dumps({**record, "complete": True}))
         return self._answer(received, size)
 
     @staticmethod
-    def _finalise(partial: Path, final: Path) -> None:
-        if final.exists():
-            return
-        partial.parent.mkdir(parents=True, exist_ok=True)
+    def _finalise(partial: Path, final: Path, size: int) -> None:
+        """Move the finished bytes into place; a later finished upload of the same name replaces
+        an earlier one (last wins, as in Cloud Storage)."""
         partial.touch()  # an empty file has no chunk to create it
+        if partial.stat().st_size != size:
+            raise ValueError(f"partial upload has {partial.stat().st_size} bytes, expected {size}")
+        final.parent.mkdir(parents=True, exist_ok=True)
         partial.replace(final)
 
     @staticmethod

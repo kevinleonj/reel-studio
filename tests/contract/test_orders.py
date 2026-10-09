@@ -16,7 +16,12 @@ from tests.fakes.clock import FrozenClock
 
 START = datetime(2026, 10, 12, 9, 0, tzinfo=UTC)  # a Monday, ISO week 2026-W42
 LIMITS = QueueLimits(
-    running_max=2, lease_minutes=70, weekly_cap=2, paid_not_started_days=7, expiry_grace_minutes=5
+    running_max=2,
+    lease_minutes=70,
+    weekly_cap=2,
+    paid_not_started_days=7,
+    expiry_grace_minutes=5,
+    order_days=30,
 )
 SETTINGS = {
     "style": "recipe",
@@ -225,6 +230,47 @@ def test_sweep_fails_dead_leases_expires_missed_checkouts_and_abandons(
     assert status(store, "c" * 32) == "abandoned"
     assert report == {"failed": ["a" * 32], "expired": ["b" * 32], "abandoned": ["c" * 32]}
     assert store.sweep() == {"failed": [], "expired": [], "abandoned": []}
+
+
+def test_next_queued_is_first_come_not_first_by_id(orders: tuple[OrderStore, FrozenClock]) -> None:
+    store, clock = orders
+    queued(store, "b" * 32)
+    clock.advance(timedelta(seconds=1))
+    queued(store, "a" * 32)
+    assert store.next_queued() == "b" * 32
+
+
+def test_a_late_pause_still_pauses_the_service(orders: tuple[OrderStore, FrozenClock]) -> None:
+    store, clock = orders
+    queued(store, "a" * 32)
+    store.take_slot("a" * 32)
+    store.fail("a" * 32, code=ErrorCode.JOB_KILLED)  # the sweep got there first
+    store.pause("a" * 32, code=ErrorCode.SPEND_LIMIT)  # the worker reports the spend limit late
+    assert status(store, "a" * 32) == "failed"
+    clock.advance(timedelta(seconds=1))
+    queued(store, "b" * 32)
+    assert store.take_slot("b" * 32) is False  # D26: the whole service is paused
+
+
+def test_an_order_expires_after_the_retention_days(orders: tuple[OrderStore, FrozenClock]) -> None:
+    store, _ = orders
+    store.create_awaiting_payment(new("a" * 32))
+    doc = store.get("a" * 32)
+    assert doc is not None
+    assert doc["expires_at"] == START + timedelta(days=LIMITS.order_days)  # Firestore TTL field
+
+
+def test_each_email_is_claimed_once(orders: tuple[OrderStore, FrozenClock]) -> None:
+    store, _ = orders
+    paid(store, "a" * 32)
+    assert store.claim_email("a" * 32, "failed") is True
+    assert store.claim_email("a" * 32, "failed") is False
+    assert store.claim_email("a" * 32, "ready") is True
+    assert store.claim_email("0" * 32, "ready") is False
+    doc = store.get("a" * 32)
+    assert doc is not None
+    emails = doc["emails"]
+    assert isinstance(emails, dict) and set(emails) == {"failed_at", "ready_at"}
 
 
 def test_queue_position_counts_the_orders_ahead(orders: tuple[OrderStore, FrozenClock]) -> None:

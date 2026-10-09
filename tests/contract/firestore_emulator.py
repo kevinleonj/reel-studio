@@ -17,6 +17,7 @@ from reel_studio.core.ports import QueueLimits
 from tests.fakes.clock import FrozenClock
 
 EMULATOR_ENV = "FIRESTORE_EMULATOR_HOST"
+REQUIRE_ENV = "REEL_REQUIRE_EMULATOR"  # set by run_emulator.py
 PROJECT = "reel-studio-test"
 TIMEOUT_S = 10.0
 MAX_ATTEMPTS = 5
@@ -26,6 +27,8 @@ MAX_ATTEMPTS = 5
 def emulator_orders(clock: FrozenClock, limits: QueueLimits) -> Iterator[FirestoreOrders]:
     host = os.environ.get(EMULATOR_ENV)
     if not host:
+        if os.environ.get(REQUIRE_ENV) == "1":  # make test-emulator: a skip would be a failure
+            pytest.fail(f"{EMULATOR_ENV} is not set but the emulators are required")
         pytest.skip(f"{EMULATOR_ENV} is not set: run `make test-emulator`")
     # The emulator's documented reset endpoint: delete every document of the project.
     reset = f"http://{host}/emulator/v1/projects/{PROJECT}/databases/(default)/documents"

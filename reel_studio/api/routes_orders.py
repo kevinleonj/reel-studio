@@ -11,6 +11,7 @@ from reel_studio.api.tokens import ORDER_ID, token_matches
 from reel_studio.api.views import order_view
 from reel_studio.core.errors import BadType, NoFiles, RateLimited, TooLarge, TooManyFiles
 from reel_studio.core.logging import get_logger
+from reel_studio.core.order_rules import WrongState
 from reel_studio.core.ports import Record
 
 log = get_logger(__name__)
@@ -38,7 +39,7 @@ def authorised(
     deps = deps_of(request)
     if not limiters_of(request).order_calls.allow(client_address(request)):
         raise RateLimited
-    doc = deps.orders.get(order_id) if ORDER_ID.match(order_id) else None
+    doc = deps.orders.get(order_id) if ORDER_ID.fullmatch(order_id) else None
     if doc is None or not token_matches(token, doc.get("token_hash")):
         raise not_found()
     return Order(deps, order_id, doc)
@@ -92,6 +93,8 @@ def uploads(batch: UploadBatch, order: Authorised) -> dict[str, object]:
         raise wrong_status()
     if not batch.files:
         raise NoFiles
+    if len({f.name for f in batch.files}) != len(batch.files):
+        raise invalid("the same file name twice in one batch")
     rules = order.deps.config.limits.order
     already = list(order.deps.storage.list_inputs(order.id))
     if len(already) + len(batch.files) > rules.max_files:
@@ -117,9 +120,15 @@ def files(order: Authorised) -> dict[str, object]:
     return {"files": [{"name": f["name"], "size": f["size"]} for f in listed]}
 
 
+STARTED = {"queued", "running", "done"}
+
+
 @router.post("/start")
 def start(order: Authorised) -> None:
-    """Write the manifest and queue; the dispatcher (or the cloud launcher) takes the slot."""
+    """Write the manifest and queue; the dispatcher (or the cloud launcher) takes the slot.
+    Safe to call twice: a second Start (a double tap, a retried request) answers 200."""
+    if order.status in STARTED:
+        return
     if order.status != "paid":
         raise wrong_status()
     listed = [
@@ -127,9 +136,23 @@ def start(order: Authorised) -> None:
     ]
     if not listed:
         raise NoFiles
+    # The batch check counted only finished files; sessions opened in parallel batches can
+    # finish past the limits, so the limits are checked again on what actually arrived.
+    rules = order.deps.config.limits.order
     total = sum(int(str(f["size"])) for f in listed)
-    order.deps.orders.set_manifest(order.id, files=listed, bytes_declared=total)
-    order.deps.orders.queue(order.id)
+    if len(listed) > rules.max_files:
+        raise TooManyFiles
+    if total > rules.max_total_bytes:
+        raise TooLarge
+    try:
+        order.deps.orders.set_manifest(order.id, files=listed, bytes_declared=total)
+        order.deps.orders.queue(order.id)
+    except WrongState:
+        # Another Start won the race: answer as it did when the order really is started.
+        current = order.deps.orders.get(order.id)
+        if current is not None and current["status"] in STARTED:
+            return
+        raise wrong_status() from None
     log.info(
         "order queued",
         extra={"order_id": order.id, "stage": "start", "event": "queue", "outcome": "ok"},

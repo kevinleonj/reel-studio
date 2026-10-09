@@ -12,8 +12,14 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 from typing import Any
 
+from reel_studio.core.config import Config
 from reel_studio.core.errors import ErrorCode, WeekFull
 from reel_studio.core.ports import NewOrder, QueueLimits
+
+
+class WrongState(ValueError):
+    """The order is not in the status this transition needs (a ValueError for older callers)."""
+
 
 # Any: raw document fields as Firestore returns them; the shapes are fixed by this module.
 Doc = dict[str, Any]
@@ -37,6 +43,7 @@ def empty_capacity() -> Doc:
 def reserve_place(week: Doc | None, cap: int) -> Doc:
     """One place per checkout, checked inside the creating transaction (F51)."""
     current = deepcopy(week) if week is not None else {"count": 0, "cap": cap}
+    current["cap"] = cap  # the configured cap applies at once, even mid-week
     if current["count"] >= current["cap"]:
         raise WeekFull
     current["count"] += 1
@@ -51,7 +58,7 @@ def release_place(week: Doc | None) -> Doc | None:
     return released
 
 
-def new_order(order: NewOrder, now: datetime) -> Doc:
+def new_order(order: NewOrder, now: datetime, order_days: int) -> Doc:
     return {
         "order_id": order.order_id,
         "status": "awaiting_payment",
@@ -73,6 +80,7 @@ def new_order(order: NewOrder, now: datetime) -> Doc:
         "result_viewed_at": None,
         "emails": {},
         "created_at": now,
+        "expires_at": now + timedelta(days=order_days),  # Firestore TTL deletes the order
         "checkout_expires_at": order.checkout_expires_at,
         "paid_at": None,
         "finished_at": None,
@@ -104,7 +112,7 @@ def expire(doc: Doc | None) -> Doc | None:
 def set_manifest(doc: Doc | None, files: list[dict[str, object]], bytes_declared: int) -> Doc:
     changed = _moved(doc, "paid")
     if changed is None:
-        raise ValueError("order is not paid")
+        raise WrongState("order is not paid")
     changed.update(files=files, bytes_declared=bytes_declared)
     return changed
 
@@ -112,7 +120,7 @@ def set_manifest(doc: Doc | None, files: list[dict[str, object]], bytes_declared
 def queue(doc: Doc | None, now: datetime) -> Doc:
     changed = _moved(doc, "paid")
     if changed is None:
-        raise ValueError("order is not paid")
+        raise WrongState("order is not paid")
     changed.update(status="queued", queue={**changed["queue"], "queued_at": now})
     return changed
 
@@ -232,3 +240,27 @@ def abandon(doc: Doc | None, limits: QueueLimits, now: datetime) -> Doc | None:
         return None
     changed["status"] = "abandoned"
     return changed
+
+
+def claim_email(doc: Doc | None, kind: str, now: datetime) -> Doc | None:
+    """Marks `emails.<kind>_at` once; None when already sent (or no such order): send nothing."""
+    field = f"{kind}_at"
+    if doc is None or field in (doc.get("emails") or {}):
+        return None
+    changed = deepcopy(doc)
+    changed["emails"] = {**(changed.get("emails") or {}), field: now}
+    return changed
+
+
+def limits_from(config: Config) -> QueueLimits:
+    """The Orders adapters' limits, all from config/limits.toml."""
+    quotas = config.limits.limits
+    return QueueLimits(
+        running_max=quotas.running_max,
+        lease_minutes=quotas.lease_minutes,
+        weekly_cap=quotas.weekly_reels,
+        paid_not_started_days=quotas.paid_not_started_days,
+        # missed_expiry_check_minutes is an age; the sweep needs the margin past the expiry.
+        expiry_grace_minutes=quotas.missed_expiry_check_minutes - quotas.checkout_expiry_minutes,
+        order_days=config.limits.retention.order_days,
+    )

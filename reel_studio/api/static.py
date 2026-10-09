@@ -26,7 +26,10 @@ ORDER_SHELL = "o/index.html"
 
 
 def _inside(dist: Path, relative: str) -> Path | None:
-    path = (dist / relative).resolve()
+    try:
+        path = (dist / relative).resolve()
+    except (ValueError, OSError):  # a NUL byte or an unusable name: not a file of the site
+        return None
     return path if dist.resolve() in path.parents and path.is_file() else None
 
 
@@ -50,7 +53,9 @@ def _resolve(dist: Path, path: str) -> tuple[Path, dict[str, str]] | None:
     return found, NO_CACHE if found.suffix == ".html" else {}
 
 
-@router.get("/{path:path}", include_in_schema=False, response_model=None)
+@router.api_route(
+    "/{path:path}", methods=["GET", "HEAD"], include_in_schema=False, response_model=None
+)
 def site(path: str, request: Request) -> Response:
     dist = deps_of(request).web_dist
     if dist is None:

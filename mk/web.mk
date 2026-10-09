@@ -10,7 +10,8 @@
 .PHONY: ci-web test-emulator prerelease
 
 NPM := npm --prefix web
-CI_SITE_URL := $(strip http://localhost:8080) # hardcode-ok: the laptop tier's address (.env.example)
+# hardcode-ok on the next line: the laptop tier's address, as in .env.example
+CI_SITE_URL := http://localhost:8080
 
 ci-web:
 	$(NPM) ci

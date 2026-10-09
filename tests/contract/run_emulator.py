@@ -106,6 +106,7 @@ def main() -> int:
             **os.environ,
             "FIRESTORE_EMULATOR_HOST": f"{HOST}:{FIRESTORE_PORT}",
             "MAILPIT_HOST": f"{HOST}:{SMTP_PORT},{MAILPIT_HTTP_PORT}",
+            "REEL_REQUIRE_EMULATOR": "1",  # every emulator case must run, none may skip
         }
         cmd = [sys.executable, "-m", "pytest", "-q", "-m", "emulator", *sys.argv[1:]]
         return subprocess.run(cmd, env=env, check=False).returncode  # noqa: S603

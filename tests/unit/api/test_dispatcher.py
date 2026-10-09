@@ -10,7 +10,12 @@ from tests.fakes.storage import FakeStorage
 
 START = datetime(2026, 10, 12, 9, 0, tzinfo=UTC)
 LIMITS = QueueLimits(
-    running_max=2, lease_minutes=70, weekly_cap=50, paid_not_started_days=7, expiry_grace_minutes=5
+    running_max=2,
+    lease_minutes=70,
+    weekly_cap=50,
+    paid_not_started_days=7,
+    expiry_grace_minutes=5,
+    order_days=30,
 )
 SETTINGS = {
     "style": "recipe",

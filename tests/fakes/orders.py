@@ -45,7 +45,7 @@ class FakeOrders:
         with self._lock:
             week = rules.week_id(now)
             self.weeks[week] = rules.reserve_place(self.weeks.get(week), self._limits.weekly_cap)
-            self.orders[order.order_id] = rules.new_order(order, now)
+            self.orders[order.order_id] = rules.new_order(order, now, self._limits.order_days)
         return order.order_id
 
     def mark_paid(self, order_id: str, stripe: Record) -> None:
@@ -127,6 +127,12 @@ class FakeOrders:
             self._write(rules.pause(self.orders.get(order_id), code))
             self._free_slot(order_id)
             self.capacity = {**self.capacity, "paused": True}
+
+    def claim_email(self, order_id: str, kind: str) -> bool:
+        with self._lock:
+            changed = rules.claim_email(self.orders.get(order_id), kind, self._clock.now())
+            self._write(changed)
+            return changed is not None
 
     def get(self, order_id: str) -> Record | None:
         with self._lock:

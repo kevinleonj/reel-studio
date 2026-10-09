@@ -76,6 +76,47 @@ def test_malformed_chunks_are_refused(storage: LocalStorage, header: str, body: 
         storage.put_chunk(session, header, body)
 
 
+def read(storage: LocalStorage, tmp_path: Path, name: str = "a.mp4") -> bytes:
+    out = tmp_path / "read-back"
+    storage.download(f"in/{ORDER}/{name}", out)
+    return out.read_bytes()
+
+
+def test_a_file_chosen_again_after_a_reload_restarts_from_zero(
+    storage: LocalStorage, tmp_path: Path
+) -> None:
+    old = session_of(storage, 10)
+    storage.put_chunk(old, "bytes 0-3/10", b"0123")  # the page reloads here
+    new = session_of(storage, 10)
+    assert storage.put_chunk(new, "bytes 0-9/10", b"abcdefghij") == ChunkAnswer(200, None)
+    assert read(storage, tmp_path) == b"abcdefghij"
+    assert list(storage.list_inputs(ORDER)) == [
+        {"name": "a.mp4", "size": 10, "key": f"in/{ORDER}/a.mp4"}
+    ]
+
+
+def test_two_sessions_for_one_name_never_interleave(storage: LocalStorage, tmp_path: Path) -> None:
+    a, b = session_of(storage, 6), session_of(storage, 6)
+    storage.put_chunk(a, "bytes 0-2/6", b"AAA")
+    storage.put_chunk(b, "bytes 0-2/6", b"BBB")
+    storage.put_chunk(a, "bytes 3-5/6", b"AAA")
+    assert read(storage, tmp_path) == b"AAAAAA"
+    storage.put_chunk(b, "bytes 3-5/6", b"BBB")
+    assert read(storage, tmp_path) == b"BBBBBB"  # last completed wins, as in Cloud Storage
+
+
+def test_bytes_written_before_a_lost_record_are_not_duplicated(
+    storage: LocalStorage, tmp_path: Path
+) -> None:
+    session = session_of(storage, 8)
+    storage.put_chunk(session, "bytes 0-3/8", b"0123")
+    # Simulate a crash after appending but before the session record moved on: extra bytes on disk.
+    partial = storage.partial_of(session)
+    partial.write_bytes(partial.read_bytes() + b"4567")
+    assert storage.put_chunk(session, "bytes 4-7/8", b"4567") == ChunkAnswer(200, None)
+    assert read(storage, tmp_path) == b"01234567"
+
+
 def test_unknown_session(storage: LocalStorage) -> None:
     with pytest.raises(SessionNotFound):
         storage.put_chunk("nope", "bytes */10", b"")
