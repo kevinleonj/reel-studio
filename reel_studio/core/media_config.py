@@ -235,6 +235,8 @@ class Edl(_Strict):
     contrast_max: float
     saturation_min: float
     saturation_max: float
+    caption_max_chars: int
+    music_hint_max_chars: int
     format_target_s: dict[str, Pair]
     defaults: EdlDefaults
 

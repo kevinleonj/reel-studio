@@ -201,6 +201,9 @@ contrast_min = 0.7                  # render.py:65
 contrast_max = 1.4                  # render.py:65
 saturation_min = 0.7                # render.py:66
 saturation_max = 1.5                # render.py:66
+# v1 fields, not kit values: docs/EDITOR.md §7.
+caption_max_chars = 2200            # Instagram caption limit; EDITOR.md §7
+music_hint_max_chars = 120          # EDITOR.md §7
 
 [edl.format_target_s]               # warning when the cut is outside [min, max] seconds; render.py:33-37
 recipe = [30, 50]                   # s; render.py:34
