@@ -52,7 +52,7 @@ HALF_TURN_DEG = 180  # a half turn keeps width and height (kit common.py:131)
 # ---------------------------------------------------------------- pixel and colour maths
 
 U8_MAX = 255  # 8-bit channel maximum (uint8 images in OpenCV and Pillow)
-LAB_L_MAX = 100.0  # OpenCV float Lab L range 0..100 for float32 input in 0..1 (OpenCV 5.0 docs)
+LAB_L_MAX = 100.0  # OpenCV float Lab L range 0..100 for float32 input in 0..1 (F202)
 FULL_TURN_DEG = 360.0  # hue angles are degrees on a circle (kit grade.py:112)
 HSV_HUE_RANGE = (0, 180)  # OpenCV 8-bit HSV hue histogram range (kit qa.py:63)
 HSV_SAT_RANGE = (0, 256)  # OpenCV 8-bit HSV saturation histogram range (kit qa.py:63)
