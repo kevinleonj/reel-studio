@@ -1,0 +1,26 @@
+# The only workflow until STEP-08 adds deploy.yml (D61). CI is `make ci`; this file just installs
+# the tools. No paths-ignore: the ruleset requires this check, so it must report on every PR.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: bash scripts/ci-install.sh
+      - run: make ci
