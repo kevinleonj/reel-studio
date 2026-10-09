@@ -6,6 +6,7 @@ libraries that open raw sockets are not covered.
 """
 
 import socket
+from collections.abc import Iterable
 from typing import NoReturn
 
 import grpc
@@ -16,6 +17,11 @@ EXEMPT_MARKERS = ("emulator", "e2e", "paid")
 
 class NetworkBlockedError(RuntimeError):
     """A unit test tried to open a network connection."""
+
+
+def is_exempt(markers: Iterable[str]) -> bool:
+    """A test with one of these markers talks to a real or emulated service on purpose."""
+    return any(marker in EXEMPT_MARKERS for marker in markers)
 
 
 def _refuse(*_args: object, **_kwargs: object) -> NoReturn:

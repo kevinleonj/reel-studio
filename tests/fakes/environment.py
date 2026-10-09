@@ -4,14 +4,24 @@ import pytest
 
 from reel_studio.settings import SETTINGS_CLASSES
 
-# Google client libraries find credentials and a project through these (Application Default
-# Credentials), so a test must not inherit them from the developer's shell.
-GOOGLE_VARIABLES = ("GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_CLOUD_PROJECT")
+# Read straight from the environment by the installed SDKs, outside our Settings: Google's
+# Application Default Credentials and project lookup, google-genai's key and Vertex switch,
+# and the anthropic client's alternative auth and endpoint.
+SDK_VARIABLES = (
+    "GOOGLE_APPLICATION_CREDENTIALS",
+    "GOOGLE_CLOUD_PROJECT",
+    "GCLOUD_PROJECT",
+    "GOOGLE_CLOUD_LOCATION",
+    "GOOGLE_API_KEY",
+    "GOOGLE_GENAI_USE_VERTEXAI",
+    "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_BASE_URL",
+)
 
 
 def variable_names() -> list[str]:
     fields = [field.upper() for cls in SETTINGS_CLASSES for field in cls.model_fields]
-    return [*fields, *GOOGLE_VARIABLES]
+    return [*fields, *SDK_VARIABLES]
 
 
 def scrub(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1125,6 +1125,7 @@ api = [
     { name = "uvicorn", extra = ["standard"] },
 ]
 dev = [
+    { name = "grpcio" },
     { name = "mypy" },
     { name = "pre-commit" },
     { name = "pytest" },
@@ -1149,6 +1150,7 @@ requires-dist = [
     { name = "google-cloud-run", marker = "extra == 'api'", specifier = ">=0.16.2" },
     { name = "google-cloud-storage", marker = "extra == 'api'", specifier = ">=3.17.0" },
     { name = "google-genai", marker = "extra == 'editor'", specifier = ">=2.29.0" },
+    { name = "grpcio", marker = "extra == 'dev'", specifier = ">=1.84.0" },
     { name = "httpx", marker = "extra == 'api'", specifier = ">=0.28.1" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=2.4.0" },

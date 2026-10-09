@@ -43,7 +43,7 @@ MakeSettings = Callable[..., AppSettings]
 
 @pytest.fixture(autouse=True)
 def _no_network(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
-    if any(request.node.get_closest_marker(name) for name in network.EXEMPT_MARKERS):
+    if network.is_exempt(marker.name for marker in request.node.iter_markers()):
         return
     network.block(monkeypatch)
 
