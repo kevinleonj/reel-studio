@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 from reel_studio.core import config
+from reel_studio.editor.media import prepare
 from reel_studio.editor.media import tools as media_tools
 from tests.fixtures import make_clips
 
@@ -62,3 +63,12 @@ def probe(tools: make_clips.Tools, path: Path) -> dict[str, Any]:  # Any: ffprob
 @pytest.fixture(scope="session")
 def ffmpeg(tools: make_clips.Tools) -> media_tools.Ffmpeg:
     return media_tools.Ffmpeg(tools.ffmpeg, tools.ffprobe, config.load_media().tools)
+
+
+@pytest.fixture(scope="session")
+def prepared(
+    clips_dir: Path, ffmpeg: media_tools.Ffmpeg, tmp_path_factory: pytest.TempPathFactory
+) -> tuple[Path, list[prepare.Proxy]]:
+    """The fixture clips through prepare once; tests read the proxies, never write them."""
+    work = tmp_path_factory.mktemp("work")
+    return work, prepare.prepare_folder(clips_dir, work, ffmpeg, config.load_media())

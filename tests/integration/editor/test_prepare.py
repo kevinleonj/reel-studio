@@ -4,21 +4,12 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import pytest
 
 from reel_studio.core import config, constants
 from reel_studio.editor.media import prepare, tools
 from tests.fixtures import make_clips
 
 SAMPLES = 5  # frames compared for the luma check
-
-
-@pytest.fixture(scope="module")
-def prepared(
-    clips_dir: Path, ffmpeg: tools.Ffmpeg, tmp_path_factory: pytest.TempPathFactory
-) -> tuple[Path, list[prepare.Proxy]]:
-    work = tmp_path_factory.mktemp("work")
-    return work, prepare.prepare_folder(clips_dir, work, ffmpeg, config.load_media())
 
 
 def _by_source(proxies: list[prepare.Proxy], name: str) -> prepare.Proxy:
