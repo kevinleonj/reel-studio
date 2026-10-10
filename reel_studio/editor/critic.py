@@ -22,6 +22,7 @@ from reel_studio.editor.loop import Session, call_claude
 from reel_studio.editor.tools import image_block, strict_schema
 
 TOOL = "submit_review"
+NUDGE = f"Call {TOOL} with your scores."
 CATEGORIES = ("hook", "retention", "story", "peak", "craft", "share", "colour")  # qa-rubric.md
 
 
@@ -152,21 +153,38 @@ def _content(material: Material, max_side: int, quality: int) -> list[dict[str, 
 def critique(
     session: Session, system: str, material: Material, max_side: int, quality: int
 ) -> Review:
-    """One fresh call with the review tool forced; the reply must be a valid review."""
+    """One fresh conversation that must end in a valid review.
+
+    `tool_choice` stays `auto` (forcing a tool is a 400 on Sonnet 5.5: D35, F10), so a reply in
+    plain text gets one nudge; a second one, or any other stop, fails the order.
+    """
     editor = session.editor
-    request = {
-        "model": editor.critic_model,
-        "max_tokens": editor.max_tokens,
-        "system": system,
-        "messages": [{"role": "user", "content": _content(material, max_side, quality)}],
-        "tools": [tool_definition()],
-        "tool_choice": {"type": "tool", "name": TOOL},
-    }
-    reply = call_claude(session, request, 1)
-    uses = [b for b in reply.get("content", []) if b.get("type") == "tool_use"]
-    if not uses:
-        raise ModelRefusal(f"critic stopped with {reply.get('stop_reason')}")
-    try:
-        return Review.model_validate(uses[0].get("input"))
-    except ValidationError as exc:
-        raise ModelRefusal(f"critic review invalid: {exc.error_count()} errors") from exc
+    messages: list[dict[str, Any]] = [  # Any: content blocks
+        {"role": "user", "content": _content(material, max_side, quality)}
+    ]
+    for turn in (1, 2):
+        request = {
+            "model": editor.critic_model,
+            "max_tokens": editor.max_tokens,
+            "system": system,
+            "messages": messages,
+            "tools": [tool_definition()],
+            "tool_choice": {"type": "auto"},
+            "cache_control": {"type": "ephemeral"},  # D34, F07
+            "output_config": {"effort": editor.effort},  # D33
+        }
+        reply = call_claude(session, request, turn)
+        uses = [b for b in reply.get("content", []) if b.get("type") == "tool_use"]
+        if uses:
+            try:
+                return Review.model_validate(uses[0].get("input"))
+            except ValidationError as exc:
+                raise ModelRefusal(f"critic review invalid: {exc.error_count()} errors") from exc
+        if reply.get("stop_reason") != "end_turn":
+            raise ModelRefusal(f"critic stopped with {reply.get('stop_reason')}")
+        messages = [
+            *messages,
+            {"role": "assistant", "content": reply.get("content", [])},
+            {"role": "user", "content": NUDGE},
+        ]
+    raise ModelRefusal("critic gave no review after a nudge")

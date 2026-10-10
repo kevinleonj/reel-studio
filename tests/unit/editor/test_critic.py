@@ -106,7 +106,7 @@ def test_fail_twice_ships_the_higher_total_with_the_weakness_named() -> None:
     assert c.renders == 2
 
 
-def test_critic_call_is_fresh_forces_submit_review_and_sends_three_sheets(tmp_path: Path) -> None:
+def test_critic_call_is_fresh_with_auto_choice_and_three_sheets(tmp_path: Path) -> None:
     sheets = []
     for name in ("hook", "cuts", "overview"):
         sheets.append(tmp_path / f"{name}.jpg")
@@ -136,18 +136,18 @@ def test_critic_call_is_fresh_forces_submit_review_and_sends_three_sheets(tmp_pa
     request = fake.requests[0]
     assert review.total == 28
     assert request["model"] == limits.editor.critic_model
-    assert request["tool_choice"] == {"type": "tool", "name": "submit_review"}
+    assert request["tool_choice"] == {"type": "auto"}  # any/tool are a 400 on Sonnet 5.5 (F10)
     assert len(request["messages"]) == 1  # never the editor's conversation
     blocks = request["messages"][0]["content"]
     assert sum(1 for b in blocks if b["type"] == "image") == 3
 
 
-def _critique(tmp_path: Path, reply: dict[str, Any]) -> critic.Review:  # Any: response JSON
-    sheet = tmp_path / "hook.jpg"
+def _critique(tmp_path: Path, *replies: dict[str, Any]) -> tuple[critic.Review, FakeClaude]:
+    sheet, fake = tmp_path / "hook.jpg", FakeClaude(list(replies))
     Image.new("RGB", (60, 40)).save(sheet)
     limits = config.load().limits
     session = loop.Session(
-        claude=FakeClaude([reply]),
+        claude=fake,
         meter=meter.Meter(config.load().prices, Decimal("5")),
         clock=FrozenClock(datetime(2026, 10, 10, tzinfo=UTC)),
         log=tmp_path / "requests.jsonl",
@@ -156,12 +156,31 @@ def _critique(tmp_path: Path, reply: dict[str, Any]) -> critic.Review:  # Any: r
     )
     material = critic.Material(sheets=[sheet], qa_lines=[], timeline="", order="")
     quality = config.load_media().contact_sheet.jpeg_quality
-    return critic.critique(session, "S", material, limits.sheets.max_image_side_px, quality)
+    side = limits.sheets.max_image_side_px
+    return critic.critique(session, "S", material, side, quality), fake
 
 
-def test_a_reply_without_a_review_is_a_refusal(tmp_path: Path) -> None:
+def test_a_refusal_fails_at_once(tmp_path: Path) -> None:
     with pytest.raises(ModelRefusal, match="refusal"):
         _critique(tmp_path, response([text("No.")], "refusal"))
+
+
+def test_a_text_reply_gets_one_nudge_then_the_review_counts(tmp_path: Path) -> None:
+    review, fake = _critique(
+        tmp_path,
+        response([text("Looks good.")], "end_turn"),
+        response([tool_use("r", TOOL, _scores())], "tool_use"),
+    )
+
+    assert review.total == 28
+    assert fake.requests[1]["messages"][-1] == {"role": "user", "content": critic.NUDGE}
+
+
+def test_two_text_replies_are_a_refusal(tmp_path: Path) -> None:
+    words = response([text("Looks good.")], "end_turn")
+
+    with pytest.raises(ModelRefusal, match="no review"):
+        _critique(tmp_path, words, words)
 
 
 def test_a_score_outside_the_scale_is_rejected(tmp_path: Path) -> None:
