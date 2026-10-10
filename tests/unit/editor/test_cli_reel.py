@@ -66,12 +66,6 @@ def test_edl_json_is_read_not_written(tmp_path: Path, make_settings: MakeSetting
     assert edl.read_text(encoding="utf-8") == text
 
 
-def _tree(folder: Path) -> dict[str, bytes]:
-    return {
-        str(p.relative_to(folder)): p.read_bytes() for p in sorted(folder.rglob("*")) if p.is_file()
-    }
-
-
 def test_dot_as_the_folder_names_the_default_out_from_the_real_name(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

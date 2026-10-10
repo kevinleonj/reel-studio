@@ -54,15 +54,11 @@ def _same(a: Path, b: Path) -> bool:
 def _overlaps(folder: Path, out: Path) -> bool:
     """True when the run would write into `folder` (D02): `out/work` is the folder, inside it,
     or holds it (a previous run's clips/ used as input). Compares files, not spellings
-    (`os.path.samefile`), since a case-insensitive volume lets `IN/out` past `in`. A path that
-    cannot be checked counts as overlapping.
+    (`os.path.samefile`), since a case-insensitive volume lets `IN/out` past `in`.
     """
     work = out / WORK
-    try:
-        upward = any(_same(c, folder) for c in (work, *work.parents))
-        downward = any(_same(work, c) for c in (folder, *folder.parents))
-    except OSError:  # an ancestor we may not search: refuse rather than guess
-        return True
+    upward = any(_same(c, folder) for c in (work, *work.parents))
+    downward = any(_same(work, c) for c in (folder, *folder.parents))
     return upward or downward
 
 
@@ -83,7 +79,10 @@ def render_command(args: argparse.Namespace, settings: EditorSettings) -> int:
         return _bad(f"input folder not found: {folder}")
     out: Path = (args.out if args.out is not None else default_out(folder)).resolve()
     if _overlaps(folder, out):
-        return _bad(f"--out {out} is inside the input folder; the folder is only read (D02)")
+        return _bad(
+            f"--out {out} and the input folder {folder} overlap (one holds the other's work/); "
+            "the input folder is only read (D02): pick an --out beside it"
+        )
     try:
         raw = json.loads(args.edl.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:  # ValueError: bad JSON or not UTF-8
