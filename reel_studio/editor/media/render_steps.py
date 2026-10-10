@@ -86,8 +86,16 @@ class Steps:
         ]
         self.ffmpeg.run(args, f"Rendering segment {out.name}")
 
+    def volume(self) -> str:
+        """The whole-Reel level change, one string for both loudness passes."""
+        return f"volume={self.edl.audio.natural_db}dB"
+
     def loudness(self, parts: list[Path]) -> dict[str, str] | None:
-        """Pass 1 of two-pass loudnorm, audio only (kit render.py:250-268)."""
+        """Pass 1 of two-pass loudnorm, audio only (kit render.py:250-268).
+
+        Measures after the same `volume` pass 2 applies: loudnorm's linear mode trusts these
+        numbers, so measuring the signal before the volume missed the target by natural_db.
+        """
         cfg = self.media.render.loudness
         args = ["-hide_banner", "-nostats"]
         for p in parts:
@@ -99,7 +107,7 @@ class Steps:
         )
         args += [
             "-filter_complex",
-            f"{inputs}concat=n={len(parts)}:v=0:a=1,{norm}[a]",
+            f"{inputs}concat=n={len(parts)}:v=0:a=1,{self.volume()},{norm}[a]",
             "-map",
             "[a]",
             "-f",
@@ -162,9 +170,7 @@ class Steps:
                 f"enable='between(t,{ev.start:.3f},{ev.end:.3f})'[{nxt}]"
             )
             last = nxt
-        chain.append(
-            f"[nat]volume={self.edl.audio.natural_db}dB,{self.loud_filter(loud)},aresample={self.rate}[aout]"
-        )
+        chain.append(f"[nat]{self.volume()},{self.loud_filter(loud)},aresample={self.rate}[aout]")
         fps = constants.OUT_FPS
         args += [
             "-filter_complex",

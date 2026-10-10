@@ -117,3 +117,23 @@ def test_qa_hard_checks_are_all_true_on_the_basic_render(rendered: Rendered) -> 
     for sheet in result.sheets:
         with Image.open(out / sheet) as image:  # relative to out_dir unless outside it
             assert max(image.size) <= limit
+
+
+def test_loudness_hits_the_target_when_natural_db_is_not_0(
+    rendered: Rendered, ffmpeg: tools.Ffmpeg, tmp_path: Path
+) -> None:
+    _, shots, _, _, job = rendered
+    quieter = json.loads(BASIC.read_text(encoding="utf-8"))
+    quieter["audio"]["natural_db"] = -6  # REVIEW-FIXES engine item 4: was -19.9 LUFS
+    report = edl.validate(quieter, shots, job.media)
+    assert isinstance(report.edl, Edl)
+    out = tmp_path / "out"
+    out.mkdir()
+    render.render(render.Job(job.work, job.input_dir, out, ffmpeg, job.media), shots, report.edl)
+    args = ["-hide_banner", "-nostats", "-i", str(out / render.CLEAN)]
+    args += ["-filter_complex", "[0:a]ebur128=peak=true[a]", "-map", "[a]", "-f", "null", "-"]
+
+    found = LUFS.findall(ffmpeg.measure(args, "loudness check"))
+
+    assert found
+    assert abs(float(found[-1]) - constants.TARGET_LUFS) <= LUFS_TOLERANCE

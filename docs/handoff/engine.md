@@ -44,6 +44,12 @@ to `EditorSettings`; 9. STEP-01 merged (6089989). Open:
     `gh pr create`"; I did not re-read it before pushing. The PR is open, not a draft, CI green; nothing
     else was pushed afterwards. Later commits on `step-02-pipeline` (the image ENV test) and all of
     `step-03-editor-loop` are local only. Close, keep or update #2 as you prefer.
+16. **`audio.natural_db` no longer changes anything you can hear.** REVIEW-FIXES item 4: loudness pass 1
+    now measures after the same `volume=natural_db` that pass 2 applies, so the Reel lands on -14 LUFS
+    for any `natural_db` (it was -19.9 at -6). The loudnorm that follows undoes any whole-Reel gain, so
+    the field only mattered as a bug. In the kit it made room under music; without music (D02, D42) it
+    has no purpose. The field stays (D46: the kit schema unchanged). Remove it from the schema and the
+    prompt, or keep it as a no-op: your call.
 Plan notes kept from the answered items: fonts (Poppins-Bold.ttf + OFL.txt) ship as package data
 under `reel_studio/editor/media/fonts/`, no host-font fallbacks. Sheets failing case:
 `test_sheet_is_1536x864_with_16_tiles` fails against a port of kit `build_sheets` (`prep.py:167-221`,
