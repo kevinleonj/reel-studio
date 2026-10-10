@@ -5,6 +5,7 @@ here is what the LUTs produce.
 """
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
@@ -40,12 +41,22 @@ def hero_frames(shots: Shots, cfg: Grade) -> list[tuple[str, float]]:
     return picks[:count]
 
 
-def preview(work: Path, shots: Shots, choice: Choice, ref: Reference, media: Media) -> Image.Image:
-    """Rows = hero frames, columns = original then each look (kit grade.py:225-271)."""
+@dataclass(frozen=True)
+class PreviewRequest:
+    """The look's strength and match, the style photo, and the frames (None: hero frames)."""
+
+    choice: Choice
+    ref: Reference
+    frames: list[tuple[str, float]] | None = None
+
+
+def preview(work: Path, shots: Shots, request: PreviewRequest, media: Media) -> Image.Image:
+    """Rows = frames, columns = original then each look (kit grade.py:225-271)."""
+    choice, ref = request.choice, request.ref
     cfg, style = media.grade.preview, media.sheet_style
     looks = [look for look in LOOKS if look != "reference" or ref.ref is not None]
     columns: Sequence[str] = ["original", *looks]
-    frames = hero_frames(shots, media.grade)
+    frames = request.frames if request.frames is not None else hero_frames(shots, media.grade)
     tw, th, gap = cfg.tile_w_px, cfg.tile_h_px, cfg.gap_px
     size = (
         gap + len(columns) * (tw + gap),
