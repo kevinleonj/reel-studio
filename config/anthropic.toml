@@ -1,0 +1,10 @@
+# The Claude client: timeout and retry backoff. Not decided values: the anthropic SDK's own
+# defaults (anthropic 1.13.0 _constants.py, read 10 Oct 2026, F207), kept because the SDK's retries
+# are off (max_retries=0) and our wrapper does the retrying (D45). The retry count is
+# config/limits.toml [editor].transient_retries.
+
+[client]
+connect_timeout_s = 5.0             # anthropic DEFAULT_TIMEOUT connect (F207)
+timeout_s = 600.0                   # anthropic DEFAULT_TIMEOUT read/write/pool (F207) hardcode-ok (config home)
+retry_initial_s = 0.5               # anthropic INITIAL_RETRY_DELAY (F207)
+retry_max_s = 8.0                   # anthropic MAX_RETRY_DELAY (F207) hardcode-ok (config home)

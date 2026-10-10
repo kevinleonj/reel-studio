@@ -200,6 +200,20 @@ class Styles(_Strict):
     text_languages: Languages
 
 
+# ---------------------------------------------------------------- anthropic.toml
+
+
+class ClaudeClient(_Strict):
+    connect_timeout_s: float
+    timeout_s: float
+    retry_initial_s: float
+    retry_max_s: float
+
+
+class _ClaudeFile(_Strict):
+    client: ClaudeClient
+
+
 # ---------------------------------------------------------------- cloud.toml
 
 
@@ -303,6 +317,11 @@ def load(folder: Path = CONFIG_DIR) -> Config:
 def load_media(folder: Path = CONFIG_DIR) -> Media:
     """Read and validate media.toml from `folder` (only the editor needs it)."""
     return Media.model_validate(_read(folder / "media.toml"))
+
+
+def load_claude(folder: Path = CONFIG_DIR) -> ClaudeClient:
+    """Read and validate anthropic.toml: only the Claude adapter needs it."""
+    return _ClaudeFile.model_validate(_read(folder / "anthropic.toml")).client
 
 
 def load_cloud(folder: Path = CONFIG_DIR) -> Cloud:
