@@ -127,6 +127,21 @@ Written by the cloud lane only. Newest entry on top.
 
 ## Log
 
+### 10 Oct 2026 — REVIEW-FIXES.md, CLOUD items 1-5
+Before: the deployer held projectIamAdmin without a condition and any main-branch job could use it;
+the budget warned only after spending; each secrets run left old versions enabled; plan artifacts
+lived 7 days. After (b8da8d6, 40db321, 3149d1e, ed95ab1, 567abdd), each with a failing test first:
+- 1: conditional projectIamAdmin (grants only roles/datastore.user, F410), deployer bound to
+  `attribute.environment/beta` with the plan job in `beta` too (F411); bootstrap `terraform test`
+  (3 runs) and a check_policy rule (iam.toml) that fails on an unconditional binding. Fix c is a
+  proposal under Needs Kevin.
+- 2: narrower secrets role proposed under Needs Kevin (not built).
+- 3: a FORECASTED_SPEND rule at 100 % beside the three current-spend rules (F412).
+- 4: `make secrets-push` confirms the new version is ENABLED, then destroys older versions;
+  nothing is destroyed otherwise (F413).
+- 5: plan artifacts kept 1 day.
+- Not applied anywhere: the bootstrap changes need your apply to take effect.
+
 ### 10 Oct 2026 — STEP-08 after STEP-01 merged (no cloud access)
 Before: phase A only. After (commits 41b3feb, 14b6ec8, 91da52e on top of the merge cd66765):
 - `scripts/check_policy.py` (python-hcl2): explicit arguments and `depends_on` edges, locations,
