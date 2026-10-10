@@ -6,7 +6,7 @@ and responses (doc ledger: anthropic, httpx2), so no request leaves the process.
 
 import json
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Iterator, Sequence
 from typing import Any
 
 import anthropic
@@ -329,3 +329,54 @@ def test_create_streams_so_the_sdk_never_refuses_the_long_retry() -> None:
     assert reply["stop_reason"] == "end_turn" and reply["request_id"] == "req_s"
     assert reply["usage"]["cache_creation_input_tokens"] == 3000
     assert reply["usage"]["output_tokens"] == 7
+
+
+class _DropAfterFirstEvent(httpx2.SyncByteStream):
+    """A stream whose connection drops after message_start (peer closed mid-body)."""
+
+    def __iter__(self) -> Iterator[bytes]:
+        first = STREAM_EVENTS[0]
+        yield f"event: {first['type']}\ndata: {json.dumps(first)}\n\n".encode()
+        raise httpx2.RemoteProtocolError("peer closed connection without sending complete body")
+
+
+def _streaming_sdk(answer: Callable[[httpx2.Request], httpx2.Response]) -> anthropic.Anthropic:
+    return anthropic.Anthropic(
+        api_key="test-anthropic-key",
+        max_retries=0,
+        http_client=httpx2.Client(transport=httpx2.MockTransport(answer)),
+    )
+
+
+def test_a_connection_dropped_mid_stream_is_retried_then_unavailable() -> None:
+    calls: list[int] = []
+
+    def answer(request: httpx2.Request) -> httpx2.Response:
+        calls.append(1)
+        headers = {"content-type": "text/event-stream"}
+        return httpx2.Response(200, headers=headers, stream=_DropAfterFirstEvent())
+
+    sleeps = list[float]()
+    claude = client.ClaudeClient(_streaming_sdk(answer), POLICY, sleep=sleeps.append)
+
+    with pytest.raises(ProviderUnavailable):
+        claude.create(REQUEST)
+
+    assert len(calls) == 3 and sleeps == [0.5, 1.0]
+
+
+def test_a_stream_that_ends_before_message_stop_is_retried() -> None:
+    cut = STREAM_EVENTS[:3]  # message_start and a text delta, then a clean end of body
+    calls: list[int] = []
+
+    def answer(request: httpx2.Request) -> httpx2.Response:
+        calls.append(1)
+        events = cut if len(calls) == 1 else STREAM_EVENTS
+        body = "".join(f"event: {e['type']}\ndata: {json.dumps(e)}\n\n" for e in events)
+        headers = {"content-type": "text/event-stream"}
+        return httpx2.Response(200, headers=headers, content=body.encode())
+
+    sleeps = list[float]()
+    reply = client.ClaudeClient(_streaming_sdk(answer), POLICY, sleep=sleeps.append).create(REQUEST)
+
+    assert reply["stop_reason"] == "end_turn" and len(calls) == 2 and sleeps == [0.5]

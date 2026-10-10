@@ -13,6 +13,7 @@ from http import HTTPStatus
 from typing import Any
 
 import anthropic
+import httpx2
 from pydantic import SecretStr
 
 from reel_studio.core import constants
@@ -166,8 +167,16 @@ class ClaudeClient:
 
     def create(self, request: Mapping[str, Any]) -> Record:  # Any: request JSON
         def send() -> tuple[Any, str | None]:  # Any: anthropic.types.Message
-            with self.sdk.messages.stream(**request) as stream:
-                return stream.get_final_message(), stream.request_id
+            try:
+                with self.sdk.messages.stream(**request) as stream:
+                    message = stream.get_final_message()
+            except httpx2.TransportError as exc:  # the SDK wraps only the connection setup (F210)
+                raise anthropic.APIConnectionError(request=exc.request) from exc
+            if message.stop_reason is None:  # the body ended before message_stop: a cut stream
+                raise anthropic.APIConnectionError(
+                    message="stream ended before message_stop", request=stream.response.request
+                )
+            return message, stream.request_id
 
         reply, request_id = self._call("claude_create", send, lambda sent: str(sent[0].stop_reason))
         # exclude_none: the reply's content goes back in the next request, so no null fields
