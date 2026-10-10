@@ -209,7 +209,10 @@ def set_stats_of(shots: Shots) -> ColourStats:
 def reference_of(shots: Shots, input_dir: Path | None, media: Media) -> Reference:
     ref = None
     if input_dir is not None and input_dir.is_dir():
-        ref, _ = reference_stats(input_dir, media.grade.reference_words, media.grade.stats)
+        grade = media.grade
+        ref, _ = reference_stats(
+            input_dir, grade.reference_words, grade.stats, media.prepare.max_pixels
+        )
     return Reference(ref, set_stats_of(shots))
 
 

@@ -10,12 +10,19 @@ from pathlib import Path
 import cv2
 import numpy as np
 from numpy.typing import NDArray
+from PIL import Image as Pil
+from PIL import UnidentifiedImageError
 from pydantic import BaseModel, ConfigDict
 
 from reel_studio.core import constants
+from reel_studio.core.logging import get_logger
 from reel_studio.core.media_config import GradeStats
 
 type Image = NDArray[np.uint8]
+
+log = get_logger(__name__)
+
+STAGE = "grade"
 
 
 class ColourStats(BaseModel):
@@ -94,24 +101,51 @@ def merge(stats: Sequence[ColourStats]) -> ColourStats:
     )
 
 
+def _small_enough(path: Path, max_pixels: int) -> bool:
+    """Read only the header (F209) so a huge photo is refused before cv2 decodes it."""
+    try:
+        with Pil.open(path) as image:
+            width, height = image.size
+    except (OSError, UnidentifiedImageError, Pil.DecompressionBombError) as exc:
+        log.warning("style photo %s skipped: %s", path.name, exc, extra={"stage": STAGE})
+        return False
+    if width * height > max_pixels:
+        log.warning(
+            "style photo %s skipped: %dx%d is over %d pixels",
+            path.name,
+            width,
+            height,
+            max_pixels,
+            extra={"stage": STAGE},
+        )
+        return False
+    return True
+
+
 def reference_stats(
-    folder: Path, words: Sequence[str], cfg: GradeStats
+    folder: Path, words: Sequence[str], cfg: GradeStats, max_pixels: int
 ) -> tuple[ColourStats | None, list[str]]:
     """Style photos in the input folder (name contains vsco, look or ref) -> one summary.
 
     Kit grade.py:61-73; the kit also read assets/looks/, which the product does not ship.
+    Returns the names of the photos actually used.
     """
     files = sorted(
         p
         for p in folder.iterdir()
         if p.suffix.lower() in constants.IMAGE_EXT and any(w in p.stem.lower() for w in words)
     )
-    stats = []
+    stats, used = [], []
     for path in files:
+        if not _small_enough(path, max_pixels):
+            continue
         image = cv2.imread(str(path))
-        if image is not None:
-            stats.append(frame_stats(image.astype(np.uint8), cfg))
-    return (merge(stats) if stats else None), [p.name for p in files]
+        if image is None:
+            log.warning("style photo %s skipped: unreadable", path.name, extra={"stage": STAGE})
+            continue
+        stats.append(frame_stats(image.astype(np.uint8), cfg))
+        used.append(path.name)
+    return (merge(stats) if stats else None), used
 
 
 def colourfulness(bgr: Image) -> float:
