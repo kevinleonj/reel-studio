@@ -84,3 +84,19 @@ signed_url_minutes = 60             # result page play/download links; re-signed
 rating_max = 5                      # docs/ARCHITECTURE.md §7: rating 1-5
 comment_max_chars = 1000            # docs/ARCHITECTURE.md §7: comment up to 1,000 characters
 google_tag_url = "https://www.googletagmanager.com/gtag/js"  # gtag.js loader (F70), sent only when analytics is on; hardcode-ok: config is its home
+
+[firestore]                          # STEP-07 Orders adapter; added 10 Oct 2026, Kevin to review
+timeout_s = 10                      # every read and query (D74); commits take no timeout argument
+                                    # in google-cloud-firestore 2.34.1 and use the client's default
+# An aborted transaction retries at once and keeps its place in line (google-cloud-firestore
+# Transaction docs, F51), so a burst of N writers on one document needs up to N attempts. The
+# race test bursts 10 checkouts at the week document.
+max_attempts = 12
+
+[reelctl]                            # STEP-07 operator commands; added 10 Oct 2026, Kevin to review
+list_limit = 200                    # orders read by `orders list` and `report --week`, newest first
+
+[payments]                           # D58; STEP-07, Kevin to review
+price_minor = 1900                  # €19.00 in cents, for the page and analytics; Stripe charges
+                                    # its own price object (stripe_price_id), which must match
+currency = "EUR"                    # ISO 4217, as GA4 expects it

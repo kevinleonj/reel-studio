@@ -102,6 +102,20 @@ class Codes(_Strict):
     max_redemptions: int
 
 
+class Firestore(_Strict):
+    timeout_s: int
+    max_attempts: int
+
+
+class Reelctl(_Strict):
+    list_limit: int
+
+
+class Payments(_Strict):
+    price_minor: int
+    currency: str
+
+
 class Upload(_Strict):
     chunk_mib: int
     parallel_files: int
@@ -128,6 +142,9 @@ class Limits(_Strict):
     speech: Speech
     codes: Codes
     upload: Upload
+    firestore: Firestore
+    reelctl: Reelctl
+    payments: Payments
     web: Web
 
 

@@ -261,6 +261,14 @@ class FirestoreOrders:
     def pause(self, order_id: str, *, code: ErrorCode) -> None:
         self._end_run("pause", order_id, lambda doc: rules.pause(doc, code), pause=True)
 
+    def places_held(self, week: str) -> int:
+        def run() -> int:
+            snapshot = self._limit(rules.week_doc_id(week)).get(timeout=self._timeout_s)
+            counter = snapshot.to_dict() if snapshot.exists else None
+            return int(counter["count"]) if counter is not None else 0
+
+        return self._logged("places_held", None, run)
+
     def get(self, order_id: str) -> Record | None:
         def run() -> Record | None:
             snapshot = self._order(order_id).get(timeout=self._timeout_s)
@@ -290,6 +298,44 @@ class FirestoreOrders:
 
         return self._logged(f"list_{status}", None, run)
 
+    def set_checkout(self, order_id: str, *, session_id: str) -> None:
+        self._single("set_checkout", order_id, lambda doc: rules.set_checkout(doc, session_id))
+
+    def checkouts_to_check(self) -> list[Record]:
+        now = self._clock.now()
+        due = []
+        for order_id in self._ids("awaiting_payment"):
+            doc = self.get(order_id)
+            if doc is not None and rules.checkout_missed(dict(doc), self._limits, now):
+                due.append(doc)
+        return due
+
+    def resume_paused(self) -> list[str]:
+        resumed = []
+        for order_id in self._ids("paused"):
+            self._single("resume", order_id, rules.resume)
+            resumed.append(order_id)
+        capacity_ref = self._limit(rules.CAPACITY_ID)
+
+        def reopen(tx: firestore.Transaction) -> None:
+            tx.set(capacity_ref, {**self._capacity(tx), "paused": False})
+
+        self._transaction("resume_service", None, reopen)
+        return resumed
+
+    def list_orders(self, *, status: str | None, limit: int) -> list[Record]:
+        def run() -> list[Record]:
+            query: firestore.Query | firestore.CollectionReference = self._db.collection(ORDERS)
+            if status is not None:
+                query = query.where(filter=firestore.FieldFilter("status", "==", status))
+            ordered = query.order_by("created_at", direction=firestore.Query.DESCENDING).limit(
+                limit
+            )
+            found = (s.to_dict() for s in ordered.stream(timeout=self._timeout_s))
+            return [doc for doc in found if doc is not None]
+
+        return self._logged("list_orders", None, run)
+
     def claim_email(self, order_id: str, kind: str) -> bool:
         ref = self._order(order_id)
         now = self._clock.now()
@@ -303,7 +349,7 @@ class FirestoreOrders:
 
         return self._transaction(f"claim_email_{kind}", order_id, body)
 
-    def sweep(self) -> SweepReport:
+    def sweep(self, *, expire_checkouts: bool) -> SweepReport:
         """Dead leases fail, missed checkouts expire, stale paid orders are abandoned. Each order
         is re-checked inside its own transaction, so a sweep racing a worker changes nothing."""
         now = self._clock.now()
@@ -312,7 +358,7 @@ class FirestoreOrders:
             if self._changed(order_id, lambda doc: doc if rules.lease_expired(doc, now) else None):
                 self.fail(order_id, code=ErrorCode.JOB_KILLED)
                 report["failed"].append(order_id)
-        for order_id in self._ids("awaiting_payment"):
+        for order_id in self._ids("awaiting_payment") if expire_checkouts else []:
             if self._changed(
                 order_id, lambda doc: doc if rules.checkout_missed(doc, self._limits, now) else None
             ):

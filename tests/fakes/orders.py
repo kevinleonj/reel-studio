@@ -128,6 +128,39 @@ class FakeOrders:
             self._free_slot(order_id)
             self.capacity = {**self.capacity, "paused": True}
 
+    def set_checkout(self, order_id: str, *, session_id: str) -> None:
+        with self._lock:
+            self._write(rules.set_checkout(self.orders.get(order_id), session_id))
+
+    def checkouts_to_check(self) -> list[Record]:
+        now = self._clock.now()
+        with self._lock:
+            due = [
+                d
+                for _, d in sorted(self.orders.items())
+                if rules.checkout_missed(d, self._limits, now)
+            ]
+            return [deepcopy(d) for d in due]
+
+    def resume_paused(self) -> list[str]:
+        with self._lock:
+            resumed = sorted(i for i, d in self.orders.items() if d["status"] == "paused")
+            for order_id in resumed:
+                self._write(rules.resume(self.orders[order_id]))
+            self.capacity = {**self.capacity, "paused": False}
+            return resumed
+
+    def list_orders(self, *, status: str | None, limit: int) -> list[Record]:
+        with self._lock:
+            found = [d for d in self.orders.values() if status is None or d["status"] == status]
+            found.sort(key=lambda d: d["created_at"], reverse=True)
+            return [deepcopy(d) for d in found[:limit]]
+
+    def places_held(self, week: str) -> int:
+        with self._lock:
+            counter = self.weeks.get(week)
+            return int(counter["count"]) if counter is not None else 0
+
     def claim_email(self, order_id: str, kind: str) -> bool:
         with self._lock:
             changed = rules.claim_email(self.orders.get(order_id), kind, self._clock.now())
@@ -152,7 +185,7 @@ class FakeOrders:
         with self._lock:
             self._write(rules.mark_deleted(self.orders.get(order_id)))
 
-    def sweep(self) -> SweepReport:
+    def sweep(self, *, expire_checkouts: bool) -> SweepReport:
         now = self._clock.now()
         report: SweepReport = {"failed": [], "expired": [], "abandoned": []}
         with self._lock:
@@ -160,7 +193,7 @@ class FakeOrders:
                 if rules.lease_expired(doc, now):
                     self._fail_locked(order_id, ErrorCode.JOB_KILLED)
                     report["failed"].append(order_id)
-                elif rules.checkout_missed(doc, self._limits, now):
+                elif expire_checkouts and rules.checkout_missed(doc, self._limits, now):
                     after = rules.expire(doc)
                     self._give_place_back(doc, after)
                     self._write(after)

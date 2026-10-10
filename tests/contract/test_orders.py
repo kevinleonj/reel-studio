@@ -222,14 +222,24 @@ def test_sweep_fails_dead_leases_expires_missed_checkouts_and_abandons(
     clock.advance(timedelta(days=8))
     paid(store, "c" * 32)
     clock.advance(timedelta(days=8))
-    report = store.sweep()
+    report = store.sweep(expire_checkouts=True)
     assert status(store, "a" * 32) == "failed"
     doc_a = store.get("a" * 32)
     assert doc_a is not None and doc_a["error"] == {"code": "job_killed"}
     assert status(store, "b" * 32) == "expired"
     assert status(store, "c" * 32) == "abandoned"
     assert report == {"failed": ["a" * 32], "expired": ["b" * 32], "abandoned": ["c" * 32]}
-    assert store.sweep() == {"failed": [], "expired": [], "abandoned": []}
+    assert store.sweep(expire_checkouts=True) == {"failed": [], "expired": [], "abandoned": []}
+
+
+def test_sweep_leaves_missed_checkouts_to_the_stripe_check_when_asked(
+    orders: tuple[OrderStore, FrozenClock],
+) -> None:
+    store, clock = orders
+    store.create_awaiting_payment(new("b" * 32, expires_in=timedelta(minutes=31)))
+    clock.advance(timedelta(days=1))
+    assert store.sweep(expire_checkouts=False)["expired"] == []
+    assert status(store, "b" * 32) == "awaiting_payment"
 
 
 def test_next_queued_is_first_come_not_first_by_id(orders: tuple[OrderStore, FrozenClock]) -> None:
@@ -273,6 +283,64 @@ def test_each_email_is_claimed_once(orders: tuple[OrderStore, FrozenClock]) -> N
     assert isinstance(emails, dict) and set(emails) == {"failed_at", "ready_at"}
 
 
+def test_the_checkout_session_is_kept_on_the_order(orders: tuple[OrderStore, FrozenClock]) -> None:
+    store, _ = orders
+    store.create_awaiting_payment(new("a" * 32))
+    store.set_checkout("a" * 32, session_id="cs_test_a")
+    doc = store.get("a" * 32)
+    assert doc is not None and doc["stripe"] == {"session_id": "cs_test_a"}
+    paid(store, "b" * 32)
+    store.set_checkout("b" * 32, session_id="cs_late")  # only while awaiting payment
+    doc_b = store.get("b" * 32)
+    assert doc_b is not None and doc_b["stripe"] == {"session_id": "cs_" + "b" * 32}  # unchanged
+
+
+def test_missed_checkouts_are_listed_for_the_stripe_check(
+    orders: tuple[OrderStore, FrozenClock],
+) -> None:
+    store, clock = orders
+    store.create_awaiting_payment(new("a" * 32))
+    store.set_checkout("a" * 32, session_id="cs_a")
+    assert store.checkouts_to_check() == []  # not past its deadline yet
+    clock.advance(timedelta(minutes=37))
+    later = timedelta(minutes=37 + 31)
+    store.create_awaiting_payment(new("b" * 32, expires_in=later))  # not due yet
+    assert [d["order_id"] for d in store.checkouts_to_check()] == ["a" * 32]
+
+
+def test_resume_puts_paused_orders_back_in_line_and_reopens_the_service(
+    orders: tuple[OrderStore, FrozenClock],
+) -> None:
+    store, clock = orders
+    queued(store, "a" * 32)
+    store.take_slot("a" * 32)
+    store.pause("a" * 32, code=ErrorCode.SPEND_LIMIT)
+    clock.advance(timedelta(seconds=1))
+    queued(store, "b" * 32)
+    assert store.resume_paused() == ["a" * 32]
+    assert status(store, "a" * 32) == "queued"
+    assert store.next_queued() == "a" * 32  # back at the front (D26): it was queued first
+    assert store.take_slot("a" * 32) is True
+    assert store.resume_paused() == []
+
+
+def test_orders_are_listed_by_status_newest_first_with_a_limit(
+    orders: tuple[OrderStore, FrozenClock],
+) -> None:
+    store, clock = orders
+    for order_id in ("a" * 32, "b" * 32):
+        paid(store, order_id)
+        clock.advance(timedelta(seconds=1))
+    clock.advance(timedelta(days=7))  # the test week holds two places
+    store.create_awaiting_payment(new("c" * 32, expires_in=timedelta(days=7, minutes=31)))
+    assert [d["order_id"] for d in store.list_orders(status="paid", limit=10)] == [
+        "b" * 32,
+        "a" * 32,
+    ]
+    assert [d["order_id"] for d in store.list_orders(status=None, limit=2)] == ["c" * 32, "b" * 32]
+    assert store.list_orders(status="done", limit=10) == []
+
+
 def test_queue_position_counts_the_orders_ahead(orders: tuple[OrderStore, FrozenClock]) -> None:
     store, clock = orders
     queued(store, "a" * 32)
@@ -284,3 +352,14 @@ def test_queue_position_counts_the_orders_ahead(orders: tuple[OrderStore, Frozen
     assert store.queue_position("a" * 32) is None  # running, not waiting
     assert store.queue_position("b" * 32) == 0
     assert store.queue_position("0" * 32) is None
+
+
+def test_places_held_reads_the_week_counter(orders: tuple[OrderStore, FrozenClock]) -> None:
+    store, _ = orders
+    week = "2026-W42"
+    assert store.places_held(week) == 0
+    paid(store, "a" * 32)
+    paid(store, "b" * 32)
+    store.mark_deleted("b" * 32)  # deleting files does not give the place back
+    assert store.places_held(week) == 2
+    assert store.places_held("2026-W43") == 0

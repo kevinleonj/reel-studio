@@ -146,6 +146,17 @@ class DeliveryFailed(Exception):
     """The Mailer could not hand an email to its server. Not a user-message key: callers log it."""
 
 
+class PaymentsFailed(Exception):
+    """Stripe refused a call or could not be reached after our retries. Not a user-message key:
+    the API answers `payments_unavailable` and logs it. Adapters raise it `from None` with the
+    vendor's error code only: a vendor message may echo the success URL, which holds the link
+    token, and the log prints the whole exception chain."""
+
+
+class BadSignature(Exception):
+    """A webhook whose `Stripe-Signature` does not match the endpoint secret (F23)."""
+
+
 # ---------------------------------------------------------------- cloud adapters
 
 

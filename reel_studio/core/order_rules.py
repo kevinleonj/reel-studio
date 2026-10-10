@@ -98,6 +98,8 @@ def mark_paid(doc: Doc | None, stripe: dict[str, object], now: datetime) -> Doc 
     changed = _moved(doc, "awaiting_payment")
     if changed is not None:
         changed.update(status="paid", paid_at=now, stripe={**changed["stripe"], **stripe})
+        if not changed["email"] and stripe.get("email"):  # Stripe collected it (ARCHITECTURE.md §2)
+            changed["email"] = stripe["email"]
     return changed
 
 
@@ -264,3 +266,18 @@ def limits_from(config: Config) -> QueueLimits:
         expiry_grace_minutes=quotas.missed_expiry_check_minutes - quotas.checkout_expiry_minutes,
         order_days=config.limits.retention.order_days,
     )
+
+
+def set_checkout(doc: Doc | None, session_id: str) -> Doc | None:
+    changed = _moved(doc, "awaiting_payment")
+    if changed is not None:
+        changed["stripe"] = {**changed["stripe"], "session_id": session_id}
+    return changed
+
+
+def resume(doc: Doc | None) -> Doc | None:
+    """paused -> queued, keeping `queue.queued_at`, so it is back at the front of the line (D26)."""
+    changed = _moved(doc, "paused")
+    if changed is not None:
+        changed.update(status="queued", error=None)
+    return changed

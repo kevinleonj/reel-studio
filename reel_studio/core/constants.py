@@ -85,6 +85,11 @@ UPLOAD_SESSION_ID_MAX_CHARS = (
 )
 FILE_NAME_MAX_CHARS = 255  # APFS and ext4 name limit: a longer name could not be stored
 
+# D58: during the beta a promotion code must take the whole price off, so nobody can be charged.
+FULL_DISCOUNT_PERCENT = 100
+PRIVATE_FILE_MODE = 0o600  # POSIX chmod(2): owner read and write only, for a file holding keys
+MINOR_UNITS_PER_EURO = 100  # ISO 4217: EUR has two decimal places
+
 # ---------------------------------------------------------------- Google Cloud (STEP-08)
 
 # OAuth scope for signing download URLs through IAM signBlob (F34; doc ledger: google-auth)
