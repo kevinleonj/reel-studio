@@ -21,8 +21,21 @@ Written by the cloud lane only. Newest entry on top.
 - **Deployer limits (REVIEW-FIXES CLOUD 1, done in code, not applied):** projectIamAdmin now carries
   the condition `modifiedGrantsByRole hasOnly(['roles/datastore.user'])` (F410), and only jobs in the
   `beta` environment may act as the deployer (F411). Consequence: you approve twice per deploy, once
-  for the plan job and once for the apply job. The bootstrap root must be re-applied by you for
-  this to take effect.
+  for the plan job and once for the apply job. Takes effect when you first apply the bootstrap root
+  (never applied yet). Limits of this fix:
+  - "Approved jobs only" is exactly as strong as the GitHub `beta` environment. GitHub creates a
+    missing environment unprotected on first use, and nothing in CI checks it: create it with you
+    as required reviewer before deploy.yml reaches main, and verify with
+    `gh api repos/kevinleonj/reel-studio/environments/beta --jq .protection_rules`.
+  - The condition limits which roles the deployer grants, not to whom: it could bind
+    roles/datastore.user to anyone.
+  - The deployer still holds strong roles: `roles/iam.serviceAccountAdmin` (setIamPolicy on any
+    service account, its own included, so it could add impersonators or undo the environment gate),
+    `roles/storage.admin` (reads and writes both roots' state), `roles/run.admin` plus actAs on the
+    runtime accounts (runs code as reel-api and reel-editor), `roles/secretmanager.admin` (reads
+    every secret; item below). None of these carries project setIamPolicy, so it cannot grant
+    itself Owner, but it is not contained. ARCHITECTURE §5 and INFRA §4 now differ from the code
+    (conditional projectIamAdmin, two approvals): doc edits are yours.
 - **Narrower secrets role, proposal (REVIEW-FIXES CLOUD 2, not built):** the deployer holds
   `roles/secretmanager.admin` at project level, which can read every secret value. After item 1 it
   is reachable only from approved `beta` jobs, acceptable for the beta. Replacement for after the
