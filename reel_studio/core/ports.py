@@ -97,6 +97,8 @@ class OrderStore(Orders, OrderUpkeep, Protocol):
 
 
 class Launcher(Protocol):
+    # At most once: never retry launch for one order after take_slot (a lost response may hide
+    # a started execution). The cloud adapter reads queue.run_token from the order itself.
     def launch(self, order_id: str) -> str: ...
 
 

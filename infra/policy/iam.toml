@@ -1,0 +1,9 @@
+# IAM bindings scripts/check_policy.py refuses (REVIEW-FIXES CLOUD item 1, FACTS F410).
+#
+# `conditional_roles`: a project-level binding of one of these roles must carry a `condition`
+# block. projectIamAdmin can grant any project role, roles/owner included, unless an IAM condition
+# limits what it may grant; an unconditional binding for the same role overrides the conditional one.
+conditional_roles = ["roles/resourcemanager.projectIamAdmin"]
+
+# Resource types whose bindings are checked.
+binding_types = ["google_project_iam_member", "google_project_iam_binding"]

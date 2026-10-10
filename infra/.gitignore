@@ -1,0 +1,8 @@
+# Doc-ledger entries waiting to be copied into the repository's doc ledger by the main checkout.
+doc-ledger.pending.json
+# Variable files and plans hold the project id, billing account and emails; the repository is public.
+*.tfvars
+*.tfvars.json
+tfplan
+tfplan.json
+crash.log

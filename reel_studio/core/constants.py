@@ -84,3 +84,10 @@ UPLOAD_SESSION_ID_MAX_CHARS = (
     128  # bounds the id in a path; ids are 32 chars (UPLOAD_SESSION_BYTES)
 )
 FILE_NAME_MAX_CHARS = 255  # APFS and ext4 name limit: a longer name could not be stored
+
+# ---------------------------------------------------------------- Google Cloud (STEP-08)
+
+# OAuth scope for signing download URLs through IAM signBlob (F34; doc ledger: google-auth)
+GOOGLE_CLOUD_PLATFORM_SCOPE = (
+    "https://www.googleapis.com/auth/cloud-platform"  # hardcode-ok: protocol constant
+)

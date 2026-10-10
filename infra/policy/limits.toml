@@ -1,0 +1,9 @@
+# Resource ceilings scripts/check_policy.py enforces. STEP-08 task 1, lesson L7 (32 GiB was planned
+# at 4 vCPU; the maximum is 16 GiB).
+
+[cloud_run_job]
+# F29 https://docs.cloud.google.com/run/docs/configuring/jobs/memory-limits : at 4 vCPU, 2 to 16 GiB.
+cpu = "4"
+max_memory = "16Gi"
+# D52: a retry pays Claude twice.
+max_retries = 0

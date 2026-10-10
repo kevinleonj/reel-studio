@@ -1,0 +1,125 @@
+# Arguments that must be written out in infra/, even when they equal the provider default.
+# Source: docs/INFRA.md §2 (resource table and "Bootstrap root extras"), provider hashicorp/google 8.6.0
+# (argument names checked against `terraform providers schema -json`, FACTS F400).
+# scripts/check_policy.py reads this file: every resource of a listed type must set every listed
+# argument. A dotted name is a nested block path (block.argument); a bare block name means the block
+# must be present. `depends_on` lists resources the type must name in its depends_on.
+
+[google_project_service]
+arguments = ["service", "disable_on_destroy", "disable_dependent_services"]
+
+[google_artifact_registry_repository]
+arguments = ["repository_id", "format", "location", "cleanup_policy_dry_run", "cleanup_policies", "labels"]
+
+[google_storage_bucket]
+arguments = [
+  "name",
+  "location",
+  "storage_class",
+  "uniform_bucket_level_access",
+  "public_access_prevention",
+  "soft_delete_policy.retention_duration_seconds",
+  "versioning.enabled",
+  "force_destroy",
+  "labels",
+]
+
+[google_firestore_database]
+arguments = [
+  "name",
+  "location_id",
+  "type",
+  "database_edition",
+  "point_in_time_recovery_enablement",
+  "delete_protection_state",
+  "deletion_policy",
+]
+
+[google_firestore_index]
+arguments = ["collection", "query_scope", "fields"]
+
+[google_firestore_field]
+arguments = ["collection", "field", "ttl_config", "skip_wait"]
+
+[google_secret_manager_secret]
+arguments = ["secret_id", "replication.user_managed", "labels"]
+
+[google_service_account]
+arguments = ["account_id", "display_name"]
+
+[google_cloud_run_v2_service]
+arguments = [
+  "name",
+  "location",
+  "ingress",
+  "deletion_protection",
+  "labels",
+  "template.service_account",
+  "template.scaling.min_instance_count",
+  "template.scaling.max_instance_count",
+  "template.max_instance_request_concurrency",
+  "template.timeout",
+  "template.containers.resources.limits",
+  "template.containers.resources.cpu_idle",
+  "template.containers.resources.startup_cpu_boost",
+  "template.containers.ports.container_port",
+  "template.containers.startup_probe.http_get.path",
+]
+# Creating it runs as a runtime account: the deployer's actAs grant must exist first
+# (senior review C1). The grant lives in infra/main/iam.tf.
+depends_on = ["google_service_account_iam_member.deployer_acts_as"]
+
+[google_cloud_run_v2_job]
+arguments = [
+  "name",
+  "location",
+  "deletion_protection",
+  "labels",
+  "template.task_count",
+  "template.parallelism",
+  "template.template.timeout",
+  "template.template.max_retries",
+  "template.template.service_account",
+  "template.template.containers.resources.limits",
+]
+# Creating it runs as a runtime account: the deployer's actAs grant must exist first
+# (senior review C1). The grant lives in infra/main/iam.tf.
+depends_on = ["google_service_account_iam_member.deployer_acts_as"]
+
+[google_cloud_scheduler_job]
+arguments = [
+  "name",
+  "region",
+  "schedule",
+  "time_zone",
+  "attempt_deadline",
+  "paused",
+  "retry_config.retry_count",
+  "http_target.http_method",
+  "http_target.uri",
+  "http_target.oidc_token.service_account_email",
+  "http_target.oidc_token.audience",
+]
+# Creating it runs as a runtime account: the deployer's actAs grant must exist first
+# (senior review C1). The grant lives in infra/main/iam.tf.
+depends_on = ["google_service_account_iam_member.deployer_acts_as"]
+
+[google_logging_project_bucket_config]
+arguments = ["bucket_id", "location", "retention_days"]
+
+[google_logging_project_exclusion]
+arguments = ["name", "filter", "disabled"]
+
+[google_iam_workload_identity_pool_provider]
+arguments = ["attribute_condition", "attribute_mapping", "oidc.issuer_uri"]
+
+[google_billing_budget]
+arguments = [
+  "billing_account",
+  "budget_filter.calendar_period",
+  "budget_filter.credit_types_treatment",
+  "budget_filter.projects",
+  "amount.specified_amount.units",
+  "amount.specified_amount.currency_code",
+  "threshold_rules.spend_basis",
+]
