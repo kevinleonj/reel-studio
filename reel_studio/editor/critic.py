@@ -24,6 +24,7 @@ from reel_studio.editor.tools import image_block, strict_schema
 TOOL = "submit_review"
 NUDGE = f"Call {TOOL} with your scores."
 CATEGORIES = ("hook", "retention", "story", "peak", "craft", "share", "colour")  # qa-rubric.md
+TOTAL_MAX = len(CATEGORIES) * constants.CRITIC_SCORE_MAX
 
 
 class _Model(BaseModel):
