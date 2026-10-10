@@ -1,0 +1,11 @@
+# build output and generated types
+dist/
+.astro/
+node_modules/
+# Playwright output (failure screenshots, reports)
+test-results/
+playwright-report/
+# Doc-ledger entries waiting to be copied into .claude/doc-ledger.json (TONIGHT.md)
+doc-ledger.pending.json
+npm-debug.log*
+.DS_Store

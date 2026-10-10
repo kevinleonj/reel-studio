@@ -53,6 +53,7 @@ rows = 4
 frames_per_clip_min = 2
 frames_per_clip_max = 6
 max_image_side_px = 2000            # F08
+near_duplicate_ssim = 0.93          # D38 near-duplicates removed; origin kit qa.py:31 (NEAR_SAME), Kevin 9 Oct 2026
 
 [gates]
 hook_min = 4                        # D36
@@ -74,3 +75,12 @@ max_redemptions = 20                # a ceiling against a leaked code, not a quo
 chunk_mib = 8                       # multiple of 256 KiB
 parallel_files = 2
 chunk_retries = 5
+backoff_ms = 1000                   # docs/UX.md §2 "up to 5 tries with backoff": first wait, doubled per try
+
+[web]                                # STEP-06 web app and API; added 10 Oct 2026, Kevin to review
+request_timeout_ms = 15000          # any API call; a hung request becomes the network message
+chunk_timeout_ms = 90000            # one 8 MiB chunk at 1 Mbit/s takes about 67 s (senior review N2)
+signed_url_minutes = 60             # result page play/download links; re-signed on every status poll
+rating_max = 5                      # docs/ARCHITECTURE.md §7: rating 1-5
+comment_max_chars = 1000            # docs/ARCHITECTURE.md §7: comment up to 1,000 characters
+google_tag_url = "https://www.googletagmanager.com/gtag/js"  # gtag.js loader (F70), sent only when analytics is on; hardcode-ok: config is its home

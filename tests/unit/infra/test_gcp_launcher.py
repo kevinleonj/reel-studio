@@ -1,8 +1,13 @@
-"""GcpLauncher: one Cloud Run job execution per order with ORDER_ID and RUN_TOKEN (F30)."""
+"""GcpLauncher: one Cloud Run job execution per order with ORDER_ID and RUN_TOKEN (F30).
+
+The port is `launch(order_id)` (ARCHITECTURE.md §3); the run token comes from the order itself,
+written by the `take_slot` transaction as `queue.run_token` (ARCHITECTURE.md §4).
+"""
 
 import json
 import logging
 
+import google.auth.exceptions
 import pytest
 from google.api_core import exceptions as google_exceptions
 from google.cloud import run_v2
@@ -16,8 +21,23 @@ JOB = "projects/test-project/locations/test-region/jobs/reel-editor"
 TIMEOUT_S = 7.5
 
 
-def make(client: FakeJobsClient) -> GcpLauncher:
-    return GcpLauncher(client, job=JOB, timeout_s=TIMEOUT_S)
+class FakeOrders:
+    """The one read the launcher makes: the order document after take_slot."""
+
+    def __init__(self, docs: dict[str, ports.Record]) -> None:
+        self.docs = docs
+
+    def get(self, order_id: str) -> ports.Record | None:
+        return self.docs.get(order_id)
+
+
+def running(token: str) -> ports.Record:
+    return {"status": "running", "queue": {"run_token": token}}
+
+
+def make(client: FakeJobsClient, docs: dict[str, ports.Record] | None = None) -> GcpLauncher:
+    orders = FakeOrders(docs if docs is not None else {})
+    return GcpLauncher(client, orders, job=JOB, timeout_s=TIMEOUT_S)
 
 
 def env_of(call: dict[str, object]) -> dict[str, str]:
@@ -32,42 +52,67 @@ def test_satisfies_the_port() -> None:
     assert launcher is not None
 
 
-def test_one_launch_sends_the_overrides_without_retry() -> None:
+def test_one_launch_sends_the_order_and_its_run_token_without_retry() -> None:
     client = FakeJobsClient()
+    order_id = "a" * 32
 
-    name = make(client).launch("a" * 32, "token-1")
+    name = make(client, {order_id: running("token-1")}).launch(order_id)
 
     assert name == client.operation_name
     [call] = client.calls
     request = call["request"]
     assert isinstance(request, run_v2.RunJobRequest)
     assert request.name == JOB
-    assert env_of(call) == {"ORDER_ID": "a" * 32, "RUN_TOKEN": "token-1"}
-    # A retried start could launch twice and pay Claude twice; the worker's token check is the
-    # second line of defence, not a reason to retry here.
+    assert env_of(call) == {"ORDER_ID": order_id, "RUN_TOKEN": "token-1"}
+    # A retried start could launch twice and pay Claude twice; at most once (ports.Launcher).
     assert call["retry"] is None
     assert call["timeout"] == TIMEOUT_S
 
 
 def test_many_launches_are_independent() -> None:
     client = FakeJobsClient()
-    launcher = make(client)
+    docs = {f"order-{i}": running(f"token-{i}") for i in range(3)}
+    launcher = make(client, docs)
 
-    for index in range(3):
-        launcher.launch(f"order-{index}", f"token-{index}")
+    for order_id in docs:
+        launcher.launch(order_id)
 
     assert [env_of(c)["RUN_TOKEN"] for c in client.calls] == ["token-0", "token-1", "token-2"]
 
 
-def test_api_failure_becomes_cloud_unavailable_and_is_logged(
-    caplog: pytest.LogCaptureFixture,
+@pytest.mark.parametrize(
+    "doc",
+    [None, {"status": "running"}, {"status": "running", "queue": {}}, running("")],
+    ids=["no-order", "no-queue", "no-token", "empty-token"],
+)
+def test_no_run_token_means_no_execution(doc: ports.Record | None) -> None:
+    client = FakeJobsClient()
+    docs = {} if doc is None else {"o1": doc}
+
+    with pytest.raises(CloudUnavailable, match="run token"):
+        make(client, docs).launch("o1")
+
+    assert client.calls == []
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        google_exceptions.PermissionDenied("actAs denied"),  # type: ignore[no-untyped-call]
+        google.auth.exceptions.RefreshError("token expired"),  # type: ignore[no-untyped-call]
+    ],
+    ids=["api", "auth"],
+)
+def test_failure_becomes_cloud_unavailable_without_the_raw_text(
+    error: Exception, caplog: pytest.LogCaptureFixture
 ) -> None:
-    denied = google_exceptions.PermissionDenied("actAs denied")  # type: ignore[no-untyped-call]
-    client = FakeJobsClient(raises=denied)
+    client = FakeJobsClient(raises=error)
 
-    with caplog.at_level(logging.INFO), pytest.raises(CloudUnavailable, match="PermissionDenied"):
-        make(client).launch("order-1", "token-1")
+    with caplog.at_level(logging.INFO), pytest.raises(CloudUnavailable) as caught:
+        make(client, {"order-1": running("token-1")}).launch("order-1")
 
+    assert type(error).__name__ in str(caught.value)
+    assert str(error.args[0]) not in str(caught.value)
     [record] = [r for r in caplog.records if r.name.endswith("gcp_launcher")]
     assert record.levelno == logging.ERROR
     assert record.__dict__["order_id"] == "order-1"
@@ -77,7 +122,7 @@ def test_api_failure_becomes_cloud_unavailable_and_is_logged(
 
 def test_success_is_logged_once_with_latency(caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.INFO):
-        make(FakeJobsClient()).launch("order-1", "token-1")
+        make(FakeJobsClient(), {"order-1": running("token-1")}).launch("order-1")
 
     [record] = [r for r in caplog.records if r.name.endswith("gcp_launcher")]
     assert record.__dict__["event"] == "job_run"

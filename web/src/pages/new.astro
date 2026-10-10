@@ -1,0 +1,11 @@
+---
+import Layout from "@/layouts/main.astro"
+import { NewOrderForm } from "@/components/new/NewOrderForm"
+import { copy } from "@/lib/copy"
+---
+
+<Layout title={copy.meta.new.title} description={copy.meta.new.description} route="/new" noindex>
+  <NewOrderForm client:only="react">
+    <p slot="fallback" class="text-muted-foreground">{copy.site.loading}</p>
+  </NewOrderForm>
+</Layout>

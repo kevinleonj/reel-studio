@@ -12,14 +12,14 @@ import time
 from datetime import UTC, datetime
 from typing import TextIO
 
-from reel_studio.core.constants import MS_PER_SECOND
+from reel_studio.core.constants import MS_PER_S
 
 D74_FIELDS = ("order_id", "stage", "event", "latency_ms", "outcome")
 
 
 def latency_ms(started: float) -> int:
     """Milliseconds since `started`, a `time.monotonic()` reading (a duration, not the clock)."""
-    return round((time.monotonic() - started) * MS_PER_SECOND)
+    return round((time.monotonic() - started) * MS_PER_S)
 
 
 class JsonLineFormatter(logging.Formatter):

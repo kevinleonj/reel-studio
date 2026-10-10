@@ -61,9 +61,10 @@ Written by the cloud lane only. Newest entry on top.
   `make tflint-init` once. CI installs all of them itself (`scripts/ci-install.d/cloud.sh`).
 - **`gcloud auth application-default login`** before `make smoke` on the laptop (the step08 gate runs
   it): smoke reads the live service, job and TTL state with Application Default Credentials.
-- **Launcher port changed (shared `reel_studio/core/ports.py`):** `launch(order_id, run_token)`,
-  because ARCHITECTURE §4 has the launcher pass ORDER_ID and RUN_TOKEN. The web lane's local
-  Dispatcher must take `run_token` too.
+- **Launcher port unchanged after the merge with main (10 Oct):** main's web lane built on
+  `launch(order_id)`, so the port keeps that signature and `GcpLauncher` reads `queue.run_token`
+  from the order (written by `take_slot`) and refuses to start without one. No other lane has to
+  change. Main's Mailer contract is `DeliveryFailed`, so `ResendMailer` raises it too.
 - **New error code `cloud_unavailable`** (`reel_studio/core/errors.py`, boundary `CloudError`): the web
   lane's copy table (`web/src/copy/en.json`) needs a message for it.
 - **Wiring the cloud adapters** (which settings feed bucket, job path, origin, Resend base URL and

@@ -1,0 +1,217 @@
+{
+  "site": {
+    "name": "Reel Studio",
+    "robotsNoindex": "noindex, nofollow",
+    "referrerPolicy": "no-referrer",
+    "ogType": "website",
+    "twitterCard": "summary_large_image",
+    "loading": "Loading…",
+    "broken": "Something went wrong on this page. Reload to try again.",
+    "githubUrl": "https://github.com/kevinleonj/reel-studio",
+    "privacyLink": "Privacy",
+    "homeLink": "Reel Studio"
+  },
+  "meta": {
+    "landing": {
+      "title": "Reel Studio: turn your food clips into a Reel that's ready to post",
+      "description": "Upload up to 40 clips and photos. You get two edited versions and a caption by email. Invite-only beta, edited by AI (Claude)."
+    },
+    "privacy": {
+      "title": "Privacy · Reel Studio",
+      "description": "What Reel Studio stores, for how long, who processes it and how to delete it."
+    },
+    "new": { "title": "Start a Reel · Reel Studio", "description": "Choose a style and start your Reel." },
+    "order": { "title": "Your Reel · Reel Studio", "description": "Upload your clips and follow your Reel." },
+    "notFound": { "title": "Page not found · Reel Studio", "description": "This page doesn't exist." },
+    "ogImageAlt": "Reel Studio"
+  },
+  "landing": {
+    "headline": "Turn your food clips into a Reel that's ready to post.",
+    "line": "Upload up to 40 clips and photos. You get two edited versions and a caption by email.",
+    "start": "Start a Reel",
+    "inviteOnly": "Invite-only beta: you need a code from Kevin.",
+    "aiLine": "Edited by AI (Claude).",
+    "privacy": "Privacy",
+    "github": "GitHub"
+  },
+  "notFound": {
+    "heading": "This page doesn't exist.",
+    "home": "Go to Reel Studio"
+  },
+  "form": {
+    "heading": "Start a Reel",
+    "style": { "label": "What did you film?", "required": "(required)" },
+    "length": { "label": "Length", "hint": "Most Reels that travel are under 60 s.", "option": "{seconds} s" },
+    "textLanguage": { "label": "Text on the video" },
+    "voice": {
+      "label": "Keep the voice?",
+      "on": "We transcribe the speech and cut between words.",
+      "off": "Natural sound only, no transcription.",
+      "unavailable": "Needs a Gemini key on this server"
+    },
+    "wishes": { "label": "Wishes", "optional": "(optional)" },
+    "note": {
+      "label": "Anything we should know?",
+      "optional": "(optional)",
+      "placeholder": "e.g. It's my grandma's pistachio cheesecake. Keep the shot where I pour the sauce.",
+      "help": "Works: the dish's name, a shot to keep or skip, where to start or end. Doesn't work: music (add it in Instagram), logos, effects, footage you didn't upload.",
+      "counter": "{count}/{max}"
+    },
+    "code": { "label": "Invite code", "required": "(required)" },
+    "email": { "label": "Email", "help": "Optional: we email you when it's ready." },
+    "continue": "Continue",
+    "opening": "Opening checkout…",
+    "errors": {
+      "code_invalid": "This code doesn't work. Check it, or ask Kevin for a new one.",
+      "code_inactive": "This code has expired. Ask Kevin for a new one.",
+      "week_full": "This week's Reels are all taken. Places free up on Monday.",
+      "rate_limited": "Too many tries. Wait a minute and try again.",
+      "network": "We couldn't reach the server. Check your connection and try again."
+    }
+  },
+  "styles": {
+    "montage": { "label": "Quick clips, no talking", "description": "Many short shots. We pick the best moments and cut a fast montage." },
+    "recipe": { "label": "Recipe", "description": "From ingredients to the finished dish, step by step." },
+    "long_take": { "label": "One long video", "description": "One continuous take. We cut the slow parts and keep the story." },
+    "talking": { "label": "Someone talking", "description": "Clips of a person speaking to camera. We keep the best take of each line." },
+    "tutorial": { "label": "Tutorial", "description": "Someone shows and explains how to do something." }
+  },
+  "chips": {
+    "Start with the finished dish": "Start with the finished dish",
+    "Calm pace": "Calm pace",
+    "Fast pace": "Fast pace",
+    "Show every step": "Show every step",
+    "No text over faces": "No text over faces",
+    "End on the first bite": "End on the first bite"
+  },
+  "textLanguages": { "en": "English", "es": "Spanish" },
+  "order": {
+    "live": "Order status",
+    "awaitingPayment": "Confirming your code…",
+    "upload": {
+      "heading": "Add your clips and photos",
+      "limits": "Up to {maxFiles} files, {maxSize} in total, {maxMinutes} minutes per video.",
+      "choose": "Choose files",
+      "addMore": "Add more files",
+      "total": "{used} of {max} · {count} of {maxFiles} files",
+      "keepOpen": "Keep this page open until the uploads finish.",
+      "start": "Start editing",
+      "retry": "Retry",
+      "progressLabel": "Upload progress for {name}",
+      "state": {
+        "waiting": "waiting",
+        "uploading": "uploading {percent}%",
+        "done": "done",
+        "failed": "failed"
+      },
+      "errors": {
+        "too_many_files": "That's more than 40 files. Remove some and try again.",
+        "too_large": "That's more than 4 GB in total. Remove a few long videos.",
+        "bad_type": "{name} isn't a video or photo we can use (MP4, MOV, JPEG, PNG).",
+        "no_files": "Add at least one clip first.",
+        "empty": "{name} is empty. Choose it again from your gallery.",
+        "network": "We couldn't reach the server. Check your connection and try again."
+      }
+    },
+    "queued": {
+      "waiting": "Waiting for a free editor.",
+      "aheadOne": "{count} Reel ahead of you.",
+      "aheadOther": "{count} Reels ahead of you."
+    },
+    "closePage": "You can close this page. We'll email {email} when it's ready.",
+    "closePageNoEmail": "You can close this page.",
+    "stagesLabel": "Progress",
+    "elapsed": "{minutes} min",
+    "stages": {
+      "reading": "Reading your clips",
+      "listening": "Listening",
+      "planning": "Planning the edit",
+      "rendering": "Cutting and colour",
+      "checking": "Final checks",
+      "revising": "Improving the cut",
+      "saving": "Saving your Reel"
+    },
+    "failed": {
+      "notified": "Kevin has been notified.",
+      "startAgain": "Start again",
+      "fewerClips": "Try with fewer clips",
+      "messages": {
+        "no_usable_input": "We could not read any of your videos. Check that they play on your phone.",
+        "model_refusal": "The editor could not work with this footage.",
+        "cost_cap": "This one needed more editing than our $5 limit allows. Try again with fewer or shorter clips.",
+        "output_too_long": "Something broke while planning. Kevin has been notified.",
+        "provider_unavailable": "A service we use was down. Try again with the same code.",
+        "render_error": "Something broke while cutting. Kevin has been notified.",
+        "job_killed": "Something broke while cutting. Kevin has been notified."
+      }
+    },
+    "paused": "We hit this month's budget. Your Reel is saved and starts when it resets. We'll email you.",
+    "expired": "This checkout expired before it was confirmed.",
+    "abandoned": "This order was never started, so its clips were deleted.",
+    "deleted": "Your files are deleted.",
+    "badLink": "This link doesn't work. Use the link in the email we sent you.",
+    "startAgain": "Start again"
+  },
+  "result": {
+    "heading": "Your Reel is ready",
+    "withText": "With text",
+    "clean": "Clean",
+    "download": "Download",
+    "downloadVersion": "Download {version}",
+    "caption": "Caption",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Couldn't copy. Select the caption and copy it by hand.",
+    "textLines": "Text to add in Instagram",
+    "textLine": "{time} · {text}",
+    "music": "Music:",
+    "musicHint": "Pick the track in Instagram.",
+    "musicLine": "{mood} · {tempo}",
+    "leftOut": "What we left out",
+    "leftOutLine": "{file}: {reason}",
+    "wishes": "Your wishes",
+    "applied": "Applied",
+    "notApplied": "Not applied",
+    "wishLine": "{wish} · {state}: {reason}",
+    "check": "Check before posting",
+    "aiLine": "Edited by AI (Claude). Check it before posting.",
+    "feedback": "How did we do?",
+    "ratingLabel": "Rating {rating} of {max}",
+    "comment": "Comment",
+    "commentOptional": "(optional)",
+    "send": "Send",
+    "sent": "Thanks for the feedback.",
+    "deleteNow": "Delete my files now",
+    "deleteConfirm": "Delete the Reels and your clips? This can't be undone.",
+    "delete": "Delete",
+    "keep": "Keep",
+    "retention": "Files are deleted automatically after 30 days."
+  },
+  "privacy": {
+    "heading": "Privacy",
+    "intro": "Reel Studio is a small invite-only beta. This page says what we keep, for how long, who handles it and how to delete it.",
+    "storedHeading": "What we store",
+    "stored": [
+      "The clips and photos you upload, and the working files made from them while we edit.",
+      "The two finished Reels, the caption and the notes on the result page.",
+      "Your order: the style and wishes you chose, your note, your email address, the invite code you used, your rating and comment, and the times each step happened."
+    ],
+    "howLongHeading": "For how long",
+    "howLong": [
+      "Your uploaded clips and the working files: 7 days.",
+      "The finished Reels and your order: 30 days.",
+      "Then they are deleted automatically."
+    ],
+    "processorsHeading": "Who processes it",
+    "processors": [
+      "Anthropic (Claude) looks at still frames and transcripts of your clips to plan the edit.",
+      "Google runs the website and stores the files (Google Cloud), and transcribes speech when you keep the voice (Gemini).",
+      "Stripe shows the checkout page and keeps your email address with the payment record.",
+      "Resend sends our emails."
+    ],
+    "cookiesHeading": "Cookies and tracking",
+    "cookies": "No cookies, no analytics scripts and no tracking pixels.",
+    "deleteHeading": "How to delete",
+    "delete": "Open the link in your email and press \"Delete my files now\" on the result page. It removes your clips and Reels at once. To remove everything else sooner, ask Kevin."
+  }
+}

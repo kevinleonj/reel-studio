@@ -8,6 +8,7 @@ check and pay Claude twice. On CloudUnavailable leave the order running; the lea
 """
 
 import time
+from collections.abc import Mapping
 from typing import Protocol
 
 from google.api_core.exceptions import GoogleAPIError
@@ -16,6 +17,7 @@ from google.cloud import run_v2
 
 from reel_studio.core.errors import CloudUnavailable
 from reel_studio.core.logging import get_logger, latency_ms
+from reel_studio.core.ports import Record
 
 log = get_logger(__name__)
 
@@ -33,6 +35,12 @@ class OperationName(Protocol):
     def name(self) -> str: ...
 
 
+class OrderReader(Protocol):
+    """The slice of the Orders port this adapter uses: the order after take_slot."""
+
+    def get(self, order_id: str) -> Record | None: ...
+
+
 class JobsClient(Protocol):
     """The slice of google.cloud.run_v2.JobsClient this adapter uses."""
 
@@ -42,13 +50,17 @@ class JobsClient(Protocol):
 
 
 class GcpLauncher:
-    def __init__(self, client: JobsClient, *, job: str, timeout_s: float) -> None:
+    def __init__(
+        self, client: JobsClient, orders: OrderReader, *, job: str, timeout_s: float
+    ) -> None:
         self._client = client
+        self._orders = orders
         self._job = job  # projects/{project}/locations/{region}/jobs/reel-editor
         self._timeout_s = timeout_s
 
-    def launch(self, order_id: str, run_token: str) -> str:
+    def launch(self, order_id: str) -> str:
         """Start one execution; returns the long-running operation's name."""
+        run_token = self._run_token(order_id)
         override = run_v2.RunJobRequest.Overrides.ContainerOverride(
             env=[
                 run_v2.EnvVar(name=ORDER_ID_ENV, value=order_id),
@@ -71,6 +83,15 @@ class GcpLauncher:
             raise CloudUnavailable(f"could not start the editor job: {type(exc).__name__}") from exc
         log.info("job run started", extra=_fields(order_id, started, "ok"))
         return operation.operation.name
+
+    def _run_token(self, order_id: str) -> str:
+        """queue.run_token, written by the take_slot transaction (ARCHITECTURE.md §4)."""
+        doc = self._orders.get(order_id)
+        queue = doc.get("queue") if doc is not None else None
+        token = queue.get("run_token") if isinstance(queue, Mapping) else None
+        if not isinstance(token, str) or not token:
+            raise CloudUnavailable(f"order {order_id} has no run token; not started")
+        return token
 
 
 def _fields(order_id: str, started: float, outcome: str) -> dict[str, object]:

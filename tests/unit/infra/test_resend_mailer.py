@@ -9,7 +9,7 @@ from pydantic import SecretStr
 
 from reel_studio.adapters.resend_mailer import Backoff, Email, ResendConfig, ResendMailer
 from reel_studio.core import ports
-from reel_studio.core.errors import CloudUnavailable
+from reel_studio.core.errors import DeliveryFailed
 
 API = "https://resend.test"
 KEY = "test-resend-key"
@@ -110,7 +110,7 @@ def test_retries_are_bounded_then_cloud_unavailable() -> None:
     recorder = Recorder(*[httpx.Response(503, json={})] * (RETRIES + 1))
     sleeps: list[float] = []
 
-    with pytest.raises(CloudUnavailable, match="503"):
+    with pytest.raises(DeliveryFailed, match="503"):
         make(recorder, sleeps).send("ready", "a@example.test", {"order_id": "o1"})
 
     assert len(recorder.requests) == RETRIES + 1
@@ -129,7 +129,7 @@ def test_retries_are_bounded_then_cloud_unavailable() -> None:
 def test_permanent_failure_is_not_retried(permanent: httpx.Response) -> None:
     recorder = Recorder(permanent)
 
-    with pytest.raises(CloudUnavailable):
+    with pytest.raises(DeliveryFailed):
         make(recorder, []).send("ready", "a@example.test", {"order_id": "o1"})
 
     assert len(recorder.requests) == 1
@@ -146,3 +146,13 @@ def test_logs_carry_latency_but_never_the_key_or_address(caplog: pytest.LogCaptu
     assert isinstance(record.__dict__["latency_ms"], int)
     assert KEY not in dumped
     assert "friend@example.test" not in dumped
+
+
+def test_failure_uses_the_mailer_ports_error_so_callers_catch_it() -> None:
+    # reel_studio/api/notify.py and routes_public.py catch DeliveryFailed from any Mailer.
+    with pytest.raises(DeliveryFailed) as caught:
+        make(Recorder(httpx.Response(422, json={})), []).send(
+            "ready", "a@example.test", {"order_id": "o1"}
+        )
+
+    assert "a@example.test" not in str(caught.value)

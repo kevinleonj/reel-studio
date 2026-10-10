@@ -1,0 +1,1 @@
+[reel-studio] {{ status }} {{ order_id }} at {{ stage }}: {{ code }}

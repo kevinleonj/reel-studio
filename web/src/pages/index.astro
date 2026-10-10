@@ -1,0 +1,23 @@
+---
+import Layout from "@/layouts/main.astro"
+import { buttonVariants } from "@/components/ui/button"
+import { copy } from "@/lib/copy"
+
+const t = copy.landing
+---
+
+<Layout title={copy.meta.landing.title} description={copy.meta.landing.description} route="/">
+  <section class="flex flex-col gap-6 py-8">
+    <h1 class="text-4xl font-semibold tracking-tight text-balance">{t.headline}</h1>
+    <p class="text-lg text-muted-foreground">{t.line}</p>
+    <a href="/new" class={buttonVariants({ size: "lg" })}>{t.start}</a>
+  </section>
+  <footer class="flex flex-col gap-2 border-t pt-6 text-sm text-muted-foreground">
+    <p>{t.inviteOnly}</p>
+    <p>{t.aiLine}</p>
+    <nav class="flex gap-4">
+      <a href="/privacy" class="inline-flex min-h-target items-center underline underline-offset-4">{t.privacy}</a>
+      <a href={copy.site.githubUrl} class="inline-flex min-h-target items-center underline underline-offset-4">{t.github}</a>
+    </nav>
+  </footer>
+</Layout>

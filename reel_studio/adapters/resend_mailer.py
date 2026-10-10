@@ -3,7 +3,8 @@
 The REST call needs no SDK: `POST /emails` with a bearer key and an `Idempotency-Key` header, so
 a retry after a timeout cannot send the same email twice (Resend keeps a key for 24 hours). The
 template is rendered by the caller's renderer, the same one the laptop's Mailpit adapter uses.
-The base URL and timeouts come with the injected httpx.Client.
+The base URL and timeouts come with the injected httpx.Client. Failure raises DeliveryFailed,
+the Mailer port's error that the API's callers catch (reel_studio/api/notify.py).
 """
 
 import hashlib
@@ -16,7 +17,7 @@ import httpx
 from pydantic import SecretStr
 
 from reel_studio.core import ports
-from reel_studio.core.errors import CloudUnavailable
+from reel_studio.core.errors import DeliveryFailed
 from reel_studio.core.logging import get_logger, latency_ms
 
 log = get_logger(__name__)
@@ -113,9 +114,9 @@ class ResendMailer:
             problem = f"HTTP {response.status_code}"
             if not transient(response):
                 _log(template, order_id, started, "error", problem)
-                raise CloudUnavailable(f"resend refused the {template} email: {problem}")
+                raise DeliveryFailed(f"resend refused the {template} email: {problem}")
             _log(template, order_id, started, "retry", problem)
-        raise CloudUnavailable(
+        raise DeliveryFailed(
             f"resend failed the {template} email after {self._backoff.retries + 1} attempts:"
             f" {problem}"
         )
