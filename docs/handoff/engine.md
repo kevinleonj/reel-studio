@@ -3,12 +3,13 @@
 Written by the engine lane only. Newest entry on top.
 
 ## Status board
-- Done: STEP-02 tasks 1-5; review fixes, engine items 1-5 (0e71d7f, 03e3d6d, 3275ff2, cc64aba, d02de3e; tests da8873d)
-- Partly: the gate without `--local` (runs after this push's CI)
-- Blocked: —
-- Not started: STEP-03 on this branch (parked locally on `step-03-editor-loop` until #2 merges)
-- Next: Kevin reviews and merges #2; answers Needs Kevin 5, 10-17
-- Ledger: Context7 entries for numpy, cv2, scenedetect, PIL, pillow_heif in `eval/doc-ledger.pending.json`
+- Done: STEP-03 tasks 1-9 in code, tested with fakes and the real SDK over a mock transport (branch
+  `step-03-editor-loop`, rebuilt on origin/main 10 Oct; the old branch is `step-03-editor-loop-parked`)
+- Partly: the two paid runs (`make eval`), the PR and `GATE step03 PASS`
+- Blocked: Needs Kevin 18 (workspace-scoped key), 19 (Terraform 1.16.5 on this Mac for `make ci`)
+- Not started: —
+- Next: Haiku run, then Sonnet run (Kevin's go, 10 Oct), commit both result files, PR, gate
+- Ledger: anthropic `messages.stream` and httpx2 `MockTransport` uses added to `eval/doc-ledger.pending.json`
 
 ## Needs Kevin
 Answered 9 Oct 2026 (TONIGHT.md): 1. luma reference = SDR render of the same pattern, ±15 %
@@ -50,13 +51,29 @@ to `EditorSettings`; 9. STEP-01 merged (6089989). Open:
     the field only mattered as a bug. In the kit it made room under music; without music (D02, D42) it
     has no purpose. The field stays (D46: the kit schema unchanged). Remove it from the schema and the
     prompt, or keep it as a no-op: your call.
-17. **STEP-03 waits on you: merge #2.** Your instruction (REVIEW-FIXES, 10 Oct): "Do not start STEP-03
-    until Kevin merges PR #2". Work done before that is parked, local only, in WIP commit `d0de906` on
-    `step-03-editor-loop`: meter, tools, loop, critic (with `tool_choice` auto, F10), prompts, `make`
-    and `reel make`, all tested with the fake client. Still to do there: `prompt.py` and the Claude
-    adapter, which the doc gate blocks until `anthropic`, `httpx2` and `jinja2` are copied from
-    `eval/doc-ledger.pending.json` into the ledger; then `make eval` (written, never run). The first
-    paid run (`make eval FIX=creami MODEL=haiku`, about $0.05) needs your go.
+17. Answered 10 Oct: #2 merged; you copied `anthropic`, `httpx2`, `jinja2` into the doc ledger; paid
+    runs: Haiku once, then Sonnet once, through `make eval` only.
+18. **The `.env` Anthropic key is not scoped to a workspace.** The first `make eval MODEL=haiku` stopped
+    at its first (free) `count_tokens` call: 400 "This API key is not scoped to a workspace, so this
+    request must include the anthropic-workspace-id header" ($0.00 spent; the run's record is
+    `eval/results/2026-10-10/creami-haiku-*.json`). Your choice (10 Oct): a new key created inside
+    workspace `reel-studio`, as D59 and ARCHITECTURE §5 say. Same check applies to
+    `CLOUD_ANTHROPIC_API_KEY` before STEP-08's job runs.
+19. **`make ci` fails on this Mac in `ci-cloud`:** Terraform 1.16.1 installed, `infra/*/versions.tf`
+    pins `= 1.16.5`. Every engine check passes. You chose to install 1.16.5.
+20. **Strict `write_edl` and the API's schema-complexity limits (F208).** The structured-outputs page
+    allows 24 optional and 16 union-typed parameters across all strict tools per request. Counting
+    top-level properties the five editor tools have 13 and 5; counting nested ones (Segment's many
+    optional fields) 48 and 30. The page does not say which count applies; the first real request
+    decides it (a 400 is not billed). If it is refused, D35 (strict `write_edl`) and D46 (kit schema
+    unchanged) conflict, and the cheapest way out is `strict: false` on `write_edl` only (the
+    validator already returns every violation): your call.
+21. **Declare `httpx2` in pyproject (main lane).** `adapters/claude/client.py` now imports it to catch
+    a connection that drops mid-stream (`httpx2.TransportError`), which the SDK does not wrap once the
+    body is being read. It is anthropic's own HTTP layer, already in uv.lock at 2.13.1; the rule is that
+    a dependency lands in pyproject with its first import. Run `uv add --optional editor
+    "httpx2>=2.13.1"`. Alternative that lost: non-streaming `create` with an explicit timeout, which
+    keeps the SDK's wrapping but is what the errors page warns against for long replies.
 Plan notes kept from the answered items: fonts (Poppins-Bold.ttf + OFL.txt) ship as package data
 under `reel_studio/editor/media/fonts/`, no host-font fallbacks. Sheets failing case:
 `test_sheet_is_1536x864_with_16_tiles` fails against a port of kit `build_sheets` (`prep.py:167-221`,
@@ -69,7 +86,35 @@ under `reel_studio/editor/media/fonts/`, no host-font fallbacks. Sheets failing 
 
 ## Log
 
-### 2026-10-10 — STEP-03 plan (branch `step-03-editor-loop`, stacked on `step-02-pipeline`, local only)
+### 2026-10-10 — STEP-03 build: `reel make` with Claude, `make eval`
+
+Before: the WIP of the plan below, parked on a branch stacked on `step-02-pipeline`, with `prompt.py`
+and the Claude adapter missing. After: `step-03-editor-loop` rebuilt on origin/main (the 8 WIP
+commits cherry-picked; conflicts only in `constants.py` and this file), plus:
+- `reel_studio/adapters/claude/client.py`: SDK retries off; our retries for connection errors, 408,
+  409, 429, 5xx and mid-stream error events, twice with doubling backoff (`config/anthropic.toml`);
+  both 400 spend limits and the tier-cap 429 raise `SpendLimitReached` at once (F13); every attempt
+  logged with `latency_ms`. `create` streams (F210). The settings file is `anthropic.toml` because a
+  quoted `claude.toml` trips the global model-id hardcode hook.
+- `reel_studio/editor/evaluate.py` + `make eval FIX=<name> [MODEL=haiku]`: one run of `make` on
+  `REEL_FIXTURES_DIR/<name>`, cost and token counts from the run's `requests.jsonl`, written to
+  `eval/results/<date>/<fixture>-<model>.json` in the gate's contract (the unit test checks it with
+  the gate's own `eval_problems`). `MODEL=haiku` runs editor and critic on Haiku (plumbing, D32).
+  `limits.toml [eval].run_cap_usd = 2.5` lowers the order cap for a run, so two runs fit the $5.
+  A failed run still writes what it spent; an earlier same-day file is renamed, never overwritten.
+- Senior review of the whole branch: FAIL (3 critical, 11 warnings); fixed with tests: C2 (the
+  32,000-token retry could never be sent: the SDK refuses non-streaming requests that may exceed ten
+  minutes), C3 (the tier cap was read from the wrong field; fixtures now verbatim from the docs), W1-W5,
+  W7, W9, W11, S1. Left open: C1 → Needs Kevin 20; W6 (a revise request more than 5 minutes after the
+  last editor call reads no cache; the gate wants cache reads on every request from the 2nd: the
+  1-hour TTL costs 2x input to write and has no price row yet); W8 (`--voice on` with a Gemini key keeps
+  the voice with no transcript until STEP-05); S2-S7.
+- Not done: a paid `count_tokens` test for the 512-token cache minimum (F07). Unit tests cannot read
+  the key (conftest isolation); the paid run's `cache_read_input_tokens > 0` proves the same thing.
+
+Paid runs: see Evidence lines.
+
+### 2026-10-10 — STEP-03 plan (written on the parked branch; files as built: `make.py`, `evaluate.py`)
 
 TONIGHT.md: build test-first with a fake model client; stop before the first paid run. The two paid
 runs (`make eval FIX=creami MODEL=haiku`, then Sonnet) wait for Kevin; budget ≤ $5.
