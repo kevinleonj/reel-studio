@@ -1,0 +1,9 @@
+---
+import Layout from "@/layouts/main.astro"
+import { copy } from "@/lib/copy"
+---
+
+<Layout title={copy.meta.notFound.title} description={copy.meta.notFound.description} noindex>
+  <h1 class="text-3xl font-semibold tracking-tight">{copy.notFound.heading}</h1>
+  <a href="/" class="inline-flex min-h-target items-center underline underline-offset-4">{copy.notFound.home}</a>
+</Layout>

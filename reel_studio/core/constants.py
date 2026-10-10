@@ -63,3 +63,24 @@ MS_PER_S = 1000  # milliseconds per second
 BYTES_PER_MB = 1_000_000  # decimal megabytes, as the kit reports file sizes (kit qa.py:109-110)
 SECONDS_DECIMALS = 3  # durations rounded to whole milliseconds (kit prep.py:271)
 COLOUR_CHANNELS = 3  # three-channel images: BGR, RGB and Lab pixels
+
+# ---------------------------------------------------------------- website and API (STEP-06, 07)
+
+# Random identifiers (ARCHITECTURE.md §4, D18): bytes from secrets.token_hex / token_urlsafe.
+ORDER_ID_BYTES = 16  # 32 hex characters
+LINK_TOKEN_BYTES = 32  # the order link's access token, 256 bits; only its SHA-256 is stored
+RUN_TOKEN_BYTES = 16  # queue.run_token checked by the worker before it starts
+SECONDS_PER_MINUTE = 60  # unit conversion for signed-link lifetimes (minutes in config)
+UPLOAD_SESSION_BYTES = 24  # laptop upload session ids, like the cloud's unguessable session URLs
+EMAIL_MAX_BYTES = 100_000  # docs/UX.md §3: every email under 100 KB
+BYTES_PER_MIB = (
+    1024 * 1024
+)  # config/limits.toml upload.chunk_mib is in MiB (a multiple of 256 KiB, F307)
+BYTES_PER_GB = 1_000_000_000  # config/limits.toml max_total_bytes is decimal: 4 GB = 4,000,000,000
+ASSET_MAX_AGE_S = 31_536_000  # one year: hashed /_astro/* files are immutable (ARCHITECTURE.md §7)
+EMAIL_ADDRESS_MAX_CHARS = 254  # RFC 5321 §4.5.3.1.3: longest forward path, minus the angle brackets
+INVITE_CODE_MAX_CHARS = 64  # Stripe promotion codes are shorter; this only bounds the request body
+UPLOAD_SESSION_ID_MAX_CHARS = (
+    128  # bounds the id in a path; ids are 32 chars (UPLOAD_SESSION_BYTES)
+)
+FILE_NAME_MAX_CHARS = 255  # APFS and ext4 name limit: a longer name could not be stored

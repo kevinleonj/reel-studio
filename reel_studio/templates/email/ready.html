@@ -1,0 +1,8 @@
+{% extends "email/_layout.html" %}
+{% block title %}Your Reel is ready{% endblock %}
+{% block body %}
+<p style="font-size:18px;font-weight:600">“{{ hook }}”</p>
+{% with href = order_url, label = "Watch and download" %}{% include "email/_button.html" %}{% endwith %}
+<p>Files are deleted after {{ out_days }} days.</p>
+<p>Edited by AI (Claude). Check it before posting.</p>
+{% endblock %}

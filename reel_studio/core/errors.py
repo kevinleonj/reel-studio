@@ -133,3 +133,7 @@ class BadType(ApiError):
 
 class NoFiles(ApiError):
     code = ErrorCode.NO_FILES
+
+
+class DeliveryFailed(Exception):
+    """The Mailer could not hand an email to its server. Not a user-message key: callers log it."""

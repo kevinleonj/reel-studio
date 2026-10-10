@@ -1,0 +1,7 @@
+{% extends "email/_layout.html" %}
+{% block title %}Your Reel Studio link{% endblock %}
+{% block body %}
+{% with href = order_url, label = "Upload your clips" %}{% include "email/_button.html" %}{% endwith %}
+<p>Up to {{ max_files }} files, {{ max_total }}.</p>
+<p>Keep this email: the link is your access.</p>
+{% endblock %}
