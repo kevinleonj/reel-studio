@@ -11,6 +11,8 @@ from typing import Any, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from reel_studio.core.media_config import Media
+
 CONFIG_DIR = Path(__file__).resolve().parents[2] / "config"
 FACT_ID = r"^F\d+[a-z]?$"  # docs/FACTS.md row ids, e.g. F05, F21b
 
@@ -78,6 +80,7 @@ class Sheets(_Strict):
     frames_per_clip_min: int
     frames_per_clip_max: int
     max_image_side_px: int
+    near_duplicate_ssim: float
 
 
 class Gates(_Strict):
@@ -230,3 +233,8 @@ def load(folder: Path = CONFIG_DIR) -> Config:
             "styles": _read(folder / "styles.toml"),
         }
     )
+
+
+def load_media(folder: Path = CONFIG_DIR) -> Media:
+    """Read and validate media.toml from `folder` (only the editor needs it)."""
+    return Media.model_validate(_read(folder / "media.toml"))
