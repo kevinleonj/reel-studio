@@ -3,7 +3,7 @@
 Written by the engine lane only. Newest entry on top.
 
 ## Status board
-- Done: STEP-02 tasks 1-5; REVIEW-FIXES engine items 1-5 (0e71d7f, 03e3d6d, 3275ff2, cc64aba, d02de3e)
+- Done: STEP-02 tasks 1-5; review fixes, engine items 1-5 (0e71d7f, 03e3d6d, 3275ff2, cc64aba, d02de3e; tests da8873d)
 - Partly: the gate without `--local` (runs after this push's CI)
 - Blocked: —
 - Not started: STEP-03 on this branch (parked locally on `step-03-editor-loop` until #2 merges)
@@ -62,14 +62,21 @@ under `reel_studio/editor/media/fonts/`, no host-font fallbacks. Sheets failing 
 
 ## Log
 
-### 2026-10-10 REVIEW-FIXES engine items 1-5 (step-02-pipeline)
+### 2026-10-10 Review fixes, engine items 1-5 (`~/projects/reel/REVIEW-FIXES.md`, step-02-pipeline)
 Before: one odd photo (10 x 4300) or a width-0 probe aborted the order (MemoryError,
 ZeroDivisionError); style photos decoded at any size; natural_db -6 gave -19.9 LUFS; one CLI test
 could not fail. After: each bad file is skipped with a `SKIPPED` or `style photo ... skipped` log
 line; `media.toml [prepare].max_pixels` = Pillow's limit (F209) caps cover sizes and style photos;
 loudness lands within 1 LU of -14 at natural_db -6; the read-only test reaches the read (checked
 against a mutant). Each item has its failing test first and its own commit. LESSONS L13-L15.
-Follow-up: Needs Kevin 16 (natural_db has no audible effect now).
+Senior review: PASS on c422eea; its two warnings (cap wiring at both call sites, the
+DecompressionBombError branch, all unpinned) closed by da8873d, PASS again (diff 7173369..da8873d,
+sha256 2b3a8c31...). `make ci` green on da8873d (257 passed, 1 skipped).
+Follow-ups: Needs Kevin 16 (natural_db has no audible effect now). Same root cause, out of scope:
+a photo the process cannot read raises PermissionError while staging (`prepare.py`, the copy into
+originals/), which is not a MediaError, so it aborts the order (reproduced by the reviewer).
+`test_edl_json_is_read_not_written` would still pass if a new exit 2 appeared before the read;
+asserting the precheck message would close that.
 
 ### 2026-10-10 — STEP-02 phase B: the media package, `reel render`, the editor image
 
