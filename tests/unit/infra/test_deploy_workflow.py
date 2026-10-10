@@ -25,3 +25,11 @@ def test_every_job_that_can_mint_a_token_waits_for_the_beta_environment() -> Non
         text = job(name)
         assert "id-token: write" in text, name
         assert "environment: beta" in text, name
+
+
+def test_plan_artifacts_live_one_day() -> None:
+    # Anyone signed in can download a public repository's artifacts; the plan holds the project
+    # id, the alert email and service-account emails (REVIEW-FIXES CLOUD item 5).
+    text = job("plan")
+    assert "retention-days: 1\n" in text
+    assert text.count("retention-days:") == 1

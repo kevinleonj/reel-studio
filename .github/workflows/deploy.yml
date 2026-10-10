@@ -86,7 +86,9 @@ jobs:
           terraform plan -out tfplan
           terraform show -json tfplan > tfplan.json
 
-      # The plan holds names and ids, never secret values (secrets are referenced, not read).
+      # The plan holds names, ids and the alert email, never secret values (secrets are referenced,
+      # not read). Artifacts of a public repository are downloadable by anyone signed in: keep one
+      # day, enough for the apply job of the same run.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: tfplan
@@ -94,7 +96,7 @@ jobs:
             infra/main/tfplan
             infra/main/tfplan.json
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
 
   apply:
     needs: plan
