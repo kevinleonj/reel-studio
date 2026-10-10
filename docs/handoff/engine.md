@@ -3,11 +3,11 @@
 Written by the engine lane only. Newest entry on top.
 
 ## Status board
-- Done: STEP-02 phase B code, tasks 1-5: fixtures, the media package, the EDL checks, `reel render`, the editor image (built only in CI)
-- Partly: STEP-02 gate: `--local` run, push, pull request and CI follow (see Log)
+- Done: STEP-02 tasks 1-5; pull request #2 open, CI green; `step02.py --local` PASS
+- Partly: the gate without `--local` (runs after this commit's CI)
 - Blocked: —
 - Not started: STEP-03 (not tonight, TONIGHT.md)
-- Next: CI green, then `python3 scripts/gates/step02.py` without `--local`; record image size and build time from CI's ImageReport warning
+- Next: Kevin reviews and merges #2; answers Needs Kevin 5, 10-14
 - Ledger: Context7 entries for numpy, cv2, scenedetect, PIL, pillow_heif in `eval/doc-ledger.pending.json`
 
 ## Needs Kevin
@@ -45,6 +45,9 @@ under `reel_studio/editor/media/fonts/`, no host-font fallbacks. Sheets failing 
 1980 px wide); `sheets.py` reuses the kit's scene detection (`prep.py:119-122`) and SSIM (`qa.py:43-51`).
 
 ## Evidence lines (the gates read these)
+- 2026-10-10 STEP-02 local gate on cf1def3: `GATE step02 PASS`. Render roundtrip: text.mp4 and clean.mp4 1080x1920, h264, 30/1, aac, 10.802042 s, I: -13.9 LUFS each; input folder 6 files SHA-256 equal (D02); qa.json 6 hard checks true.
+- 2026-10-10 CI run 38029390044 on #2: `make ci` passed in 5m56s on ubuntu-24.04; 245 passed, 1 skipped (case-variant guard test: Linux is case-sensitive).
+- 2026-10-10 Editor image (CI, linux/amd64): built in 29 s, 1,264,698,610 bytes; `reel render` inside it on the fixtures exits 0 with every hard check true (tests/integration/editor/test_image.py).
 
 ## Log
 
