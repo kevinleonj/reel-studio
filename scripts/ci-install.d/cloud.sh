@@ -49,6 +49,8 @@ fetch "${TRIVY_URL}" "${TRIVY_SHA256}" trivy.tar.gz
 tar -xzf "${WORK}/trivy.tar.gz" -C "${WORK}" trivy
 install -m 0755 "${WORK}/trivy" "${BIN}/"
 
-terraform version | head -1
-tflint --version | head -1
-trivy --version | head -1
+# sed reads its whole input; `head -1` would close the pipe early and, under pipefail, turn the
+# writer's SIGPIPE into exit 141.
+terraform version | sed -n 1p
+tflint --version | sed -n 1p
+trivy --version | sed -n 1p
