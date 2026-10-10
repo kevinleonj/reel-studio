@@ -112,6 +112,21 @@ Written by the cloud lane only. Newest entry on top.
   task 8 smoke and the phone order, task 9 budget check. (Task 5's Gemini terms note is done: F409.)
 
 ## Open follow-ups (no project needed)
+- Review of the REVIEW-FIXES commits (8b1f5a9..e7d259d): PASS, 0 critical. Fixed after it: W3, W4
+  (rotation destroys only older versions; argv check covers every call). Open, close before your
+  first bootstrap run:
+  - W1: `conditional_roles` in check_policy fails open: it accepts any `condition` block (even
+    `expression = "true"`), ignores unresolvable roles, roles/owner or editor bound outright,
+    `google_project_iam_policy`, and an extra repository-wide workloadIdentityUser binding. Make it
+    fail closed, require `modifiedGrantsByRole` in the expression, deny-list owner/editor/
+    securityAdmin, and require deployer impersonation bindings to be environment-scoped.
+  - W2: `deployer_grantable_roles` (bootstrap) must equal infra/main's project-level grants; only a
+    comment holds that today. One allow-list in iam.toml plus a check_policy rule.
+  - W6: `test_deploy_workflow.py` matches substrings and only the two named jobs; anchor per line
+    and iterate every job with `id-token: write`.
+  - Suggestions: assert the forecast threshold and the conditional binding's member in the
+    bootstrap test; deploy.yml header still says only apply waits for approval; a LESSONS row for
+    the ungated deployer; check_policy.py is 322 lines.
 - `scripts/check_policy.py` false negatives (review W8): a `dynamic` block with `for_each = []`
   counts as present (e.g. a budget with no threshold rules), the `service.uri` ban is a text regex
   (misses `[0].uri`), and only direct children of `infra/` are roots. Fix by reading
