@@ -13,7 +13,7 @@ from reel_studio.api import routes_local, routes_orders, routes_public, static
 from reel_studio.api.deps import ApiDeps, Limiters, deps_of
 from reel_studio.api.errors import Refused, on_api_error, on_refused, on_validation
 from reel_studio.api.ratelimit import SlidingWindow
-from reel_studio.core.constants import MS_PER_SECOND
+from reel_studio.core.constants import MS_PER_S
 from reel_studio.core.errors import ApiError
 from reel_studio.core.logging import get_logger
 
@@ -54,7 +54,7 @@ def create_app(deps: ApiDeps) -> FastAPI:
                     "order_id": request.path_params.get("order_id"),
                     "stage": "api",
                     "event": "request",
-                    "latency_ms": round((time.monotonic() - started) * MS_PER_SECOND),
+                    "latency_ms": round((time.monotonic() - started) * MS_PER_S),
                     "outcome": response.status_code,
                 },
             )

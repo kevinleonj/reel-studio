@@ -66,7 +66,6 @@ COLOUR_CHANNELS = 3  # three-channel images: BGR, RGB and Lab pixels
 
 # ---------------------------------------------------------------- website and API (STEP-06, 07)
 
-MS_PER_SECOND = 1000  # unit conversion for the latency_ms log field (D74)
 # Random identifiers (ARCHITECTURE.md §4, D18): bytes from secrets.token_hex / token_urlsafe.
 ORDER_ID_BYTES = 16  # 32 hex characters
 LINK_TOKEN_BYTES = 32  # the order link's access token, 256 bits; only its SHA-256 is stored

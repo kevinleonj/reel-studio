@@ -14,7 +14,7 @@ from typing import Any
 from google.cloud import firestore
 
 from reel_studio.core import order_rules as rules
-from reel_studio.core.constants import MS_PER_SECOND, RUN_TOKEN_BYTES
+from reel_studio.core.constants import MS_PER_S, RUN_TOKEN_BYTES
 from reel_studio.core.errors import ErrorCode, WeekFull
 from reel_studio.core.logging import get_logger
 from reel_studio.core.ports import Clock, NewOrder, QueueLimits, Record, SweepReport
@@ -67,18 +67,16 @@ class FirestoreOrders:
         except (WeekFull, rules.WrongState) as refusal:
             # Expected refusals, not failures: one INFO line, no traceback (D74).
             extra.update(
-                latency_ms=round((time.monotonic() - started) * MS_PER_SECOND),
+                latency_ms=round((time.monotonic() - started) * MS_PER_S),
                 outcome=f"refused: {type(refusal).__name__}",
             )
             log.info("firestore %s refused", event, extra=extra)
             raise
         except Exception:
-            extra.update(
-                latency_ms=round((time.monotonic() - started) * MS_PER_SECOND), outcome="error"
-            )
+            extra.update(latency_ms=round((time.monotonic() - started) * MS_PER_S), outcome="error")
             log.exception("firestore %s failed", event, extra=extra)
             raise
-        extra.update(latency_ms=round((time.monotonic() - started) * MS_PER_SECOND), outcome="ok")
+        extra.update(latency_ms=round((time.monotonic() - started) * MS_PER_S), outcome="ok")
         log.info("firestore %s", event, extra=extra)
         return result
 
