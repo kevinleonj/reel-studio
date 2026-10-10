@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from reel_studio.core import config
-from reel_studio.core.errors import RenderError
+from reel_studio.core.errors import MediaError, RenderError
 from reel_studio.core.logging import configure
 from reel_studio.editor.media import tools
 
@@ -87,3 +87,12 @@ def test_probe_swaps_width_and_height_for_a_quarter_turn() -> None:
 def test_probe_without_video_stream_fails() -> None:
     with pytest.raises(RenderError, match="no video stream"):
         tools.parse_probe({"streams": [{"codec_type": "audio"}], "format": {}}, "song.m4a")
+
+
+@pytest.mark.parametrize(("width", "height"), [(0, 1080), (1920, 0), (-1, 1080)])
+def test_probe_with_no_picture_size_is_a_media_error(width: int, height: int) -> None:
+    video = {"codec_type": "video", "width": width, "height": height, "avg_frame_rate": "30/1"}
+    data = {"streams": [video], "format": {"duration": "4.0"}}
+
+    with pytest.raises(MediaError, match="size"):
+        tools.parse_probe(data, "IMG_0002.MOV")

@@ -79,3 +79,17 @@ def test_a_sliver_photo_is_skipped_with_a_log_line_and_the_order_goes_on(
 
     assert [p.source for p in proxies] == ["IMG_0.MOV"]
     assert any("SKIPPED sliver.png" in r.getMessage() for r in caplog.records)
+
+
+def test_a_video_whose_probe_says_width_0_is_skipped_and_the_order_goes_on(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    folder = _videos(tmp_path, 2)
+    zero = {"streams": [{"codec_type": "video", "width": 0, "height": 1080}], "format": {}}
+    fake = FakeFfmpeg(raw={"IMG_0.MOV": zero})  # REVIEW-FIXES engine item 2
+
+    with caplog.at_level("WARNING"):
+        proxies = prepare.prepare_folder(folder, tmp_path / "w", fake, config.load_media())  # type: ignore[arg-type]
+
+    assert [p.source for p in proxies] == ["IMG_1.MOV"]
+    assert any("SKIPPED IMG_0.MOV" in r.getMessage() for r in caplog.records)

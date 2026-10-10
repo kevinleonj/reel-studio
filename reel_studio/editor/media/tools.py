@@ -66,7 +66,9 @@ def parse_probe(data: Mapping[str, Any], name: str) -> Probe:  # Any: ffprobe JS
     audio = next((s for s in streams if s.get("codec_type") == "audio"), None)
     if video is None:
         raise RenderError(f"{name} has no video stream")
-    width, height = int(video["width"]), int(video["height"])
+    width, height = int(video.get("width") or 0), int(video.get("height") or 0)
+    if width <= 0 or height <= 0:  # a later division by the size would stop the whole order
+        raise RenderError(f"{name} has no picture size ({width}x{height})")
     if abs(_rotation(video)) % constants.HALF_TURN_DEG == constants.QUARTER_TURN_DEG:
         width, height = height, width
     fmt = data.get("format") or {}
