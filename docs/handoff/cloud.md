@@ -23,6 +23,15 @@ Written by the cloud lane only. Newest entry on top.
   `beta` environment may act as the deployer (F411). Consequence: you approve twice per deploy, once
   for the plan job and once for the apply job. The bootstrap root must be re-applied by you for
   this to take effect.
+- **Narrower secrets role, proposal (REVIEW-FIXES CLOUD 2, not built):** the deployer holds
+  `roles/secretmanager.admin` at project level, which can read every secret value. After item 1 it
+  is reachable only from approved `beta` jobs, acceptable for the beta. Replacement for after the
+  beta: a custom role `reelSecretIamAdmin` in the bootstrap root with exactly
+  `secretmanager.secrets.get`, `secretmanager.secrets.getIamPolicy` and
+  `secretmanager.secrets.setIamPolicy` (no `secretmanager.versions.access`, no create or delete:
+  the containers come from bootstrap, which you apply). infra/main only adds accessor bindings on
+  existing containers, so these three cover it; confirm with one plan before switching. Needs an
+  ARCHITECTURE §5 edit (yours).
 - **Fix c, proposal for your decision (ARCHITECTURE §5 change, not built):** a second account
   `github-planner@` bound through WIF to `attribute.environment/plan` (a `plan` environment with no
   reviewer, branches limited to main), holding only read roles: `roles/viewer` would be the simple
