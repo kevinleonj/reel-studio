@@ -10,7 +10,7 @@ import pytest
 from PIL import Image
 
 from reel_studio.core import config
-from reel_studio.core.errors import ModelRefusal
+from reel_studio.core.errors import CostCapReached, ModelRefusal
 from reel_studio.editor import critic, loop, meter
 from tests.fakes.claude import FakeClaude, response, text, tool_use
 from tests.fakes.clock import FrozenClock
@@ -183,11 +183,55 @@ def test_two_text_replies_are_a_refusal(tmp_path: Path) -> None:
         _critique(tmp_path, words, words)
 
 
-def test_a_score_outside_the_scale_is_rejected(tmp_path: Path) -> None:
-    bad = _scores(hook=7)
+def test_an_invalid_review_gets_its_problems_back_once(tmp_path: Path) -> None:
+    bad = response([tool_use("r", TOOL, _scores(hook=7))], "tool_use")
+    good = response([tool_use("r2", TOOL, _scores())], "tool_use")
+
+    review, fake = _critique(tmp_path, bad, good)
+
+    assert review.total == 28
+    answer = fake.requests[1]["messages"][-1]
+    assert answer["role"] == "user"
+    result = answer["content"][0]
+    assert (result["type"], result["tool_use_id"], result["is_error"]) == ("tool_result", "r", True)
+    assert "hook" in result["content"]
+
+
+def test_two_invalid_reviews_are_a_refusal(tmp_path: Path) -> None:
+    bad = response([tool_use("r", TOOL, _scores(hook=7))], "tool_use")
 
     with pytest.raises(ModelRefusal, match="invalid"):
-        _critique(tmp_path, response([tool_use("r", TOOL, bad)], "tool_use"))
+        _critique(tmp_path, bad, bad)
+
+
+def test_an_empty_reply_is_not_sent_back(tmp_path: Path) -> None:
+    empty = response([], "end_turn")
+
+    _, fake = _critique(tmp_path, empty, response([tool_use("r", TOOL, _scores())], "tool_use"))
+
+    messages = fake.requests[1]["messages"]
+    assert all(m["content"] for m in messages)
+    assert [m["role"] for m in messages] == ["user"]
+    assert messages[0]["content"][-1] == {"type": "text", "text": critic.NUDGE}
+
+
+class _FailingRevision(_Cycle):
+    def plan(self, feedback: str | None) -> str:
+        if feedback is not None:
+            raise CostCapReached("spent $4.90 + worst case $0.30 > cap $5")
+        return super().plan(feedback)
+
+
+def test_an_error_while_revising_ships_the_first_render_and_names_it() -> None:
+    c = _FailingRevision([_review(hook=3)])
+
+    final = critic.review_cycle(
+        c.plan, c.render, c.judge, GATES, config.load().limits.editor.max_renders
+    )
+
+    assert final.render == "render1-edl1" and not final.passed
+    assert final.weakness is not None
+    assert "hook 3 < 4" in final.weakness and "cost_cap" in final.weakness
 
 
 def test_the_review_tool_is_strict_and_carries_no_bounds() -> None:

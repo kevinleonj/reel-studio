@@ -17,12 +17,17 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from reel_studio.core import constants
 from reel_studio.core.config import Gates
-from reel_studio.core.errors import ModelRefusal
-from reel_studio.editor.loop import Session, call_claude
+from reel_studio.core.errors import EditorError, ModelRefusal, ProviderUnavailable
+from reel_studio.core.logging import get_logger
+from reel_studio.editor.loop import Session, answer, call_claude, continue_with
 from reel_studio.editor.tools import image_block, strict_schema
 
+log = get_logger(__name__)
+
+STAGE = "critic"
 TOOL = "submit_review"
 NUDGE = f"Call {TOOL} with your scores."
+TURNS = (1, 2)  # a nudge or one invalid review gets one more turn
 CATEGORIES = ("hook", "retention", "story", "peak", "craft", "share", "colour")  # qa-rubric.md
 TOTAL_MAX = len(CATEGORIES) * constants.CRITIC_SCORE_MAX
 
@@ -111,12 +116,29 @@ def review_cycle[E, R](
     gates: Gates,
     max_renders: int,
 ) -> Final[R]:
-    """Plan, render, judge; revise on a fail until `max_renders`; ship the higher total."""
+    """Plan, render, judge; revise on a fail until `max_renders`; ship the higher total.
+
+    Once a render exists, a revision that stops (cost cap, refusal, provider down) ships the best
+    render so far with the stop named (EDITOR §8); a spend limit still stops the order (D45).
+    """
     tried: list[tuple[R, Review, str]] = []
     note: str | None = None
     for number in range(1, max_renders + 1):
-        rendered = render(plan(note), number)
-        review = judge(rendered)
+        try:
+            rendered = render(plan(note), number)
+            review = judge(rendered)
+        except (EditorError, ProviderUnavailable) as exc:
+            if not tried:
+                raise
+            log.warning(
+                "revision %d stopped: %s",
+                number,
+                exc,
+                extra={"stage": STAGE, "event": "revision_stopped", "outcome": exc.code},
+            )
+            rendered, review, why = tried[-1]
+            tried[-1] = (rendered, review, f"{why}; revision stopped: {exc.code}")
+            break
         ok, why = passes(review, gates)
         if ok:
             return Final(rendered, review, True, None)
@@ -151,6 +173,17 @@ def _content(material: Material, max_side: int, quality: int) -> list[dict[str, 
     return blocks
 
 
+def _rejected(uses: list[dict[str, Any]], exc: ValidationError) -> list[dict[str, Any]]:
+    """A tool_result for every tool_use (F12); each names what to fix, as write_edl does."""
+    problems = "; ".join(f"{'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in exc.errors())
+    text = f"{TOOL} rejected: {problems}. Scores are whole numbers {constants.CRITIC_SCORE_MIN}-"
+    text += f"{constants.CRITIC_SCORE_MAX}. Call {TOOL} again."
+    return [
+        {"type": "tool_result", "tool_use_id": u["id"], "content": text, "is_error": True}
+        for u in uses
+    ]
+
+
 def critique(
     session: Session, system: str, material: Material, max_side: int, quality: int
 ) -> Review:
@@ -163,7 +196,7 @@ def critique(
     messages: list[dict[str, Any]] = [  # Any: content blocks
         {"role": "user", "content": _content(material, max_side, quality)}
     ]
-    for turn in (1, 2):
+    for turn in TURNS:
         request = {
             "model": editor.critic_model,
             "max_tokens": editor.max_tokens,
@@ -176,16 +209,18 @@ def critique(
         }
         reply = call_claude(session, request, turn)
         uses = [b for b in reply.get("content", []) if b.get("type") == "tool_use"]
+        messages = answer(messages, reply)
         if uses:
             try:
                 return Review.model_validate(uses[0].get("input"))
             except ValidationError as exc:
-                raise ModelRefusal(f"critic review invalid: {exc.error_count()} errors") from exc
+                if turn == len(TURNS):
+                    raise ModelRefusal(
+                        f"critic review invalid: {exc.error_count()} errors"
+                    ) from exc
+                messages.append({"role": "user", "content": _rejected(uses, exc)})
+                continue
         if reply.get("stop_reason") != "end_turn":
             raise ModelRefusal(f"critic stopped with {reply.get('stop_reason')}")
-        messages = [
-            *messages,
-            {"role": "assistant", "content": reply.get("content", [])},
-            {"role": "user", "content": NUDGE},
-        ]
+        messages = continue_with(messages, NUDGE)
     raise ModelRefusal("critic gave no review after a nudge")

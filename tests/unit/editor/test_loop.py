@@ -229,3 +229,50 @@ def test_a_continued_conversation_puts_the_new_text_after_the_last_tool_results(
     assert all(a != b for a, b in itertools.pairwise(roles))  # strictly alternating
     last = messages[-1]["content"]
     assert [b["type"] for b in last] == ["tool_result", "text"] and last[-1]["text"] == "Revise."
+
+
+def test_an_empty_end_turn_is_not_sent_back(tmp_path: Path) -> None:
+    script = [
+        response([], "end_turn"),
+        response([tool_use("w", "write_edl", GOOD_EDL)], "tool_use"),
+    ]
+
+    _, fake, _ = _run(tmp_path, script)
+
+    messages = fake.requests[1]["messages"]
+    assert all(m["content"] for m in messages)
+    roles = [m["role"] for m in messages]
+    assert all(a != b for a, b in itertools.pairwise(roles))
+    assert messages[-1]["content"][-1] == {"type": "text", "text": NUDGE}
+
+
+def test_earlier_messages_stay_byte_equal_between_requests(tmp_path: Path) -> None:
+    script = [
+        response([tool_use("a", "read_transcript", {"clip": "c01"})], "tool_use"),
+        response([text("Thinking.")], "end_turn"),
+        response([tool_use("w", "write_edl", GOOD_EDL)], "tool_use"),
+    ]
+
+    _, fake, _ = _run(tmp_path, script)
+
+    for before, after in itertools.pairwise(fake.requests):
+        kept = after["messages"][: len(before["messages"]) - 1]
+        assert json.dumps(kept) == json.dumps(before["messages"][: len(kept)])
+
+
+def test_the_guard_counts_the_whole_request(tmp_path: Path) -> None:
+    _, fake, _ = _run(tmp_path, [response([tool_use("w", "write_edl", GOOD_EDL)], "tool_use")])
+
+    counted, sent = fake.counted[0], fake.requests[0]
+    assert counted == {k: sent[k] for k in ("model", "system", "messages", "tools")}
+
+
+def test_null_cache_counts_cost_nothing_but_missing_usage_is_an_error() -> None:
+    usage = {"input_tokens": 10, "output_tokens": 5}
+    nulls = {"cache_creation_input_tokens": None, "cache_read_input_tokens": None}
+
+    counted = loop.usage_of({"usage": {**usage, **nulls}})
+
+    assert (counted.cache_write, counted.cache_read, counted.input_tokens) == (0, 0, 10)
+    with pytest.raises(KeyError):
+        loop.usage_of({"usage": {"output_tokens": 5}})
