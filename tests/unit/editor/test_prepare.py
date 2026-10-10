@@ -2,15 +2,26 @@
 
 from pathlib import Path
 
+import pytest
+
 from reel_studio.core import config
+from reel_studio.core.errors import MediaError
 from reel_studio.editor.media import prepare
 from reel_studio.editor.media.tools import Probe
 
+CAP = config.load_media().prepare.max_pixels
+
 
 def test_cover_size_fills_the_reel_frame_with_even_sides() -> None:
-    assert prepare.cover_size(1920, 1080) == (3414, 1920)
-    assert prepare.cover_size(1080, 1920) == (1080, 1920)
-    assert prepare.cover_size(1200, 1600) == (1440, 1920)
+    assert prepare.cover_size(1920, 1080, CAP) == (3414, 1920)
+    assert prepare.cover_size(1080, 1920, CAP) == (1080, 1920)
+    assert prepare.cover_size(1200, 1600, CAP) == (1440, 1920)
+
+
+def test_a_sliver_whose_cover_passes_the_pixel_cap_is_a_media_error() -> None:
+    # 1 x 10000 would cover at 1080 x 10,800,000: 11.7 gigapixels, about 33 GiB as RGB.
+    with pytest.raises(MediaError, match="pixels"):
+        prepare.cover_size(1, 10000, CAP)
 
 
 def test_tonemap_chain_uses_the_kit_curve_and_peak() -> None:

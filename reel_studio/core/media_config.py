@@ -52,6 +52,7 @@ class Prepare(_Strict):
     audio_codec: str
     audio_bitrate_kbps: int
     silent_track_layout: str
+    max_pixels: int
     tonemap: Tonemap
     photo: Photo
 

@@ -117,6 +117,7 @@ Snapshot: 9 Oct 2026 unless the row says otherwise.
 | F204 | Hard cut detection on the fixtures | AdaptiveDetector finds the 90 s fixture's cut at 45 s within 0.1 s on the 1080x1920 proxy | tests/integration/editor/test_measure.py | 10 Oct 2026 | measured |
 | F205 | uv image digest | `ghcr.io/astral-sh/uv:0.12.24` index `sha256:3af4716e991d6956a41e573eab705d0ee08500cd829ed30293eb8472f372c65a` (the uv this repo pins, F39) | https://ghcr.io/v2/astral-sh/uv/manifests/0.12.24 | 10 Oct 2026 | verified |
 | F206 | ffmpeg filters the editor uses | Documented in ffmpeg-filters: zscale (npl), tonemap (desat), lut3d (interp=tetrahedral), loudnorm (print_format, measured_I, linear), alimiter (level), atempo, ebur128, blackdetect (pix_th), freezedetect, boxblur, zoompan, overlay, anullsrc, apad, atrim, afade, aresample, setpts, concat, eq, split. Arguments are the kit's, byte-identical (phase B review). A single quote, colon or backslash in a quoted filter argument needs escaping, so LUT paths are refused when they hold one | https://ffmpeg.org/ffmpeg-filters.html | 10 Oct 2026 | verified |
+| F209 | Pillow pixel limit | `Image.MAX_IMAGE_PIXELS` = 1024³ // 4 // 3 = 89,478,485 pixels (about 256 MiB as RGB): a warning above it, `DecompressionBombError` above twice it. `Image.open` is lazy: it reads the header, so `.size` costs no decode. Pillow 12.3.0 prints 89478485 | https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.open , https://github.com/python-pillow/pillow/blob/12.3.0/src/PIL/Image.py | 10 Oct 2026 | verified |
 
 ## Product and craft
 

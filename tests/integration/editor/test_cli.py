@@ -2,7 +2,10 @@
 
 import hashlib
 import json
+import shutil
 from pathlib import Path
+
+from PIL import Image
 
 from reel_studio.cli import reel
 from reel_studio.editor.media import qa, render
@@ -58,3 +61,21 @@ def test_edl_with_errors_exits_2_without_rendering(
 
     assert code == 2
     assert not (out / render.TEXT).exists()
+
+
+def test_a_sliver_photo_among_the_clips_is_skipped_and_the_reel_still_renders(
+    clips_dir: Path, tools: make_clips.Tools, tmp_path: Path, make_settings: MakeSettings
+) -> None:
+    settings = make_settings(
+        EditorSettings, ffmpeg_path=str(tools.ffmpeg), ffprobe_path=str(tools.ffprobe)
+    )
+    assert isinstance(settings, EditorSettings)
+    folder = tmp_path / "clips"
+    shutil.copytree(clips_dir, folder)
+    Image.new("RGB", (10, 4300)).save(folder / "sliver.png")  # REVIEW-FIXES engine item 1
+    out = tmp_path / "out"
+
+    code = reel.main(["render", "--edl", str(BASIC), str(folder), "--out", str(out)], settings)
+
+    assert code == 0
+    assert (out / render.TEXT).is_file() and (out / render.CLEAN).is_file()

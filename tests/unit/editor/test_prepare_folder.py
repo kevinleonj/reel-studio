@@ -66,3 +66,16 @@ def test_a_decompression_bomb_photo_is_skipped_not_fatal(
     proxies = prepare.prepare_folder(folder, tmp_path / "w", FakeFfmpeg(), config.load_media())  # type: ignore[arg-type]
 
     assert [p.source for p in proxies] == ["IMG_0.MOV"]
+
+
+def test_a_sliver_photo_is_skipped_with_a_log_line_and_the_order_goes_on(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    folder = _videos(tmp_path, 1)
+    Image.new("RGB", (10, 4300)).save(folder / "sliver.png")  # REVIEW-FIXES engine item 1
+
+    with caplog.at_level("WARNING"):
+        proxies = prepare.prepare_folder(folder, tmp_path / "w", FakeFfmpeg(), config.load_media())  # type: ignore[arg-type]
+
+    assert [p.source for p in proxies] == ["IMG_0.MOV"]
+    assert any("SKIPPED sliver.png" in r.getMessage() for r in caplog.records)

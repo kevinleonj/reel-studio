@@ -33,6 +33,8 @@ gop_seconds = 1                     # keyframe every fps frames = 1 s; prep.py:8
 audio_codec = "aac"                 # prep.py:84
 audio_bitrate_kbps = 192            # kbps; prep.py:84
 silent_track_layout = "stereo"      # anullsrc layout added to clips with no audio; prep.py:80
+max_pixels = 89_478_485             # cap on a cover size and on a style photo: Pillow's own
+                                    # MAX_IMAGE_PIXELS, about 256 MiB as RGB (F209); the kit had none
 
 [prepare.tonemap]                   # HDR (HLG/PQ BT.2020) -> SDR BT.709, needs zscale (F45)
 npl = 100                           # nominal peak luminance, cd/m2; 203 came out ~25% darker; prep.py:40-41,44

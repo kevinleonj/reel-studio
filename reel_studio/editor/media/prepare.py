@@ -94,10 +94,20 @@ def sort_key(path: Path, info: Probe | None) -> tuple[float, str]:
     return (stamp if stamp is not None else path.stat().st_mtime, path.name)
 
 
-def cover_size(width: int, height: int) -> tuple[int, int]:
-    """Smallest even size that covers the Reel frame (kit prep.py:61-63)."""
+def cover_size(width: int, height: int, max_pixels: int) -> tuple[int, int]:
+    """Smallest even size that covers the Reel frame (kit prep.py:61-63).
+
+    A sliver (1 x 10000) would cover at gigapixels and exhaust memory, so a cover above
+    `max_pixels` is a MediaError: that one file is skipped and the order goes on.
+    """
     scale = max(constants.OUT_W / width, constants.OUT_H / height)
-    return round(width * scale / 2) * 2, round(height * scale / 2) * 2
+    cover = round(width * scale / 2) * 2, round(height * scale / 2) * 2
+    if cover[0] * cover[1] > max_pixels:
+        raise MediaError(
+            f"{width}x{height} would need {cover[0]}x{cover[1]} pixels to fill the frame"
+            f" (limit {max_pixels})"
+        )
+    return cover
 
 
 def tonemap_chain(transfer: str, cfg: Tonemap) -> str:
@@ -116,7 +126,7 @@ def _silent_track() -> list[str]:
 def make_proxy(src: Path, dst: Path, info: Probe, ctx: Context) -> tuple[int, int, int, str]:
     """Video -> proxy; returns width, height, fps and a colour note (kit prep.py:66-87)."""
     cfg = ctx.media.prepare
-    width, height = cover_size(info.width, info.height)
+    width, height = cover_size(info.width, info.height, cfg.max_pixels)
     fps = cfg.proxy_fps_high if info.fps >= cfg.high_fps_threshold else cfg.proxy_fps_low
     filters, note = [], "sdr"
     if is_hdr(info) and info.color_transfer is not None:
@@ -173,14 +183,16 @@ def make_proxy(src: Path, dst: Path, info: Probe, ctx: Context) -> tuple[int, in
     return width, height, fps, note
 
 
-def photo_proxy(src: Path, dst: Path, ffmpeg: Ffmpeg, cfg: Photo) -> tuple[int, int, int]:
+def photo_proxy(
+    src: Path, dst: Path, ffmpeg: Ffmpeg, cfg: Photo, max_pixels: int
+) -> tuple[int, int, int]:
     """Still -> short clip with a slow push-in so it does not look frozen (prep.py:90-115)."""
     try:
         with Image.open(src) as opened:
             image = ImageOps.exif_transpose(opened).convert("RGB")
     except (OSError, UnidentifiedImageError, Image.DecompressionBombError) as exc:
         raise MediaError(f"Cannot open photo {src.name}: {exc}") from exc
-    width, height = cover_size(*image.size)
+    width, height = cover_size(*image.size, max_pixels)
     still = dst.with_suffix(".png")
     image.resize((width, height), Image.Resampling.LANCZOS).save(still)
     frames = int(cfg.seconds * cfg.fps)
@@ -242,7 +254,9 @@ def _one(src: Path, cid: str, work: Path, info: Probe | None, ctx: Context) -> P
             width, height, fps, note = make_proxy(staged, dst, info, ctx)
             kind: Literal["video", "photo"] = "video"
         else:
-            width, height, fps = photo_proxy(staged, dst, ctx.ffmpeg, ctx.media.prepare.photo)
+            width, height, fps = photo_proxy(
+                staged, dst, ctx.ffmpeg, ctx.media.prepare.photo, ctx.media.prepare.max_pixels
+            )
             note, kind = "photo", "photo"
     finally:
         staged.unlink(missing_ok=True)
