@@ -20,3 +20,7 @@ BYTES_PER_GB = 1_000_000_000  # config/limits.toml max_total_bytes is decimal: 4
 ASSET_MAX_AGE_S = 31_536_000  # one year: hashed /_astro/* files are immutable (ARCHITECTURE.md §7)
 EMAIL_ADDRESS_MAX_CHARS = 254  # RFC 5321 §4.5.3.1.3: longest forward path, minus the angle brackets
 INVITE_CODE_MAX_CHARS = 64  # Stripe promotion codes are shorter; this only bounds the request body
+UPLOAD_SESSION_ID_MAX_CHARS = (
+    128  # bounds the id in a path; ids are 32 chars (UPLOAD_SESSION_BYTES)
+)
+FILE_NAME_MAX_CHARS = 255  # APFS and ext4 name limit: a longer name could not be stored

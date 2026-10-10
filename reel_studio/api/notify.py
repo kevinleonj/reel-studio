@@ -40,21 +40,11 @@ class Notifier:
     def order_failed(self, order_id: str, code: ErrorCode, stage: str) -> None:
         """`stage` names where it broke when the order cannot say (no stage was ever set)."""
         doc = self._orders.get(order_id)
-        if doc is None:
-            return
+        if doc is None or doc["status"] != "failed":
+            return  # a sweep that raced a finish must not say "didn't finish"
         done = doc.get("stages_done")
         where = str(done[-1]) if isinstance(done, list) and done else stage
-        email = doc.get("email")
-        if self._orders.claim_email(order_id, "failed") and isinstance(email, str) and email:
-            self._send(
-                "failed",
-                email,
-                {
-                    "order_id": order_id,
-                    "message": failure_message(str(code)),
-                    "start_url": f"{self._site}/new",
-                },
-            )
+        # Kevin first: his alert needs nothing from the copy table, so nothing below can stop it.
         if self._orders.claim_email(order_id, "kevin"):
             alert: dict[str, object] = {
                 "order_id": order_id,
@@ -63,3 +53,28 @@ class Notifier:
                 "code": str(code),
             }
             self._send("kevin", self._kevin, alert)
+        email = doc.get("email")
+        if not (isinstance(email, str) and email):
+            return
+        try:
+            # Built before the claim: if the words cannot be read, the email stays unclaimed.
+            failed: dict[str, object] = {
+                "order_id": order_id,
+                "message": failure_message(str(code)),
+                "start_url": f"{self._site}/new",
+            }
+        except (OSError, ValueError, KeyError):
+            # Nothing retries this later (the sweep reports an order once): logged for Kevin,
+            # whose alert above already went out.
+            log.exception(
+                "customer failure email could not be built",
+                extra={
+                    "order_id": order_id,
+                    "stage": "notify",
+                    "event": "failed",
+                    "outcome": "error",
+                },
+            )
+            return
+        if self._orders.claim_email(order_id, "failed"):
+            self._send("failed", email, failed)

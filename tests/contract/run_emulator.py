@@ -52,8 +52,14 @@ SERVICES = (
 )
 
 
-def docker(*args: str) -> None:
-    subprocess.run(["docker", *args], check=True, timeout=DOCKER_TIMEOUT_S)  # noqa: S603, S607
+def docker(*args: str, check: bool = True) -> int:
+    try:
+        done = subprocess.run(["docker", *args], check=check, timeout=DOCKER_TIMEOUT_S)  # noqa: S603, S607
+    except subprocess.TimeoutExpired:
+        if check:
+            raise
+        return -1  # check=False (the stop loop): report it, keep stopping the others
+    return done.returncode
 
 
 def wait_ready(port: int) -> None:
@@ -112,7 +118,9 @@ def main() -> int:
         return subprocess.run(cmd, env=env, check=False).returncode  # noqa: S603
     finally:
         for name in started:
-            docker("stop", name)
+            # Stop every container even if one stop fails, so the next run can start cleanly.
+            if docker("stop", name, check=False) != 0:
+                sys.stderr.write(f"could not stop {name}: run `docker stop {name}`\n")
 
 
 if __name__ == "__main__":

@@ -80,7 +80,7 @@ class SmtpMailer:
                 type(error).__name__,
                 extra={**extra, "latency_ms": latency, "outcome": "error"},
             )
-            raise DeliveryFailed(template) from error
+            raise DeliveryFailed(template) from None
         # Never the address or the body (D74, CLAUDE.md): template and latency only.
         latency = round((time.monotonic() - started) * MS_PER_SECOND)
         log.info("email %s sent", template, extra={**extra, "latency_ms": latency, "outcome": "ok"})

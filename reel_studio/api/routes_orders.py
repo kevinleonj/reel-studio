@@ -1,5 +1,6 @@
 """The order routes behind the `X-Order-Token` header (docs/ARCHITECTURE.md §7)."""
 
+import unicodedata
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Request
@@ -9,6 +10,7 @@ from reel_studio.api.deps import ApiDeps, client_address, deps_of, limiters_of
 from reel_studio.api.errors import invalid, not_found, wrong_status
 from reel_studio.api.tokens import ORDER_ID, token_matches
 from reel_studio.api.views import order_view
+from reel_studio.core.constants import FILE_NAME_MAX_CHARS
 from reel_studio.core.errors import BadType, NoFiles, RateLimited, TooLarge, TooManyFiles
 from reel_studio.core.logging import get_logger
 from reel_studio.core.order_rules import WrongState
@@ -76,7 +78,7 @@ def cancel(order: Authorised) -> dict[str, object]:
 
 class FileIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    name: str = Field(min_length=1)
+    name: str = Field(min_length=1, max_length=FILE_NAME_MAX_CHARS)
     size: int = Field(ge=0)
     type: str
 
@@ -93,7 +95,9 @@ def uploads(batch: UploadBatch, order: Authorised) -> dict[str, object]:
         raise wrong_status()
     if not batch.files:
         raise NoFiles
-    if len({f.name for f in batch.files}) != len(batch.files):
+    if len({unicodedata.normalize("NFC", f.name).casefold() for f in batch.files}) != len(
+        batch.files
+    ):
         raise invalid("the same file name twice in one batch")
     rules = order.deps.config.limits.order
     already = list(order.deps.storage.list_inputs(order.id))

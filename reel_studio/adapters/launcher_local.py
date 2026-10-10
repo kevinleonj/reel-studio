@@ -47,8 +47,21 @@ class Dispatcher:
         self._notifier = notifier
 
     def _failed(self, order_id: str, stage: str) -> None:
-        if self._notifier is not None:
+        if self._notifier is None:
+            return
+        try:
             self._notifier.order_failed(order_id, ErrorCode.JOB_KILLED, stage)
+        except Exception:
+            # Logged with its traceback; the other orders of this sweep still get their notices.
+            log.exception(
+                "failure notice not sent",
+                extra={
+                    "order_id": order_id,
+                    "stage": "dispatcher",
+                    "event": "notify",
+                    "outcome": "error",
+                },
+            )
 
     def tick(self) -> None:
         """One pass: sweep when due, then start queued orders while slots are free."""

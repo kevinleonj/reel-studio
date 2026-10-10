@@ -28,9 +28,10 @@ ORDER_SHELL = "o/index.html"
 def _inside(dist: Path, relative: str) -> Path | None:
     try:
         path = (dist / relative).resolve()
-    except (ValueError, OSError):  # a NUL byte or an unusable name: not a file of the site
+        found = dist.resolve() in path.parents and path.is_file()
+    except (ValueError, OSError):  # a NUL byte, a name too long: not a file of the site
         return None
-    return path if dist.resolve() in path.parents and path.is_file() else None
+    return path if found else None
 
 
 def _resolve(dist: Path, path: str) -> tuple[Path, dict[str, str]] | None:

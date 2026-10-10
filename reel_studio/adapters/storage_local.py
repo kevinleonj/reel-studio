@@ -17,8 +17,15 @@ from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import quote, unquote, urlencode
 
-from reel_studio.core.constants import SECONDS_PER_MINUTE, UPLOAD_SESSION_BYTES
+from reel_studio.core.constants import (
+    SECONDS_PER_MINUTE,
+    UPLOAD_SESSION_BYTES,
+    UPLOAD_SESSION_ID_MAX_CHARS,
+)
+from reel_studio.core.logging import get_logger
 from reel_studio.core.ports import Clock, Record, UploadTarget
+
+log = get_logger(__name__)
 
 PREFIXES = ("in", "work", "out")
 PARTIAL = ".part"
@@ -74,16 +81,23 @@ class LocalStorage:
         return path
 
     def _session_file(self, session: str) -> Path:
-        if not re.fullmatch(r"[A-Za-z0-9_-]+", session):
+        if not re.fullmatch(rf"[A-Za-z0-9_-]{{1,{UPLOAD_SESSION_ID_MAX_CHARS}}}", session):
             raise SessionNotFound(session)
         return self._sessions / f"{session}.json"
 
     def _load(self, session: str) -> dict[str, object]:
         try:
             loaded: dict[str, object] = json.loads(self._session_file(session).read_text())
-        except FileNotFoundError:
+        except (OSError, ValueError):  # missing, unreadable or a record cut off mid-write
             raise SessionNotFound(session) from None
         return loaded
+
+    def _write_record(self, session: str, record: dict[str, object]) -> None:
+        # Write then rename: a crash leaves the old record or the new one, never a torn file.
+        path = self._session_file(session)
+        temporary = path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(record))
+        temporary.replace(path)
 
     # ------------------------------------------------------------ port
 
@@ -92,7 +106,7 @@ class LocalStorage:
         size = int(str(file["size"]))
         session = secrets.token_urlsafe(UPLOAD_SESSION_BYTES)
         record = {"order_id": order_id, "key": f"in/{order_id}/{name}", "size": size, "received": 0}
-        self._session_file(session).write_text(json.dumps(record))
+        self._write_record(session, record)
         return {"name": name, "upload_url": f"{self._upload_path}/{session}"}
 
     def list_inputs(self, order_id: str) -> list[Record]:
@@ -133,7 +147,16 @@ class LocalStorage:
             if folder.exists():
                 shutil.rmtree(folder)
         for session in self._sessions.glob("*.json"):
-            if json.loads(session.read_text()).get("order_id") == order_id:
+            try:
+                owner = json.loads(session.read_text()).get("order_id")
+            except (OSError, ValueError):
+                # Another order's record cut off mid-write must not block this delete.
+                log.warning(
+                    "unreadable upload session record skipped",
+                    extra={"stage": "storage", "event": "delete", "outcome": "skipped"},
+                )
+                continue
+            if owner == order_id:
                 self.partial_of(session.stem).unlink(missing_ok=True)
                 session.unlink(missing_ok=True)
 
@@ -169,14 +192,22 @@ class LocalStorage:
         size, received = int(str(record["size"])), int(str(record["received"]))
         partial = self.partial_of(session)
         query, chunk = QUERY.match(content_range), CHUNK.match(content_range)
+        if query is None and chunk is None:
+            raise ValueError(f"malformed Content-Range: {content_range!r}")
+        if not record.get("complete") and partial.exists() and partial.stat().st_size < received:
+            # The disk holds fewer bytes than the record counted (for a status query as for a
+            # chunk): report what is really there, so the client resends from it instead of
+            # finishing a file with a zero-filled hole.
+            received = partial.stat().st_size
+            record = {**record, "received": received}
+            self._write_record(session, record)
+            return self._answer(received, size)
         if query is not None:
             if int(query["total"]) != size:
                 raise ValueError(
                     f"Content-Range total {query['total']} is not the session size {size}"
                 )
-        elif chunk is None:
-            raise ValueError(f"malformed Content-Range: {content_range!r}")
-        elif not record.get("complete"):
+        elif chunk is not None and not record.get("complete"):
             start, end, total = int(chunk["start"]), int(chunk["end"]), int(chunk["total"])
             if total != size or end >= size or end < start or len(body) != end - start + 1:
                 raise ValueError(
@@ -193,10 +224,13 @@ class LocalStorage:
                     handle.write(body[received - start :])
                 received = end + 1
                 record = {**record, "received": received}
-                self._session_file(session).write_text(json.dumps(record))
-        if received == size and not record.get("complete"):
-            self._finalise(partial, self._path(str(record["key"])), size)
-            self._session_file(session).write_text(json.dumps({**record, "complete": True}))
+                self._write_record(session, record)
+        final = self._path(str(record["key"]))
+        moved = not partial.exists() and final.is_file() and final.stat().st_size == size
+        if received == size and not record.get("complete") and not moved:
+            self._finalise(partial, final, size)
+        if received == size and not record.get("complete"):  # also after a crash past the move
+            self._write_record(session, {**record, "complete": True})
         return self._answer(received, size)
 
     @staticmethod

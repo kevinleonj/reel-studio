@@ -46,19 +46,20 @@ def test_a_dead_lease_emails_the_customer_and_kevin_once() -> None:
     clock.advance(timedelta(minutes=2))
     dispatcher.tick()  # a second sweep finds nothing new and sends nothing
     assert [(m.template, m.to) for m in mailer.sent] == [
-        ("failed", "friend@example.test"),
         ("kevin", KEVIN),
+        ("failed", "friend@example.test"),
     ]
-    failed = mailer.sent[0]
+    failed = mailer.sent[1]
     assert "Something broke while cutting. Kevin has been notified." in failed.text
     assert f"{SITE}/new" in failed.text
-    assert mailer.sent[1].subject == f"[reel-studio] failed {'a' * 32} at running: job_killed"
+    assert mailer.sent[0].subject == f"[reel-studio] failed {'a' * 32} at running: job_killed"
 
 
 def test_without_an_email_only_kevin_hears() -> None:
     clock = FrozenClock(START)
     orders, mailer = FakeOrders(clock, LIMITS), FakeMailer()
     running(orders, "a" * 32, "")
+    orders.fail("a" * 32, code=ErrorCode.RENDER_ERROR)
     notifier(orders, mailer).order_failed("a" * 32, ErrorCode.RENDER_ERROR, "rendering")
     assert [m.to for m in mailer.sent] == [KEVIN]
 
@@ -71,6 +72,7 @@ def test_a_mail_server_failure_never_breaks_the_caller() -> None:
     clock = FrozenClock(START)
     orders = FakeOrders(clock, LIMITS)
     running(orders, "a" * 32, "friend@example.test")
+    orders.fail("a" * 32, code=ErrorCode.RENDER_ERROR)  # the notifier speaks only for failed orders
     Notifier(orders, DownMailer(), site_url=SITE, kevin=KEVIN).order_failed(
         "a" * 32, ErrorCode.RENDER_ERROR, "x"
     )

@@ -17,16 +17,20 @@ class SlidingWindow:
         self._clock = clock
         self._calls: dict[str, deque[datetime]] = {}
         self._lock = threading.Lock()
+        self._pruned_at: datetime | None = None
 
     def allow(self, address: str) -> bool:
         now = self._clock.now()
         with self._lock:
+            if self._pruned_at is None or now - self._pruned_at >= WINDOW:
+                # Without this, every address that ever called would stay in memory.
+                stale = [a for a, c in self._calls.items() if not c or now - c[-1] >= WINDOW]
+                for gone in stale:
+                    del self._calls[gone]
+                self._pruned_at = now
             calls = self._calls.setdefault(address, deque())
             while calls and now - calls[0] >= WINDOW:
                 calls.popleft()
-            if not calls:
-                del self._calls[address]  # an address seen once is not kept forever
-                calls = self._calls.setdefault(address, deque())
             if len(calls) >= self._limit:
                 return False
             calls.append(now)

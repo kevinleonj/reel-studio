@@ -117,6 +117,83 @@ def test_bytes_written_before_a_lost_record_are_not_duplicated(
     assert read(storage, tmp_path) == b"01234567"
 
 
+def test_deleting_the_order_removes_unfinished_bytes(storage: LocalStorage, tmp_path: Path) -> None:
+    session = session_of(storage, 10)
+    storage.put_chunk(session, "bytes 0-3/10", b"0123")
+    storage.delete_order(ORDER)
+    assert not storage.partial_of(session).exists()
+    assert list((tmp_path / "data" / "sessions").iterdir()) == []
+
+
+def test_a_broken_session_record_of_another_order_does_not_block_a_delete(
+    storage: LocalStorage,
+) -> None:
+    storage.create_upload_session(ORDER, {"name": "y.mov", "size": 4, "type": "video/mp4"})
+    (storage.partial_of("x").parent / "broken.json").write_text("")  # a write cut off mid-way
+    storage.delete_order(ORDER)
+    assert storage.list_inputs(ORDER) == []
+
+
+def test_a_partial_shorter_than_its_record_is_resent_not_zero_filled(
+    storage: LocalStorage, tmp_path: Path
+) -> None:
+    session = session_of(storage, 8)
+    storage.put_chunk(session, "bytes 0-3/8", b"0123")
+    storage.partial_of(session).write_bytes(b"01")  # the disk lost bytes the record counted
+    assert storage.put_chunk(session, "bytes 4-7/8", b"4567") == ChunkAnswer(308, "bytes=0-1")
+    storage.put_chunk(session, "bytes 2-7/8", b"234567")
+    assert read(storage, tmp_path) == b"01234567"
+
+
+def test_a_crash_after_the_file_moved_still_answers_complete(
+    storage: LocalStorage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session = session_of(storage, 4)
+    real = Path.write_text
+
+    def crash_on_complete(self: Path, data: str, *args: object, **kwargs: object) -> int:
+        if self.name == f"{session}.tmp" and '"complete"' in data:  # records go via a temp file
+            raise OSError("killed here")
+        return real(self, data, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "write_text", crash_on_complete)
+    with pytest.raises(OSError):
+        storage.put_chunk(session, "bytes 0-3/4", b"0123")
+    monkeypatch.undo()
+    assert storage.put_chunk(session, "bytes */4", b"") == ChunkAnswer(200, None)
+
+
+def test_two_orders_with_the_same_file_name_never_cross(
+    storage: LocalStorage, tmp_path: Path
+) -> None:
+    other = "b" * 32
+    a = session_of(storage, 4)
+    b = str(
+        storage.create_upload_session(other, {"name": "a.mp4", "size": 4, "type": "video/mp4"})[
+            "upload_url"
+        ]
+    ).rsplit("/", 1)[1]
+    storage.put_chunk(a, "bytes 0-3/4", b"AAAA")
+    storage.put_chunk(b, "bytes 0-3/4", b"BBBB")
+    storage.delete_order(ORDER)
+    out = tmp_path / "other"
+    storage.download(f"in/{other}/a.mp4", out)
+    assert out.read_bytes() == b"BBBB"
+
+
+def test_a_delete_that_cannot_remove_a_folder_raises(storage: LocalStorage, tmp_path: Path) -> None:
+    session = session_of(storage, 1)
+    storage.put_chunk(session, "bytes 0-0/1", b"x")
+    inner = tmp_path / "data" / "objects" / "in" / ORDER
+    inner.chmod(0o500)  # read and enter only: its files cannot be removed
+    try:
+        with pytest.raises(OSError):
+            storage.delete_order(ORDER)
+    finally:
+        inner.chmod(0o700)
+    assert [f["name"] for f in storage.list_inputs(ORDER)] == ["a.mp4"]
+
+
 def test_unknown_session(storage: LocalStorage) -> None:
     with pytest.raises(SessionNotFound):
         storage.put_chunk("nope", "bytes */10", b"")
