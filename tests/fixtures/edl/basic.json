@@ -1,0 +1,22 @@
+{
+  "format": "recipe",
+  "text_style": "outline",
+  "defaults": {"zoom": 1.0},
+  "grade": {"look": "reference", "strength": 0.6, "match": 0.6},
+  "audio": {"natural_db": 0},
+  "versions": [
+    {
+      "name": "A",
+      "hook_text": "Self test title card",
+      "segments": [
+        {"clip": "c01", "in": 0.5, "out": 2.0, "role": "hook", "note": "HDR clip, rotated"},
+        {"clip": "c02", "in": 0.0, "out": 0.9, "speed": 0.5, "role": "reveal", "text": "Slow motion"},
+        {"clip": "c03", "in": 0.0, "out": 3.0, "speed": 2.0, "focus_x": 0.2, "role": "mix", "rotate": 180, "text": "Landscape crop"},
+        {"clip": "c04", "in": 1.0, "out": 9.0, "speed": 4.0, "role": "bake", "zoom": 1.3, "text": "Long take 4x"},
+        {"clip": "c05", "in": 0.0, "out": 1.5, "role": "detail"},
+        {"clip": "c03", "in": 3.0, "out": 4.0, "role": "ambience", "fit": "blur"},
+        {"clip": "c01", "in": 2.0, "out": 3.5, "role": "payoff"}
+      ]
+    }
+  ]
+}
