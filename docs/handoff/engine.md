@@ -3,11 +3,11 @@
 Written by the engine lane only. Newest entry on top.
 
 ## Status board
-- Done: STEP-02 tasks 1-5; pull request #2 open, CI green; `step02.py --local` PASS
-- Partly: the gate without `--local` (runs after this commit's CI)
+- Done: STEP-02 tasks 1-5; REVIEW-FIXES engine items 1-5 (0e71d7f, 03e3d6d, 3275ff2, cc64aba, d02de3e)
+- Partly: the gate without `--local` (runs after this push's CI)
 - Blocked: —
-- Not started: STEP-03 (not tonight, TONIGHT.md)
-- Next: Kevin reviews and merges #2; answers Needs Kevin 5, 10-14
+- Not started: STEP-03 on this branch (parked locally on `step-03-editor-loop` until #2 merges)
+- Next: Kevin reviews and merges #2; answers Needs Kevin 5, 10-16
 - Ledger: Context7 entries for numpy, cv2, scenedetect, PIL, pillow_heif in `eval/doc-ledger.pending.json`
 
 ## Needs Kevin
@@ -61,6 +61,15 @@ under `reel_studio/editor/media/fonts/`, no host-font fallbacks. Sheets failing 
 - 2026-10-10 Editor image (CI, linux/amd64): built in 29 s, 1,264,698,610 bytes; `reel render` inside it on the fixtures exits 0 with every hard check true (tests/integration/editor/test_image.py).
 
 ## Log
+
+### 2026-10-10 REVIEW-FIXES engine items 1-5 (step-02-pipeline)
+Before: one odd photo (10 x 4300) or a width-0 probe aborted the order (MemoryError,
+ZeroDivisionError); style photos decoded at any size; natural_db -6 gave -19.9 LUFS; one CLI test
+could not fail. After: each bad file is skipped with a `SKIPPED` or `style photo ... skipped` log
+line; `media.toml [prepare].max_pixels` = Pillow's limit (F209) caps cover sizes and style photos;
+loudness lands within 1 LU of -14 at natural_db -6; the read-only test reaches the read (checked
+against a mutant). Each item has its failing test first and its own commit. LESSONS L13-L15.
+Follow-up: Needs Kevin 16 (natural_db has no audible effect now).
 
 ### 2026-10-10 — STEP-02 phase B: the media package, `reel render`, the editor image
 
