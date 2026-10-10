@@ -68,10 +68,11 @@ def test_secrets_push_sends_each_value_on_stdin_only() -> None:
     for args, stdin, timeout in runner.calls:
         assert f"--project={PROJECT}" in args
         assert timeout == TIMEOUT_S
+        argv = " ".join(args)
+        assert not any(v.get_secret_value() in argv for v in values.values()), args
         if stdin is not None:
             assert args[2:4] == ["versions", "add"]
             assert "--data-file=-" in args
-            assert stdin not in " ".join(args)
 
 
 def test_secrets_push_destroys_the_previous_version_after_the_new_one_is_enabled() -> None:
@@ -105,6 +106,26 @@ def test_secrets_push_first_version_destroys_nothing() -> None:
     assert commands(runner, "destroy") == []
 
 
+def test_secrets_push_never_destroys_a_newer_version_from_another_writer() -> None:
+    newer = "projects/p/secrets/x/versions/8"
+    runner = rotating_runner(listed=f"{newer}\n{NEW}\n{OLD}\n")
+
+    secrets_push.push_all(runner, PROJECT, {"gemini-api-key": SecretStr("g2")}, TIMEOUT_S)
+
+    assert [c[4] for c in commands(runner, "destroy")] == ["6"]
+
+
+def test_a_failed_rotation_message_never_echoes_the_value() -> None:
+    runner = rotating_runner(state="DISABLED")
+
+    with pytest.raises(_shell.CommandError) as caught:
+        secrets_push.push_all(
+            runner, PROJECT, {"gemini-api-key": SecretStr("g2-secret")}, TIMEOUT_S
+        )
+
+    assert "g2-secret" not in str(caught.value)
+
+
 def test_secrets_push_never_destroys_the_new_version_even_if_listed_twice() -> None:
     runner = rotating_runner(listed=f"{NEW}\n{NEW}\n{OLD}\n")
 
@@ -124,7 +145,13 @@ def test_secrets_push_names_exactly_the_three_cloud_secrets() -> None:
 
 
 def test_secrets_push_stops_on_the_first_failure_without_echoing_values() -> None:
-    runner = FakeRunner(fail="gemini-api-key")
+    runner = FakeRunner(
+        answers={
+            "versions add": "projects/p/secrets/x/versions/7\n",
+            "versions describe": "ENABLED\n",
+        },
+        fail="gemini-api-key",
+    )
     values = {"anthropic-api-key": SecretStr("a1"), "gemini-api-key": SecretStr("g2")}
 
     with pytest.raises(_shell.CommandError) as caught:

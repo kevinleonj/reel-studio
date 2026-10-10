@@ -75,7 +75,7 @@ def version_id(name: str) -> str:
 def rotate_secret(
     runner: Runner, project: str, secret_id: str, value: SecretStr, timeout_s: float
 ) -> str:
-    """Add a version, confirm it is ENABLED, then destroy every older version still billed.
+    """Add a version, confirm it is ENABLED, then destroy the older versions still billed.
 
     Enabled and disabled versions are both billed and the old value stays readable; destroyed
     versions are free (F413). Nothing is destroyed unless the new version is confirmed.
@@ -113,7 +113,7 @@ def rotate_secret(
         None,
         timeout_s,
     ).strip()
-    if not new or state != "ENABLED":
+    if not new.isdigit() or state != "ENABLED":
         raise CommandError(
             f"{secret_id}: new version {new or '?'} is {state or 'missing'}; older versions kept"
         )
@@ -131,7 +131,13 @@ def rotate_secret(
         None,
         timeout_s,
     )
-    for old in sorted({version_id(name) for name in listed.split()} - {new}):
+    # Only versions older than ours: a newer one may come from another writer and must survive.
+    older = {
+        v
+        for v in (version_id(name) for name in listed.split())
+        if v.isdigit() and int(v) < int(new)
+    }
+    for old in sorted(older, key=int):
         runner(
             [
                 "gcloud",
