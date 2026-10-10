@@ -98,16 +98,28 @@ def _text(message: str, is_error: bool = False) -> Result:
     return Result([{"type": "text", "text": message}], is_error)
 
 
-def _strict(schema: Any) -> Any:  # Any: JSON Schema
+def strict_schema(schema: Any) -> Any:  # Any: JSON Schema
     """Drop what strict tool schemas reject and close every object (F11, F208)."""
     if isinstance(schema, dict):
-        out = {k: _strict(v) for k, v in schema.items() if k not in UNSUPPORTED and k != "title"}
+        out = {
+            k: strict_schema(v) for k, v in schema.items() if k not in UNSUPPORTED and k != "title"
+        }
         if out.get("type") == "object":
             out["additionalProperties"] = False
         return out
     if isinstance(schema, list):
-        return [_strict(v) for v in schema]
+        return [strict_schema(v) for v in schema]
     return schema
+
+
+def image_block(image: Image.Image, max_side: int, quality: int) -> Block:
+    """A JPEG content block no larger than the F08 limit on its longest side."""
+    picture = image.convert("RGB")
+    picture.thumbnail((max_side, max_side))
+    buffer = io.BytesIO()
+    picture.save(buffer, format="JPEG", quality=quality)
+    data = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return {"type": "image", "source": {"type": "base64", "media_type": JPEG, "data": data}}
 
 
 def _render_strip(work: Path, request: strip.Request, media: Media, max_side: int) -> Path:
@@ -151,7 +163,7 @@ class Toolbox:
                 "name": name,
                 "description": " ".join(desc.split()),
                 "strict": True,
-                "input_schema": _strict(model.model_json_schema(by_alias=True)),
+                "input_schema": strict_schema(model.model_json_schema(by_alias=True)),
             }
             for name, model, desc in specs
         ]
@@ -179,18 +191,11 @@ class Toolbox:
 
     # ------------------------------------------------------------ images
     def _image(self, image: Image.Image, caption: str) -> Result:
-        side = self.ctx.limits.sheets.max_image_side_px
-        picture = image.convert("RGB")
-        picture.thumbnail((side, side))
-        buffer = io.BytesIO()
-        picture.save(buffer, format="JPEG", quality=self.ctx.media.contact_sheet.jpeg_quality)
-        data = base64.b64encode(buffer.getvalue()).decode("ascii")
-        return Result(
-            [
-                {"type": "image", "source": {"type": "base64", "media_type": JPEG, "data": data}},
-                {"type": "text", "text": caption},
-            ]
+        side, quality = (
+            self.ctx.limits.sheets.max_image_side_px,
+            self.ctx.media.contact_sheet.jpeg_quality,
         )
+        return Result([image_block(image, side, quality), {"type": "text", "text": caption}])
 
     # ------------------------------------------------------------ handlers
     def _read_sheet(self, raw: Any) -> Result:  # Any: tool input JSON
