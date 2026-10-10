@@ -69,6 +69,35 @@ under `reel_studio/editor/media/fonts/`, no host-font fallbacks. Sheets failing 
 
 ## Log
 
+### 2026-10-10 — STEP-03 plan (branch `step-03-editor-loop`, stacked on `step-02-pipeline`, local only)
+
+TONIGHT.md: build test-first with a fake model client; stop before the first paid run. The two paid
+runs (`make eval FIX=creami MODEL=haiku`, then Sonnet) wait for Kevin; budget ≤ $5.
+
+SDK facts (Context7 /anthropics/anthropic-sdk-python, 10 Oct 2026, anthropic 1.13.0): top-level
+`cache_control={"type": "ephemeral"}` on `messages.create`; `output_config={"effort": ...}`
+(low/medium/high/xhigh/max); `messages.count_tokens(**params)`; usage `input_tokens`, `output_tokens`,
+`cache_creation_input_tokens`, `cache_read_input_tokens`; `APIStatusError.status_code/.type/.request_id`;
+the SDK's default retry set (408, 409, 429, 5xx, connection) is the one our wrapper owns with
+`max_retries=0`. The SDK's HTTP layer is `httpx2`, so tests never build SDK errors: a pure classifier
+decides retry / SpendLimitReached / ProviderUnavailable from (status, type, message).
+
+Build order, each module test-first:
+1. `editor/meter.py` (task 4): prices from `config/prices.toml`, Haiku long tier, worst-case guard,
+   exact cost (Decimal). First test: baseline usage costs exactly $0.164 + $0.325.
+2. `tests/fakes/claude.py` + `adapters/claude/client.py` (task 1, 5): scripted fake recording requests;
+   real adapter = SDK call + classifier + JSON log line. First test: classifier table.
+3. `editor/tools.py` (task 3): Pydantic inputs → strict schemas without numeric bounds; handlers over
+   STEP-02's sheets/strip/grade_preview/edl; images ≤ 2000 px. First test: 13th `read_strip` refused.
+4. `editor/loop.py` (task 5): the §3 loop. First test: identical tools/system/tool_choice every request.
+5. `editor/critic.py` (task 6): `submit_review` tool, gates from limits.toml. First test: fail twice →
+   higher total shipped with the weakness named.
+6. `editor/prompts/` (task 2): kit SKILL.md, references, critic prompt, styles, structures, brief.
+   First test: byte-equal system prompt across two builds, > 4,000 characters.
+7. `editor/run.py` + `reel make` (tasks 7, 9): prepare → loop → render → qa → critic. First test: no
+   Gemini key forces voice off with the notice.
+8. `make eval` target + `eval/run.py` (task 8): written and unit-tested with the fake; never run tonight.
+
 ### 2026-10-10 Review fixes, engine items 1-5 (`~/projects/reel/REVIEW-FIXES.md`, step-02-pipeline)
 Before: one odd photo (10 x 4300) or a width-0 probe aborted the order (MemoryError,
 ZeroDivisionError); style photos decoded at any size; natural_db -6 gave -19.9 LUFS; one CLI test
