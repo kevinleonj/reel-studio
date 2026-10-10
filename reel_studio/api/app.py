@@ -9,7 +9,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from reel_studio.api import routes_local, routes_orders, routes_public, static
+from reel_studio.api import payments, routes_local, routes_orders, routes_public, static
 from reel_studio.api.deps import ApiDeps, Limiters, deps_of
 from reel_studio.api.errors import Refused, on_api_error, on_refused, on_validation
 from reel_studio.api.ratelimit import SlidingWindow
@@ -24,6 +24,8 @@ API_NOINDEX = {"X-Robots-Tag": "noindex, nofollow"}
 
 
 def create_app(deps: ApiDeps) -> FastAPI:
+    if deps.settings.payments == "stripe" and deps.payments is None:
+        raise ValueError("PAYMENTS=stripe needs a Payments adapter in ApiDeps")
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     app.state.deps = deps
     quotas = deps.config.limits.limits
@@ -64,9 +66,10 @@ def create_app(deps: ApiDeps) -> FastAPI:
     def sweep(request: Request) -> JSONResponse:
         if not deps_of(request).sweep_auth(request):
             return JSONResponse({"error": "unauthorized"}, status_code=HTTPStatus.UNAUTHORIZED)
-        return JSONResponse(dict(deps_of(request).orders.sweep()))
+        return JSONResponse(dict(payments.sweep(deps_of(request))))
 
     app.include_router(routes_public.router)
+    app.include_router(payments.router)
     app.include_router(routes_orders.router)
     app.include_router(routes_local.router)
     app.include_router(static.router)  # last: it answers every GET nothing else claimed

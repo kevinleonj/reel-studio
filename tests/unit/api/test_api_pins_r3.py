@@ -15,7 +15,7 @@ from reel_studio.core.errors import DeliveryFailed, ErrorCode
 from tests.fakes.clock import FrozenClock
 from tests.fakes.mailer import FakeMailer
 from tests.fakes.orders import FakeOrders
-from tests.unit.api.conftest import Api
+from tests.unit.api.conftest import Api, offline_sweep
 from tests.unit.api.test_api_pins import new_order
 from tests.unit.api.test_dispatcher import LIMITS, RecordingLauncher
 from tests.unit.api.test_notify import KEVIN, SITE, running
@@ -101,7 +101,13 @@ def test_one_failed_notice_does_not_skip_the_next_order() -> None:
 
     flaky = Flaky()
     clock.advance(timedelta(minutes=71))
-    Dispatcher(orders, RecordingLauncher(), clock, sweep_every_s=60, notifier=flaky).tick()
+    Dispatcher(
+        orders,
+        RecordingLauncher(),
+        clock,
+        sweep=offline_sweep(orders),
+        notifier=flaky,
+    ).tick()
     assert flaky.seen == ["a" * 32, "b" * 32]
 
 

@@ -2,11 +2,12 @@
 
 from datetime import UTC, datetime, timedelta
 
-from reel_studio.adapters.launcher_local import Dispatcher, FakeEditor
-from reel_studio.core.ports import NewOrder, QueueLimits
+from reel_studio.adapters.launcher_local import Dispatcher, FakeEditor, Sweep
+from reel_studio.core.ports import NewOrder, QueueLimits, SweepReport
 from tests.fakes.clock import FrozenClock
 from tests.fakes.orders import FakeOrders
 from tests.fakes.storage import FakeStorage
+from tests.unit.api.conftest import offline_sweep
 
 START = datetime(2026, 10, 12, 9, 0, tzinfo=UTC)
 LIMITS = QueueLimits(
@@ -48,7 +49,8 @@ def queued(orders: FakeOrders, order_id: str) -> None:
 def test_nothing_queued_launches_nothing() -> None:
     clock = FrozenClock(START)
     launcher = RecordingLauncher()
-    Dispatcher(FakeOrders(clock, LIMITS), launcher, clock, sweep_every_s=60).tick()
+    orders = FakeOrders(clock, LIMITS)
+    Dispatcher(orders, launcher, clock, sweep=offline_sweep(orders)).tick()
     assert launcher.launched == []
 
 
@@ -59,7 +61,7 @@ def test_queued_orders_launch_up_to_the_slot_limit() -> None:
         clock.advance(timedelta(seconds=1))
         queued(orders, order_id)
     launcher = RecordingLauncher()
-    Dispatcher(orders, launcher, clock, sweep_every_s=60).tick()
+    Dispatcher(orders, launcher, clock, sweep=offline_sweep(orders)).tick()
     assert launcher.launched == ["a" * 32, "b" * 32]
     assert orders.get("c" * 32)["status"] == "queued"  # type: ignore[index]
 
@@ -70,7 +72,12 @@ def test_sweep_runs_on_its_interval() -> None:
     orders.create_awaiting_payment(
         NewOrder("a" * 32, "h", SETTINGS, "", START + timedelta(minutes=31))
     )
-    dispatcher = Dispatcher(orders, RecordingLauncher(), clock, sweep_every_s=60)
+    dispatcher = Dispatcher(
+        orders,
+        RecordingLauncher(),
+        clock,
+        sweep=offline_sweep(orders),
+    )
     dispatcher.tick()  # first tick sweeps: nothing expired yet
     clock.advance(timedelta(minutes=40))
     dispatcher.tick()
@@ -85,7 +92,7 @@ def test_a_failing_launch_fails_the_order_and_frees_the_slot() -> None:
     clock = FrozenClock(START)
     orders = FakeOrders(clock, LIMITS)
     queued(orders, "a" * 32)
-    Dispatcher(orders, Broken(), clock, sweep_every_s=60).tick()
+    Dispatcher(orders, Broken(), clock, sweep=offline_sweep(orders)).tick()
     doc = orders.get("a" * 32)
     assert doc is not None and doc["status"] == "failed"
     assert orders.capacity["slots"] == {}
@@ -125,3 +132,18 @@ def test_fake_editor_listens_only_with_voice_on() -> None:
     stages: list[str] = []
     FakeEditor(orders, FakeStorage(), stage_seconds=0, on_stage=stages.append).run("a" * 32)
     assert "listening" in stages
+
+
+def test_the_dispatcher_runs_the_sweep_it_is_given() -> None:
+    """With PAYMENTS=stripe the composition root passes the API's sweep, which asks Stripe."""
+    clock = FrozenClock(START)
+    calls: list[str] = []
+
+    def sweep() -> SweepReport:
+        calls.append("sweep")
+        return {"failed": [], "expired": [], "abandoned": []}
+
+    Dispatcher(
+        FakeOrders(clock, LIMITS), RecordingLauncher(), clock, sweep=Sweep(sweep, every_s=60)
+    ).tick()
+    assert calls == ["sweep"]

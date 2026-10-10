@@ -6,12 +6,20 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, Request
 from pydantic import BaseModel, ConfigDict, Field
 
+from reel_studio.api import payments
 from reel_studio.api.deps import ApiDeps, client_address, deps_of, limiters_of
 from reel_studio.api.errors import invalid, not_found, wrong_status
 from reel_studio.api.tokens import ORDER_ID, token_matches
 from reel_studio.api.views import order_view
 from reel_studio.core.constants import FILE_NAME_MAX_CHARS
-from reel_studio.core.errors import BadType, NoFiles, RateLimited, TooLarge, TooManyFiles
+from reel_studio.core.errors import (
+    BadType,
+    NoFiles,
+    PaymentsFailed,
+    RateLimited,
+    TooLarge,
+    TooManyFiles,
+)
 from reel_studio.core.logging import get_logger
 from reel_studio.core.order_rules import WrongState
 from reel_studio.core.ports import Record
@@ -65,14 +73,27 @@ def status(order: Authorised) -> dict[str, object]:
 
 @router.post("/fulfil")
 def fulfil(order: Authorised) -> None:
-    """With PAYMENTS=off the order is already paid; Stripe's check arrives in STEP-07."""
-    del order
+    """Stripe's success page: the same fulfilment as the webhook (§7). With PAYMENTS=off the
+    order is already paid, and an order without a session has nothing to check."""
+    stripe = order.doc["stripe"]
+    session_id = stripe.get("session_id") if isinstance(stripe, dict) else None
+    if order.deps.settings.payments == "off" or session_id is None:
+        return
+    try:
+        payments.fulfil(order.deps, str(session_id))
+    except PaymentsFailed:
+        log.exception("stripe call failed", extra=payments.failure("fulfil", order.id))
+        raise payments.unavailable() from None
 
 
 @router.post("/cancel")
 def cancel(order: Authorised) -> dict[str, object]:
-    """Stripe's Cancel: release an unpaid checkout's place (no-op once paid), refill the form."""
-    order.deps.orders.expire(order.id)
+    """Stripe's Cancel: release an unpaid checkout's place, refill the form. With PAYMENTS=off
+    it changes nothing once paid."""
+    if order.deps.settings.payments == "off":
+        order.deps.orders.expire(order.id)
+    else:
+        payments.cancel(order.deps, order.id, order.doc)
     return {"settings": order.doc["settings"]}
 
 

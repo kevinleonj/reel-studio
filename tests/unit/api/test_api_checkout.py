@@ -146,21 +146,18 @@ def test_checkout_is_rate_limited_per_address(tmp_path: Path, make_settings: Mak
     assert checkout(api)[0] == 200
 
 
-def test_stripe_checkout_is_not_wired_in_this_step(
+def test_stripe_mode_without_a_payments_adapter_refuses_to_start(
     tmp_path: Path, make_settings: MakeSettings
 ) -> None:
     settings = make_settings(
         WebSettings,
         payments="stripe",
-        stripe_secret_key="sk_test_x",
-        stripe_webhook_secret="whsec_x",
+        stripe_secret_key="test-stripe-key",
+        stripe_webhook_secret="test-webhook-secret",
     )
     assert isinstance(settings, WebSettings)
-    response = build(tmp_path, settings).client.post(
-        "/api/checkout", json={"settings": SETTINGS, "code": "C", "email": ""}
-    )
-    assert response.status_code == 501
-    assert response.json() == {"error": "payments_not_wired"}
+    with pytest.raises(ValueError, match="Payments adapter"):
+        build(tmp_path, settings)
 
 
 def test_logs_never_carry_the_token(api: Api, caplog: pytest.LogCaptureFixture) -> None:

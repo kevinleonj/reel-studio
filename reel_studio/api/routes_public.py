@@ -2,23 +2,24 @@
 
 import re
 from datetime import timedelta
-from http import HTTPStatus
 from typing import Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from reel_studio.api import payments
 from reel_studio.api.deps import ApiDeps, client_address, deps_of, limiters_of
-from reel_studio.api.errors import Refused, invalid
+from reel_studio.api.errors import invalid
+from reel_studio.api.notify import send_link
 from reel_studio.api.tokens import hash_token, new_order_id, new_token
 from reel_studio.core.constants import (
-    BYTES_PER_GB,
     BYTES_PER_MIB,
     EMAIL_ADDRESS_MAX_CHARS,
     INVITE_CODE_MAX_CHARS,
+    MINOR_UNITS_PER_EURO,
 )
-from reel_studio.core.errors import DeliveryFailed, RateLimited
+from reel_studio.core.errors import RateLimited
 from reel_studio.core.logging import get_logger
 from reel_studio.core.ports import NewOrder
 
@@ -82,6 +83,14 @@ def health() -> str:
     return "ok"
 
 
+def price(deps: ApiDeps) -> dict[str, object] | None:
+    """The €19 anchor (D58) as the page's analytics value; none when nothing is sold."""
+    if deps.settings.payments == "off":
+        return None
+    payments = deps.config.limits.payments
+    return {"value": payments.price_minor / MINOR_UNITS_PER_EURO, "currency": payments.currency}
+
+
 @router.get("/api/config")
 def app_config(request: Request) -> dict[str, object]:
     deps = deps_of(request)
@@ -113,7 +122,7 @@ def app_config(request: Request) -> dict[str, object]:
         "timeouts": {"request_ms": web.request_timeout_ms, "chunk_ms": web.chunk_timeout_ms},
         "poll_seconds": limits.limits.poll_seconds,
         "feedback": {"rating_max": web.rating_max, "comment_max_chars": web.comment_max_chars},
-        "price": None,  # the €19 anchor arrives with Stripe (STEP-07)
+        "price": price(deps),
         "analytics": {
             "enabled": analytics_on,
             "ga4_id": deps.settings.ga4_measurement_id,
@@ -123,46 +132,14 @@ def app_config(request: Request) -> dict[str, object]:
     }
 
 
-def send_link(deps: ApiDeps, order_id: str, email: str, path: str) -> None:
-    """The optional link email. The order already exists and the page already has the link, so
-    a mail server that is down is logged, not turned into a failed checkout."""
-    limits = deps.config.limits
-    try:
-        deps.mailer.send(
-            "link",
-            email,
-            {
-                "order_id": order_id,
-                "order_url": f"{deps.settings.site_url.rstrip('/')}{path}",
-                "max_files": limits.order.max_files,
-                "max_total": f"{limits.order.max_total_bytes // BYTES_PER_GB} GB",
-                "out_days": limits.retention.out_days,
-            },
-        )
-    except DeliveryFailed:
-        log.exception(
-            "link email not delivered",
-            extra={
-                "order_id": order_id,
-                "stage": "checkout",
-                "event": "link_email",
-                "outcome": "error",
-            },
-        )
-
-
 @router.post("/api/checkout", response_model=None)
 def checkout(body: CheckoutBody, request: Request) -> dict[str, str] | JSONResponse:
     deps = deps_of(request)
     if not limiters_of(request).checkout.allow(client_address(request)):
         raise RateLimited
-    if deps.settings.payments != "off":
-        log.error(
-            "checkout with PAYMENTS=stripe is not wired before STEP-07",
-            extra={"event": "checkout", "outcome": "refused"},
-        )
-        raise Refused("payments_not_wired", HTTPStatus.NOT_IMPLEMENTED)
     settings = check_settings(deps, body.settings)
+    if deps.settings.payments == "stripe":
+        return payments.checkout(deps, settings, body.code.strip())  # Stripe collects the email
     email = body.email.strip()
     if email and not EMAIL_SHAPE.match(email):  # also refuses CR/LF: no header injection
         raise invalid("email shape")

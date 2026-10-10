@@ -9,7 +9,7 @@ from fastapi import Request
 from reel_studio.adapters.storage_local import LocalStorage
 from reel_studio.api.ratelimit import SlidingWindow
 from reel_studio.core.config import Config
-from reel_studio.core.ports import Clock, Mailer, OrderStore, Storage
+from reel_studio.core.ports import Clock, Mailer, OrderStore, PaymentGateway, Storage
 from reel_studio.settings import WebSettings
 
 
@@ -24,6 +24,7 @@ class ApiDeps:
     storage: Storage
     local_storage: LocalStorage | None  # the laptop's chunk endpoint and signed downloads
     mailer: Mailer
+    payments: PaymentGateway | None  # None with PAYMENTS=off; create_app checks
     clock: Clock
     config: Config
     settings: WebSettings
