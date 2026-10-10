@@ -60,3 +60,16 @@ run "only_approved_jobs_become_the_deployer" {
     error_message = "Only jobs in the beta environment (Kevin approves) may act as the deployer."
   }
 }
+
+run "budget_warns_before_the_money_is_spent" {
+  command = apply
+
+  assert {
+    condition     = length([for rule in google_billing_budget.monthly.threshold_rules : rule if rule.spend_basis == "FORECASTED_SPEND"]) == 1
+    error_message = "One rule must fire on the forecast, before the spend happens (REVIEW-FIXES CLOUD 3)."
+  }
+  assert {
+    condition     = length([for rule in google_billing_budget.monthly.threshold_rules : rule if rule.spend_basis == "CURRENT_SPEND"]) == 3
+    error_message = "The 50/90/100 % rules on actual spend stay (D59)."
+  }
+}

@@ -62,6 +62,8 @@ locals {
   # D59: a $10 a month warning budget, alerting at 50 %, 90 % and 100 %.
   budget_units      = "10"
   budget_thresholds = [0.5, 0.9, 1.0]
+  # Warn when the month's forecast reaches the budget, before the money is spent (F412).
+  budget_forecast_threshold = 1.0
 
   # docs/INFRA.md §2 cleanup: delete any version older than 30 days, keep the 5 newest (keep wins).
   image_max_age     = "2592000s" # 30 days
