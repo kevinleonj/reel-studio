@@ -137,12 +137,24 @@ def _reply(
     return reply
 
 
+def _continue(history: list[Message], text: str) -> list[Message]:
+    """Add `text` as the next user turn. After tool results it joins that same user message,
+    behind them (F12), so roles keep alternating; the earlier messages stay byte-equal (D34)."""
+    if history and history[-1]["role"] == "user" and isinstance(history[-1]["content"], list):
+        last = {
+            "role": "user",
+            "content": [*history[-1]["content"], {"type": "text", "text": text}],
+        }
+        return [*history[:-1], last]
+    return [*history, {"role": "user", "content": text}]
+
+
 def run(
     session: Session, box: Toolbox, system: str, opening: str, history: list[Message] | None = None
 ) -> Outcome:
     """Run until write_edl is accepted. `history` continues an earlier conversation (critic, F2)."""
     tools = box.definitions()
-    messages = [*(history if history is not None else []), {"role": "user", "content": opening}]
+    messages = _continue(history if history is not None else [], opening)
     box.accepted = None
     for turn in range(1, session.editor.max_turns + 1):
         reply = _reply(session, system, tools, messages, turn)

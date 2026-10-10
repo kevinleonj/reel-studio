@@ -1,5 +1,6 @@
 """The editor loop (docs/EDITOR.md §3) against a scripted fake Claude."""
 
+import itertools
 import json
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -211,3 +212,20 @@ def test_one_log_line_per_call_with_the_run_record_fields(tmp_path: Path) -> Non
     assert fields <= set(lines[0])
     assert lines[0]["tools"] == ["read_sheet"] and lines[0]["call"] == "editor"
     assert lines[1]["turn"] == 2
+
+
+def test_a_continued_conversation_puts_the_new_text_after_the_last_tool_results(
+    tmp_path: Path,
+) -> None:
+    first, fake, box = _run(
+        tmp_path, [response([tool_use("t1", "write_edl", GOOD_EDL)], "tool_use")]
+    )
+    fake.script = [response([tool_use("t2", "write_edl", GOOD_EDL)], "tool_use")]
+
+    loop.run(_session(tmp_path, fake), box, "SYSTEM PROMPT", "Revise.", first.messages)
+
+    messages = fake.requests[-1]["messages"]
+    roles = [m["role"] for m in messages]
+    assert all(a != b for a, b in itertools.pairwise(roles))  # strictly alternating
+    last = messages[-1]["content"]
+    assert [b["type"] for b in last] == ["tool_result", "text"] and last[-1]["text"] == "Revise."
