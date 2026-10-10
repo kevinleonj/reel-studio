@@ -10,7 +10,7 @@ import pytest
 from PIL import Image
 
 from reel_studio.core import config
-from reel_studio.core.errors import CostCapReached, ModelRefusal
+from reel_studio.core.errors import CostCapReached, ModelRefusal, RenderError, SpendLimitReached
 from reel_studio.editor import critic, loop, meter
 from tests.fakes.claude import FakeClaude, response, text, tool_use
 from tests.fakes.clock import FrozenClock
@@ -241,3 +241,34 @@ def test_the_review_tool_is_strict_and_carries_no_bounds() -> None:
     assert definition["strict"] is True
     assert "maximum" not in schema and "minimum" not in schema
     assert definition["input_schema"]["additionalProperties"] is False
+
+
+class _FailingRender(_Cycle):
+    def render(self, edl: str, number: int) -> str:
+        if number > 1:
+            raise RenderError("ffmpeg exited 1")
+        return super().render(edl, number)
+
+
+def test_a_render_error_while_revising_ships_the_first_render() -> None:
+    c = _FailingRender([_review(hook=3)])
+
+    final = critic.review_cycle(c.plan, c.render, c.judge, GATES, 2)
+
+    assert final.render == "render1-edl1" and final.weakness is not None
+    assert "render_error" in final.weakness
+
+
+class _SpendLimitOnRevision(_Cycle):
+    def plan(self, feedback: str | None) -> str:
+        if feedback is not None:
+            raise SpendLimitReached("workspace limit")
+        return super().plan(feedback)
+
+
+def test_a_spend_limit_while_revising_stops_the_order() -> None:
+    """D45: the service pauses; a shipped first render would hide it."""
+    c = _SpendLimitOnRevision([_review(hook=3)])
+
+    with pytest.raises(SpendLimitReached):
+        critic.review_cycle(c.plan, c.render, c.judge, GATES, 2)

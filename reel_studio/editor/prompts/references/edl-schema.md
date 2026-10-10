@@ -1,7 +1,8 @@
 # Cut list (EDL) format: the input of write_edl
 
 `write_edl` validates it: errors come back with every violation and nothing is rendered; warnings
-are craft risks to fix, or to justify in the segment's `note`. Times are seconds. Clip ids come
+are craft risks. An accepted edit list is final, so avoid them before you call it, or say why in
+the segment's `note`. Times are seconds. Clip ids come
 from the brief (`c01`...).
 
 ```json

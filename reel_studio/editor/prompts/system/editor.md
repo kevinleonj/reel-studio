@@ -59,8 +59,9 @@ Call `read_grade_preview`, choose the look with the colour reference, set
 one line of `assumptions`.
 
 ### 5 Hand in
-Call `write_edl`. Fix every error it returns and call it again. Fix each warning, or justify it
-in the segment's `note`. Fill every top-level field: `style` from the brief, `dropped` for every
+Call `write_edl`. Fix every error it returns and call it again. An accepted edit list is final:
+avoid the craft risks it warns about before you call it, and where you keep one on purpose,
+say why in the segment's `note`. Fill every top-level field: `style` from the brief, `dropped` for every
 clip you did not use, `preferences` for every customer wish, `caption`, `music_hint`,
 `assumptions`, `check_by_eye`. When it is accepted, your work on this cut is done.
 

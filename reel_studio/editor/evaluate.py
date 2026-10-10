@@ -11,7 +11,7 @@ import json
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -115,8 +115,12 @@ def _keep_earlier(target: Path) -> None:
     the gate's branch budget check (results_budget) still sums it."""
     if not target.exists():
         return
-    earlier = json.loads(target.read_text(encoding="utf-8"))
-    stamp = datetime.fromisoformat(earlier["started"])
+    started = json.loads(target.read_text(encoding="utf-8")).get("started")
+    stamp = (  # a file from before `started` existed is named by its write time
+        datetime.fromisoformat(started)
+        if started is not None
+        else datetime.fromtimestamp(target.stat().st_mtime, UTC)
+    )
     target.rename(target.with_name(f"{target.stem}-{stamp:%H%M%S}{target.suffix}"))
 
 
@@ -163,7 +167,7 @@ def run(job: Job, ports: make.Ports, steps: make.Steps, cfg: Config) -> int:
             exc,
             extra={"stage": STAGE, "event": "failed", "outcome": exc.code},
         )
-    except Exception as exc:
+    except BaseException as exc:  # Ctrl-C too: the calls made so far were paid
         _write(job, out, None, type(exc).__name__, now)
         raise
     _write(job, out, made, error, now)

@@ -39,7 +39,9 @@ def response(
 class FakeClaude:
     """Implements the Claude port. `script` items are responses or exceptions to raise."""
 
-    def __init__(self, script: Sequence[Record | Exception], prompt_tokens: int = 1_000) -> None:
+    def __init__(
+        self, script: Sequence[Record | BaseException], prompt_tokens: int = 1_000
+    ) -> None:
         self.script = list(script)
         self.prompt_tokens = prompt_tokens
         self.requests: list[Record] = []
@@ -54,6 +56,6 @@ class FakeClaude:
         if not self.script:
             raise AssertionError("FakeClaude ran out of scripted responses")
         item = self.script.pop(0)
-        if isinstance(item, Exception):
+        if isinstance(item, BaseException):  # Ctrl-C too
             raise item
         return copy.deepcopy(item)

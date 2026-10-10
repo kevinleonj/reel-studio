@@ -144,3 +144,11 @@ def test_transcripts_appear_only_when_the_voice_is_kept() -> None:
 
     assert "swirl" not in prompt.brief(_order(), CFG, SHOTS, transcripts=words)
     assert "swirl" in prompt.brief(_order(voice=True), CFG, SHOTS, transcripts=words)
+
+
+def test_the_prompt_never_promises_a_turn_after_acceptance() -> None:
+    """write_edl acceptance ends the loop (EDITOR §3): warnings cannot be fixed afterwards."""
+    system = prompt.system_prompt("montage", CFG)
+
+    assert "Fix each warning" not in system and "warnings\nare craft risks to fix" not in system
+    assert system.count("An accepted edit list is final") == 2

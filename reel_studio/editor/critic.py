@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from reel_studio.core import constants
 from reel_studio.core.config import Gates
-from reel_studio.core.errors import EditorError, ModelRefusal, ProviderUnavailable
+from reel_studio.core.errors import EditorError, MediaError, ModelRefusal, ProviderUnavailable
 from reel_studio.core.logging import get_logger
 from reel_studio.editor.loop import Session, answer, call_claude, continue_with
 from reel_studio.editor.tools import image_block, strict_schema
@@ -118,8 +118,9 @@ def review_cycle[E, R](
 ) -> Final[R]:
     """Plan, render, judge; revise on a fail until `max_renders`; ship the higher total.
 
-    Once a render exists, a revision that stops (cost cap, refusal, provider down) ships the best
-    render so far with the stop named (EDITOR §8); a spend limit still stops the order (D45).
+    Once a render exists, a revision that stops (cost cap, refusal, render error, provider down)
+    ships the best render so far with the stop named (EDITOR §8); a spend limit still stops the
+    order (D45).
     """
     tried: list[tuple[R, Review, str]] = []
     note: str | None = None
@@ -127,7 +128,7 @@ def review_cycle[E, R](
         try:
             rendered = render(plan(note), number)
             review = judge(rendered)
-        except (EditorError, ProviderUnavailable) as exc:
+        except (EditorError, MediaError, ProviderUnavailable) as exc:
             if not tried:
                 raise
             log.warning(

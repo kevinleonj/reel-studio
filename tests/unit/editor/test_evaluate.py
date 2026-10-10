@@ -180,3 +180,25 @@ def test_an_unknown_model_or_fixture_is_refused(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="fixture"):
         evaluate.run(_job(tmp_path, "haiku", fixture="nope"), ports, steps, CFG)
     assert fake.requests == []
+
+
+def test_an_interrupted_run_still_records_what_it_spent(tmp_path: Path) -> None:
+    """Ctrl-C during a paid run is the likeliest way to stop one: its calls still count."""
+    looked = response([tool_use("t", "read_transcript", {"clip": "c01"})], "tool_use")
+
+    with pytest.raises(KeyboardInterrupt):
+        _run(tmp_path, [looked, KeyboardInterrupt()], "haiku")
+
+    data = _result(tmp_path / "repo" / "eval" / "results" / "2026-10-10", "creami-haiku.json")
+    assert data["error"] == "KeyboardInterrupt" and len(data["requests"]) == 1
+
+
+def test_an_earlier_result_without_a_start_time_is_kept_by_its_file_time(tmp_path: Path) -> None:
+    folder = tmp_path / "repo" / "eval" / "results" / "2026-10-10"
+    folder.mkdir(parents=True)
+    (folder / "creami-haiku.json").write_text('{"cost_usd": 0.01}\n', encoding="utf-8")
+
+    _run(tmp_path, [edl_turn("e1"), critic_turn(5)], "haiku")
+
+    names = sorted(p.name for p in folder.iterdir())
+    assert len(names) == 2 and "creami-haiku.json" in names
