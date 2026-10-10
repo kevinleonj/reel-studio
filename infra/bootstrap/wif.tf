@@ -22,6 +22,7 @@ resource "google_iam_workload_identity_pool_provider" "github_oidc" {
     "attribute.repository_id"       = "assertion.repository_id"
     "attribute.repository_owner_id" = "assertion.repository_owner_id"
     "attribute.ref"                 = "assertion.ref"
+    "attribute.environment"         = "assertion.environment"
   }
   # Numeric ids, not names: a renamed or re-created repository with the same name cannot deploy.
   attribute_condition = join(" && ", [
@@ -46,11 +47,13 @@ resource "google_service_account" "deployer" {
   depends_on = [google_project_service.bootstrap]
 }
 
-# Only identities from the provider above whose repository id matches may act as the deployer.
+# Only jobs of this repository's main branch (provider condition) that run in the beta environment,
+# which Kevin approves, may act as the deployer. Every deploy.yml job that asks for a token
+# declares `environment: beta`, so no job relies on how a missing claim is mapped (F411).
 resource "google_service_account_iam_member" "deployer_wif" {
   service_account_id = google_service_account.deployer.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository_id/${var.github_repository_id}"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.environment/${local.github_environment}"
 }
 
 resource "google_project_iam_member" "deployer" {
@@ -59,6 +62,23 @@ resource "google_project_iam_member" "deployer" {
   project = var.project_id
   role    = each.value
   member  = google_service_account.deployer.member
+
+  depends_on = [google_project_service.bootstrap]
+}
+
+# Project IAM admin limited to granting the roles infra/main needs: without the condition the
+# deployer could grant itself roles/owner (F410). Unconditional bindings win over conditional ones,
+# so this role must never also appear in deployer_project_roles (scripts/check_policy.py, iam.toml).
+resource "google_project_iam_member" "deployer_iam_admin" {
+  project = var.project_id
+  role    = "roles/resourcemanager.projectIamAdmin"
+  member  = google_service_account.deployer.member
+
+  condition {
+    title       = "grant-only-runtime-project-roles"
+    description = "The deployer may grant only the project roles infra/main grants"
+    expression  = "api.getAttribute('iam.googleapis.com/modifiedGrantsByRole', []).hasOnly([${join(", ", formatlist("'%s'", local.deployer_grantable_roles))}])"
+  }
 
   depends_on = [google_project_service.bootstrap]
 }

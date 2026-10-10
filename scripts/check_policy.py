@@ -8,7 +8,8 @@ Reads infra/policy/*.toml and every *.tf in each Terraform root under infra/, an
   (`depends_on`);
 - a location outside the allowed list for its service (locations.toml, D50, lesson L5);
 - an editor job above the memory ceiling at its vCPU count, or with retries (limits.toml, L7, D52);
-- a reference to a Cloud Run service's `uri` or `urls` (the URL comes from the project number, F61).
+- a reference to a Cloud Run service's `uri` or `urls` (the URL comes from the project number, F61);
+- a role listed in iam.toml `conditional_roles` bound without a `condition` (F410).
 
 Prints one sorted line per violation. Exit 0 when clean, 1 on violations, 2 when the checker
 cannot do its job (unreadable policy or Terraform).
@@ -38,6 +39,8 @@ SERVICE_URI = re.compile(r"google_cloud_run_v2_service\.\w+\.(?:uri|urls)\b")
 MEMORY = re.compile(r"^(\d+)(Mi|Gi)$")
 MIB_PER_GIB = 1024
 JOB_TYPE = "google_cloud_run_v2_job"
+EACH_VALUE = "${each.value}"
+QUOTED = re.compile(r'"([^"]+)"')
 
 Body = dict[str, object]
 
@@ -245,6 +248,31 @@ def job_limits(root: Root, policy: dict[str, object]) -> list[str]:
     return found
 
 
+def granted_roles(res: Resource, local_values: Body) -> list[str]:
+    """The role a binding grants, or every role of the local its for_each walks."""
+    role = res.body.get("role")
+    if role == EACH_VALUE:
+        source = LOCAL_REF.fullmatch(str(res.body.get("for_each", "")))
+        raw = local_values.get(source.group(1)) if source else None
+        if isinstance(raw, list):
+            return [str(item) for item in raw]
+        return QUOTED.findall(str(raw)) if raw is not None else []
+    resolved = resolve(role, local_values)
+    return [resolved] if isinstance(resolved, str) else []
+
+
+def conditional_roles(root: Root, policy: dict[str, object]) -> list[str]:
+    needed = set(strings(policy.get("conditional_roles")))
+    types = set(strings(policy.get("binding_types")))
+    found = []
+    for res in (r for r in root.resources if r.type in types):
+        if children(res.body, "condition"):
+            continue
+        for role in sorted(needed.intersection(granted_roles(res, root.locals))):
+            found.append(f"{res.address}: {role} granted without a condition")
+    return found
+
+
 def service_uri(infra: Path, roots: list[Root]) -> list[str]:
     found = []
     for root in roots:
@@ -262,12 +290,14 @@ def run(infra: Path) -> list[str]:
     args = read_toml(policy_dir / "explicit_args.toml")
     allowed = read_toml(policy_dir / "locations.toml")
     limits = read_toml(policy_dir / "limits.toml")
+    iam = read_toml(policy_dir / "iam.toml")
     roots = load_roots(infra)
     if not roots:
         return ["infra: no Terraform root found"]
     found = service_uri(infra, roots)
     for root in roots:
         found += explicit_args(root, args) + locations(root, allowed) + job_limits(root, limits)
+        found += conditional_roles(root, iam)
     return sorted(found)
 
 

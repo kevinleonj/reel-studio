@@ -27,9 +27,11 @@ tf-validate:
 		$(TERRAFORM) -chdir=$$root validate -no-color || exit 1; \
 	done
 
-# Offline: mock_provider, no project, no credentials (infra/main/tests/).
+# Offline: mock_provider, no project, no credentials (infra/*/tests/).
 tf-test: tf-validate
-	$(TERRAFORM) -chdir=infra/main test -no-color
+	for root in $(TF_ROOTS); do \
+		$(TERRAFORM) -chdir=$$root test -no-color || exit 1; \
+	done
 
 # The google ruleset must be installed first: cloud.sh does it in CI, `make tflint-init` on a laptop.
 tflint:

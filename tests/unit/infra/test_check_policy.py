@@ -75,6 +75,14 @@ BAD = {
         "google_cloud_scheduler_job.sweep: depends_on lacks"
         " google_service_account_iam_member.deployer_acts_as",
     ),
+    # iam.toml, REVIEW-FIXES CLOUD 1a: projectIamAdmin without a condition can grant roles/owner
+    "unconditional project IAM admin": (
+        "bootstrap/locals.tf",
+        '    "roles/logging.configWriter",\n',
+        '    "roles/logging.configWriter",\n    "roles/resourcemanager.projectIamAdmin",\n',
+        "google_project_iam_member.deployer: roles/resourcemanager.projectIamAdmin granted"
+        " without a condition",
+    ),
     # STEP-08 task 4: the service URL comes from the project number (F61)
     "service uri": (
         "main/outputs.tf",

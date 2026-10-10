@@ -18,6 +18,22 @@ Written by the cloud lane only. Newest entry on top.
   `make secrets-push` → `make stripe-setup MODE=test` → `make dns` → deploy.yml → `make smoke`.
 
 ## Needs Kevin
+- **Deployer limits (REVIEW-FIXES CLOUD 1, done in code, not applied):** projectIamAdmin now carries
+  the condition `modifiedGrantsByRole hasOnly(['roles/datastore.user'])` (F410), and only jobs in the
+  `beta` environment may act as the deployer (F411). Consequence: you approve twice per deploy, once
+  for the plan job and once for the apply job. The bootstrap root must be re-applied by you for
+  this to take effect.
+- **Fix c, proposal for your decision (ARCHITECTURE §5 change, not built):** a second account
+  `github-planner@` bound through WIF to `attribute.environment/plan` (a `plan` environment with no
+  reviewer, branches limited to main), holding only read roles: `roles/viewer` would be the simple
+  choice but reads too much, so instead `roles/run.viewer`, `roles/datastore.viewer` (index and
+  field metadata), `roles/storage.objectViewer` on the state bucket plus
+  `roles/storage.legacyBucketReader`, `roles/iam.securityReviewer` (reads IAM policies),
+  `roles/secretmanager.viewer` (metadata, no values), `roles/cloudscheduler.viewer`,
+  `roles/logging.viewer`, `roles/artifactregistry.reader` and `roles/serviceusage.serviceUsageViewer`.
+  The plan job would run `terraform plan -lock=false` as the planner, and only apply would need the
+  deployer, so you would approve once. Open questions: whether plan can refresh every resource with
+  these roles (check with one dry run), and whether images should then be built by apply instead.
 - **Tools on the Mac for `make ci`:** `brew upgrade terraform` (1.16.5; Homebrew has 1.16.1 and both
   roots pin `= 1.16.5`, F403), `brew install tflint trivy` (versions in F404), then
   `make tflint-init` once. CI installs all of them itself (`scripts/ci-install.d/cloud.sh`).

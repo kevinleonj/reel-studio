@@ -39,17 +39,25 @@ locals {
   # roles/editor. roles/artifactregistry.writer is granted on the repository (registry.tf);
   # roles/iam.serviceAccountUser on the runtime accounts is granted where those accounts are created
   # (infra/main/iam.tf), because they do not exist when this root is applied.
+  # roles/resourcemanager.projectIamAdmin is NOT in this set: it is granted only with a condition
+  # (wif.tf), and an unconditional binding for the same role would override it (F410).
   deployer_project_roles = toset([
     "roles/cloudscheduler.admin",
     "roles/datastore.owner",
     "roles/iam.serviceAccountAdmin",
     "roles/logging.configWriter",
-    "roles/resourcemanager.projectIamAdmin",
     "roles/run.admin",
     "roles/secretmanager.admin",
     "roles/serviceusage.serviceUsageAdmin",
     "roles/storage.admin",
   ])
+
+  # Project roles the deployer may grant: exactly the project-level grants in infra/main/iam.tf
+  # (datastore.user for reel-api and reel-editor). Never a role that carries setIamPolicy (F410).
+  deployer_grantable_roles = ["roles/datastore.user"]
+
+  # GitHub environment whose jobs Kevin approves; only its jobs may act as the deployer (F411).
+  github_environment = "beta"
 
   # D59: a $10 a month warning budget, alerting at 50 %, 90 % and 100 %.
   budget_units      = "10"
