@@ -154,8 +154,8 @@ class Toolbox:
             (
                 "write_edl",
                 Edl,
-                "Hand back the finished edit list. Rejected with every problem listed, "
-                "or accepted with craft warnings to fix or justify.",
+                "Hand back the finished edit list. Rejected with every problem listed, or "
+                "accepted, which ends editing; craft warnings are kept with the Reel.",
             ),
         ]
         return [
@@ -293,6 +293,7 @@ class Toolbox:
             )
         self.accepted, self.warnings = report.edl, report.warnings
         notes = "\n- ".join(report.warnings)
+        # Acceptance ends the loop (EDITOR §3): warnings go to result.json, not back to editing.
         return _text(
-            "accepted" + (f" with warnings (fix or justify in note):\n- {notes}" if notes else "")
+            "accepted" + (f" with warnings, kept with the Reel:\n- {notes}" if notes else "")
         )

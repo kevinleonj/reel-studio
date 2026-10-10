@@ -39,6 +39,7 @@ def test_a_passing_first_render_ships_with_its_record(tmp_path: Path) -> None:
     record = json.loads((made.out / "result.json").read_text())
     assert record["critic"]["passed"] is True and record["critic"]["total"] == 29
     assert record["cost_usd"] == str(made.cost) and made.cost > 0
+    assert record["edl_warnings"] == made.warnings and made.warnings  # 4 s is short for a dessert
     calls = [json.loads(x)["call"] for x in (made.out / "requests.jsonl").read_text().splitlines()]
     assert calls == ["editor", "critic"]
     assert fake.requests[1]["model"] == config.load().limits.editor.critic_model

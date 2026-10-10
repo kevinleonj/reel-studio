@@ -66,6 +66,7 @@ class Made:
     renders: int
     cost: Decimal
     edl: Edl
+    warnings: list[str]  # write_edl's craft warnings for the shipped edit list
 
 
 def media_steps(folder: Path, ffmpeg: Ffmpeg, media: Media, cfg: Config) -> Steps:
@@ -112,7 +113,9 @@ def _order_line(order: prompt.OrderSettings) -> str:
     return f"style {order.style}, {order.length_s} s, text {order.text_lang}, voice {voice}"
 
 
-def _ship(request: Request, final: critic.Final[Rendered], meter: Meter, edl: Edl) -> None:
+def _ship(
+    request: Request, final: critic.Final[Rendered], meter: Meter, edl: Edl, warnings: list[str]
+) -> None:
     out = request.out
     for name in (render.TEXT, render.CLEAN, qa.QA_JSON):
         shutil.copy2(final.render.folder / name, out / name)
@@ -132,6 +135,7 @@ def _ship(request: Request, final: critic.Final[Rendered], meter: Meter, edl: Ed
             "major": [i.model_dump() for i in review.major],
         },
         "hard_checks_passed": all(final.render.qa.hard_checks.model_dump().values()),
+        "edl_warnings": warnings,
     }
     (out / RESULT_JSON).write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
 
@@ -156,6 +160,7 @@ def make(request: Request, ports_: Ports, steps: Steps, cfg: Config) -> Made:
     judge_system = prompt.critic_prompt(cfg)
     history: list[loop.Message] = []
     edls: list[Edl] = []
+    warned: list[list[str]] = []
 
     def plan(feedback: str | None) -> Edl:
         opening = feedback if feedback is not None else prompt.brief(request.order, cfg, shots, {})
@@ -164,6 +169,7 @@ def make(request: Request, ports_: Ports, steps: Steps, cfg: Config) -> Made:
             raise ModelRefusal("the loop ended without an edit list")
         history[:] = outcome.messages
         edls.append(outcome.edl)
+        warned.append(list(outcome.warnings))
         return outcome.edl
 
     def render_one(edl: Edl, number: int) -> Rendered:
@@ -182,8 +188,9 @@ def make(request: Request, ports_: Ports, steps: Steps, cfg: Config) -> Made:
         )
 
     final = critic.review_cycle(plan, render_one, judge, limits.gates, limits.editor.max_renders)
-    shipped = edls[int(final.render.folder.name) - 1]
-    _ship(request, final, meter, shipped)
+    number = int(final.render.folder.name) - 1
+    shipped, warnings = edls[number], warned[number]
+    _ship(request, final, meter, shipped, warnings)
     log.info(
         "shipped render %s, critic %d, cost %s",
         final.render.folder.name,
@@ -191,4 +198,4 @@ def make(request: Request, ports_: Ports, steps: Steps, cfg: Config) -> Made:
         meter.spent,
         extra={"stage": STAGE, "event": "shipped", "outcome": "passed" if final.passed else "weak"},
     )
-    return Made(request.out, final, len(edls), meter.spent, shipped)
+    return Made(request.out, final, len(edls), meter.spent, shipped, warnings)
