@@ -82,6 +82,21 @@ Written by the cloud lane only. Newest entry on top.
   `POST /api-keys` retried could orphan a key (rare; the rerun then stops and asks for cleanup).
 - cloud.toml values are key-strict but not range-checked (review S1); SigningIdentity repr shows the
   token (S2); `signed_url` signs any key: callers must authorise (S2).
+- Focused review of 005d131..08a94f7: PASS, 0 critical. Its warnings are evidence gaps, to close
+  next (tests only, behaviour verified by the reviewer's probes):
+  - W-A: `test_failed_verification_stops_at_once` also matches the old timeout message; assert
+    "marked the domain failed" and one poll, plus a failed-then-verified case.
+  - W-B: the verification-timeout test lost its `clock.now >= timeout` assertion.
+  - W-C: assert the original exception text is absent from CloudUnavailable, and add a launcher
+    RefreshError case.
+  - W-D: no test for smoke's credentials failure in `main()` or stripe-setup's SetupError path.
+  - W-E: zone-relative record names are pinned only at function level; add a run through
+    `run_dns` with a zone-relative fake.
+  - W-F: FACTS row for `gcloud secrets describe` and
+    `secrets versions list --filter=state:ENABLED --limit=1` (flags checked offline by the reviewer).
+- Same review, suggestions: send `limit=100` and fail closed on `has_more` for `/domains` and
+  `/api-keys`; INFRA §4 still says smoke uses `gcloud run ... describe` (docs are Kevin's); the same
+  `| head -1` under pipefail exists in `scripts/ci-install.sh:57` (main lane, latent).
 
 ## Evidence lines (the gates read these)
 
