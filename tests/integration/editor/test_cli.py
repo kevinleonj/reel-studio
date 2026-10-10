@@ -72,7 +72,7 @@ def test_a_sliver_photo_among_the_clips_is_skipped_and_the_reel_still_renders(
     assert isinstance(settings, EditorSettings)
     folder = tmp_path / "clips"
     shutil.copytree(clips_dir, folder)
-    Image.new("RGB", (10, 4300)).save(folder / "sliver.png")  # REVIEW-FIXES engine item 1
+    Image.new("RGB", (10, 4300)).save(folder / "sliver.png")  # LESSONS L13
     out = tmp_path / "out"
 
     code = reel.main(["render", "--edl", str(BASIC), str(folder), "--out", str(out)], settings)

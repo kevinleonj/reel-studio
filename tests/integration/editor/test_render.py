@@ -124,7 +124,7 @@ def test_loudness_hits_the_target_when_natural_db_is_not_0(
 ) -> None:
     _, shots, _, _, job = rendered
     quieter = json.loads(BASIC.read_text(encoding="utf-8"))
-    quieter["audio"]["natural_db"] = -6  # REVIEW-FIXES engine item 4: was -19.9 LUFS
+    quieter["audio"]["natural_db"] = -6  # LESSONS L14: was -19.9 LUFS
     report = edl.validate(quieter, shots, job.media)
     assert isinstance(report.edl, Edl)
     out = tmp_path / "out"

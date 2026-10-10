@@ -72,7 +72,7 @@ def test_a_sliver_photo_is_skipped_with_a_log_line_and_the_order_goes_on(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     folder = _videos(tmp_path, 1)
-    Image.new("RGB", (10, 4300)).save(folder / "sliver.png")  # REVIEW-FIXES engine item 1
+    Image.new("RGB", (10, 4300)).save(folder / "sliver.png")  # LESSONS L13
 
     with caplog.at_level("WARNING"):
         proxies = prepare.prepare_folder(folder, tmp_path / "w", FakeFfmpeg(), config.load_media())  # type: ignore[arg-type]
@@ -86,10 +86,20 @@ def test_a_video_whose_probe_says_width_0_is_skipped_and_the_order_goes_on(
 ) -> None:
     folder = _videos(tmp_path, 2)
     zero = {"streams": [{"codec_type": "video", "width": 0, "height": 1080}], "format": {}}
-    fake = FakeFfmpeg(raw={"IMG_0.MOV": zero})  # REVIEW-FIXES engine item 2
+    fake = FakeFfmpeg(raw={"IMG_0.MOV": zero})  # LESSONS L13
 
     with caplog.at_level("WARNING"):
         proxies = prepare.prepare_folder(folder, tmp_path / "w", fake, config.load_media())  # type: ignore[arg-type]
 
     assert [p.source for p in proxies] == ["IMG_1.MOV"]
     assert any("SKIPPED IMG_0.MOV" in r.getMessage() for r in caplog.records)
+
+
+def test_a_sliver_video_is_skipped_by_the_configured_cap(tmp_path: Path) -> None:
+    folder = _videos(tmp_path, 2)
+    sliver = {"streams": [{"codec_type": "video", "width": 1, "height": 10000}], "format": {}}
+    fake = FakeFfmpeg(raw={"IMG_0.MOV": sliver})  # 1080 x 10,800,000 to fill the frame
+
+    proxies = prepare.prepare_folder(folder, tmp_path / "w", fake, config.load_media())  # type: ignore[arg-type]
+
+    assert [p.source for p in proxies] == ["IMG_1.MOV"]
