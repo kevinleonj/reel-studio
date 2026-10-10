@@ -67,6 +67,88 @@ def push_secret(
     )
 
 
+def version_id(name: str) -> str:
+    """`projects/p/secrets/s/versions/7` -> `7`."""
+    return name.strip().rsplit("/", 1)[-1]
+
+
+def rotate_secret(
+    runner: Runner, project: str, secret_id: str, value: SecretStr, timeout_s: float
+) -> str:
+    """Add a version, confirm it is ENABLED, then destroy every older version still billed.
+
+    Enabled and disabled versions are both billed and the old value stays readable; destroyed
+    versions are free (F413). Nothing is destroyed unless the new version is confirmed.
+    """
+    raw = value.get_secret_value()
+    if not raw:
+        raise ValueError(f"{secret_id}: refusing to store an empty secret")
+    where = f"--project={project}"
+    added = runner(
+        [
+            "gcloud",
+            "secrets",
+            "versions",
+            "add",
+            secret_id,
+            "--data-file=-",
+            where,
+            "--format=value(name)",
+        ],
+        raw,
+        timeout_s,
+    )
+    new = version_id(added)
+    state = runner(
+        [
+            "gcloud",
+            "secrets",
+            "versions",
+            "describe",
+            new,
+            f"--secret={secret_id}",
+            where,
+            "--format=value(state)",
+        ],
+        None,
+        timeout_s,
+    ).strip()
+    if not new or state != "ENABLED":
+        raise CommandError(
+            f"{secret_id}: new version {new or '?'} is {state or 'missing'}; older versions kept"
+        )
+    listed = runner(
+        [
+            "gcloud",
+            "secrets",
+            "versions",
+            "list",
+            secret_id,
+            where,
+            "--filter=NOT state:DESTROYED",
+            "--format=value(name)",
+        ],
+        None,
+        timeout_s,
+    )
+    for old in sorted({version_id(name) for name in listed.split()} - {new}):
+        runner(
+            [
+                "gcloud",
+                "secrets",
+                "versions",
+                "destroy",
+                old,
+                f"--secret={secret_id}",
+                where,
+                "--quiet",
+            ],
+            None,
+            timeout_s,
+        )
+    return new
+
+
 class SecretStore(Protocol):
     """Where show-once secrets go. Check `ready` before asking a vendor to mint one."""
 

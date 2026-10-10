@@ -2,7 +2,8 @@
 
 docs/ARCHITECTURE.md §6: only CLOUD_ANTHROPIC_API_KEY, CLOUD_GEMINI_API_KEY and STRIPE_SECRET_KEY.
 The Resend key and the webhook secret are created by `make dns` and `make stripe-setup`. Values
-go on gcloud's stdin and are never printed. Each run adds a new version (the latest wins).
+go on gcloud's stdin and are never printed. Each run adds a new version, confirms it is enabled,
+then destroys the older versions (billed while enabled or disabled, and still readable; F413).
 """
 
 import sys
@@ -11,7 +12,7 @@ from pydantic import SecretStr
 
 from reel_studio.core.config import load_cloud
 from reel_studio.settings import CloudSettings, WebSettings
-from scripts.cloud._shell import CommandError, Runner, push_secret, run, say
+from scripts.cloud._shell import CommandError, Runner, rotate_secret, run, say
 
 # settings field -> Secret Manager container (infra/bootstrap/locals.tf secret_ids)
 SECRET_FIELDS = {
@@ -23,8 +24,8 @@ SECRET_FIELDS = {
 
 def push_all(runner: Runner, project: str, values: dict[str, SecretStr], timeout_s: float) -> None:
     for secret_id, value in values.items():
-        push_secret(runner, project, secret_id, value, timeout_s)
-        say(f"secrets-push: {secret_id} updated")
+        version = rotate_secret(runner, project, secret_id, value, timeout_s)
+        say(f"secrets-push: {secret_id} now at version {version}, older versions destroyed")
 
 
 def main() -> int:
