@@ -2,7 +2,8 @@
 
 The SDK's own retries are off (`max_retries=0`, F15); this wrapper owns them, so a spend limit is
 never retried and every attempt is logged once with its latency. Requests and replies cross the
-port as plain JSON: the loop never sees an SDK type.
+port as plain JSON: the loop never sees an SDK type. `create` streams: the SDK refuses a plain
+request whose max_tokens could take over ten minutes, which max_tokens_retry does (F210).
 """
 
 import time
@@ -25,14 +26,21 @@ type Record = dict[str, Any]  # Any: a request or reply as plain JSON
 log = get_logger(__name__)
 
 STAGE = "planning"
-# F13: the two ways a spend limit answers. The 400 is told apart from any other bad request only
-# by the start of its message.
-WORKSPACE_LIMIT_PREFIX = "You have reached your specified workspace API usage limits"
-SPEND_LIMIT_TYPE = "enforced_spend_limit_reached"
+# F13: how a spend limit answers. A limit Kevin set is a 400 told apart from any other bad request
+# only by the start of its message (organisation or workspace); the tier cap is a 429 whose
+# error.details.error_code tells it apart from a rate limit.
+SPEND_LIMIT_PREFIXES = (
+    "You have reached your specified API usage limits",
+    "You have reached your specified workspace API usage limits",
+)
+SPEND_LIMIT_CODE = "enforced_spend_limit_reached"
 # F15: the statuses the SDK itself would retry; 5xx are added in _transient.
 RETRY_STATUSES = frozenset(
     {HTTPStatus.REQUEST_TIMEOUT, HTTPStatus.CONFLICT, HTTPStatus.TOO_MANY_REQUESTS}
 )
+# An error inside a stream comes after its 200, so only error.type tells what it was (F210);
+# these are the types of the retried statuses (errors page).
+RETRY_TYPES = frozenset({"rate_limit_error", "api_error", "timeout_error", "overloaded_error"})
 
 
 @dataclass(frozen=True)
@@ -46,20 +54,24 @@ class RetryPolicy:
         return float(min(self.initial_s * 2**attempt, self.max_s))
 
 
-def _error_message(error: anthropic.APIStatusError) -> str:
-    body = error.body
-    if isinstance(body, Mapping):
-        detail = body.get("error")
-        if isinstance(detail, Mapping) and isinstance(detail.get("message"), str):
-            return str(detail["message"])
-    return str(error.message)
+def _error_field(error: anthropic.APIStatusError, *path: str) -> object:
+    """body["error"][path...], or None when the body has no such field."""
+    value: object = error.body
+    for key in ("error", *path):
+        if not isinstance(value, Mapping):
+            return None
+        value = value.get(key)
+    return value
 
 
 def _is_spend_limit(error: anthropic.APIStatusError) -> bool:
     if error.status_code == HTTPStatus.TOO_MANY_REQUESTS:
-        return error.type == SPEND_LIMIT_TYPE
-    return error.status_code == HTTPStatus.BAD_REQUEST and _error_message(error).startswith(
-        WORKSPACE_LIMIT_PREFIX
+        return _error_field(error, "details", "error_code") == SPEND_LIMIT_CODE
+    message = _error_field(error, "message")
+    return (
+        error.status_code == HTTPStatus.BAD_REQUEST
+        and isinstance(message, str)
+        and message.startswith(SPEND_LIMIT_PREFIXES)
     )
 
 
@@ -70,6 +82,7 @@ def _transient(error: anthropic.APIError) -> bool:
         return (
             error.status_code in RETRY_STATUSES
             or error.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR
+            or error.type in RETRY_TYPES
         )
     return False
 
@@ -93,7 +106,9 @@ class ClaudeClient:
         self.policy = policy
         self._sleep = sleep
 
-    def _call(self, name: str, send: Callable[[], Any]) -> Any:  # Any: the SDK's reply
+    def _call(
+        self, name: str, send: Callable[[], Any], outcome: Callable[[Any], str]
+    ) -> Any:  # Any: the SDK's reply
         for attempt in range(self.policy.retries + 1):
             started = time.monotonic()
             try:
@@ -103,13 +118,16 @@ class ClaudeClient:
                 self._failed(name, error, attempt, latency_ms)
                 continue
             latency_ms = round((time.monotonic() - started) * constants.MS_PER_S)
-            stop = getattr(reply, "stop_reason", None)  # count_tokens replies have none
-            outcome = stop if stop is not None else "ok"
             log.info(
                 "%s ok after %d ms",
                 name,
                 latency_ms,
-                extra={"stage": STAGE, "event": name, "latency_ms": latency_ms, "outcome": outcome},
+                extra={
+                    "stage": STAGE,
+                    "event": name,
+                    "latency_ms": latency_ms,
+                    "outcome": outcome(reply),
+                },
             )
             return reply
         raise ProviderUnavailable(f"{name}: no answer after {self.policy.retries + 1} attempts")
@@ -141,14 +159,20 @@ class ClaudeClient:
         raise error
 
     def count_tokens(self, request: Mapping[str, Any]) -> int:  # Any: request JSON
-        counted = self._call("claude_count", lambda: self.sdk.messages.count_tokens(**request))
+        counted = self._call(
+            "claude_count", lambda: self.sdk.messages.count_tokens(**request), lambda _: "ok"
+        )
         return int(counted.input_tokens)
 
     def create(self, request: Mapping[str, Any]) -> Record:  # Any: request JSON
-        reply = self._call("claude_create", lambda: self.sdk.messages.create(**request))
+        def send() -> tuple[Any, str | None]:  # Any: anthropic.types.Message
+            with self.sdk.messages.stream(**request) as stream:
+                return stream.get_final_message(), stream.request_id
+
+        reply, request_id = self._call("claude_create", send, lambda sent: str(sent[0].stop_reason))
         # exclude_none: the reply's content goes back in the next request, so no null fields
         record: Record = reply.model_dump(mode="json", exclude_none=True)
-        record["request_id"] = reply._request_id
+        record["request_id"] = request_id
         return record
 
 

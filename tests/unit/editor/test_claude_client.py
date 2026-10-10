@@ -4,6 +4,7 @@ The SDK object is a fake that raises the SDK's own exception classes, built on h
 and responses (doc ledger: anthropic, httpx2), so no request leaves the process.
 """
 
+import json
 import logging
 from collections.abc import Sequence
 from typing import Any
@@ -18,10 +19,25 @@ from reel_studio.core import config
 from reel_studio.core.errors import ProviderUnavailable, SpendLimitReached
 
 URL = "https://api.anthropic.test/v1/messages"
+# Verbatim from https://platform.claude.com/docs/en/api/rate-limits (F13, read 10 Oct 2026).
 WORKSPACE_LIMIT = (
     "You have reached your specified workspace API usage limits. "
     "You will regain access on 2026-11-01 at 00:00 UTC."
 )
+ORGANISATION_LIMIT = (
+    "You have reached your specified API usage limits. "
+    "You will regain access on 2026-11-01 at 00:00 UTC."
+)
+TIER_CAP_BODY = {
+    "type": "error",
+    "error": {
+        "type": "rate_limit_error",
+        "message": "You have reached your API usage limits: your organization has crossed its "
+        "monthly API usage threshold, set based on your organization's API tier. You will "
+        "regain access on 2026-09-01 at 00:00 UTC.",
+        "details": {"error_code": "enforced_spend_limit_reached"},
+    },
+}
 POLICY = client.RetryPolicy(retries=2, initial_s=0.5, max_s=8.0)
 REQUEST: dict[str, Any] = {  # Any: request JSON
     "model": "claude-haiku-5-5",
@@ -35,11 +51,14 @@ REQUEST: dict[str, Any] = {  # Any: request JSON
 }
 
 
-def status_error(status: int, kind: str, message: str = "boom") -> anthropic.APIStatusError:
+def body_error(status: int, body: dict[str, Any]) -> anthropic.APIStatusError:  # Any: JSON
     request = httpx2.Request("POST", URL)
-    body = {"type": "error", "error": {"type": kind, "message": message}}
     response = httpx2.Response(status, json=body, request=request, headers={"request-id": "r1"})
-    return anthropic.APIStatusError(message, response=response, body=body)
+    return anthropic.APIStatusError(str(body["error"]["message"]), response=response, body=body)
+
+
+def status_error(status: int, kind: str, message: str = "boom") -> anthropic.APIStatusError:
+    return body_error(status, {"type": "error", "error": {"type": kind, "message": message}})
 
 
 def connection_error() -> anthropic.APIConnectionError:
@@ -92,11 +111,28 @@ class _Messages:
             raise item
         return item
 
-    def create(self, **kwargs: Any) -> Any:  # Any: SDK keyword arguments
-        return self._next(kwargs)
+    def stream(self, **kwargs: Any) -> "_Stream":  # Any: SDK keyword arguments
+        return _Stream(self._next(kwargs))
 
     def count_tokens(self, **kwargs: Any) -> Any:  # Any: SDK keyword arguments
         return self._next(kwargs)
+
+
+class _Stream:
+    """Stands in for anthropic's MessageStream: a context manager with the final message."""
+
+    def __init__(self, reply: anthropic.types.Message) -> None:
+        self.reply = reply
+        self.request_id = reply._request_id
+
+    def __enter__(self) -> "_Stream":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+    def get_final_message(self) -> anthropic.types.Message:
+        return self.reply
 
 
 class _Sdk:
@@ -117,6 +153,8 @@ RETRYABLE = [
     pytest.param(lambda: status_error(429, "rate_limit_error"), id="429"),
     pytest.param(lambda: status_error(500, "api_error"), id="500"),
     pytest.param(lambda: status_error(529, "overloaded_error"), id="529"),
+    # An error after the stream's 200 arrives as an SSE error event (errors page, F210).
+    pytest.param(lambda: status_error(200, "overloaded_error"), id="mid-stream"),
 ]
 
 
@@ -146,7 +184,10 @@ def test_a_transient_failure_then_a_reply_returns_the_reply() -> None:
     "error",
     [
         pytest.param(status_error(400, "invalid_request_error", WORKSPACE_LIMIT), id="workspace"),
-        pytest.param(status_error(429, "enforced_spend_limit_reached"), id="organisation"),
+        pytest.param(
+            status_error(400, "invalid_request_error", ORGANISATION_LIMIT), id="organisation"
+        ),
+        pytest.param(body_error(429, TIER_CAP_BODY), id="tier-cap"),
     ],
 )
 def test_a_spend_limit_stops_at_once_without_a_retry(error: anthropic.APIStatusError) -> None:
@@ -226,3 +267,65 @@ def test_connect_turns_the_sdk_retries_off_and_sets_the_timeouts() -> None:
     assert sdk.max_retries == 0 and editor.transient_retries == 2  # D45, EDITOR §3
     assert sdk.timeout == anthropic.Timeout(cfg.timeout_s, connect=cfg.connect_timeout_s)
     assert claude.policy == client.RetryPolicy(2, cfg.retry_initial_s, cfg.retry_max_s)
+
+
+STREAM_EVENTS: list[dict[str, Any]] = [  # Any: server-sent event JSON
+    {
+        "type": "message_start",
+        "message": {
+            "id": "msg_s",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-haiku-5-5",
+            "content": [],
+            "stop_reason": None,
+            "stop_sequence": None,
+            "usage": {
+                "input_tokens": 12,
+                "output_tokens": 1,
+                "cache_creation_input_tokens": 3000,
+                "cache_read_input_tokens": 0,
+            },
+        },
+    },
+    {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}},
+    {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "Hi"}},
+    {"type": "content_block_stop", "index": 0},
+    {
+        "type": "message_delta",
+        "delta": {"stop_reason": "end_turn", "stop_sequence": None},
+        "usage": {"output_tokens": 7},
+    },
+    {"type": "message_stop"},
+]
+
+
+def test_create_streams_so_the_sdk_never_refuses_the_long_retry() -> None:
+    """The real SDK refuses a non-streaming request whose max_tokens could outlast ten minutes
+    (anthropic 1.13.0 _calculate_nonstreaming_timeout): max_tokens_retry must still go out."""
+    sent: list[dict[str, Any]] = []  # Any: request body JSON
+
+    def answer(request: httpx2.Request) -> httpx2.Response:
+        sent.append(json.loads(request.content))
+        events = "".join(f"event: {e['type']}\ndata: {json.dumps(e)}\n\n" for e in STREAM_EVENTS)
+        headers = {"content-type": "text/event-stream", "request-id": "req_s"}
+        return httpx2.Response(200, headers=headers, content=events.encode())
+
+    editor = config.load().limits.editor
+    sdk = anthropic.Anthropic(
+        api_key="test-anthropic-key",
+        max_retries=0,
+        http_client=httpx2.Client(transport=httpx2.MockTransport(answer)),
+    )
+
+    reply = client.ClaudeClient(sdk, POLICY).create(
+        {**REQUEST, "max_tokens": editor.max_tokens_retry}
+    )
+
+    assert sent[0]["stream"] is True and sent[0]["max_tokens"] == editor.max_tokens_retry
+    assert sent[0]["cache_control"] == {"type": "ephemeral"}
+    assert sent[0]["output_config"] == {"effort": "high"}
+    assert reply["content"] == [{"type": "text", "text": "Hi"}]
+    assert reply["stop_reason"] == "end_turn" and reply["request_id"] == "req_s"
+    assert reply["usage"]["cache_creation_input_tokens"] == 3000
+    assert reply["usage"]["output_tokens"] == 7
