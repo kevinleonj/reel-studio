@@ -58,12 +58,16 @@ def test_out_defaults_next_to_the_folder_never_inside_it(tmp_path: Path) -> None
 
 def test_edl_json_is_read_not_written(tmp_path: Path, make_settings: MakeSettings) -> None:
     edl = tmp_path / "edl.json"
-    text = json.dumps({"versions": []})
+    # Odd spacing, and an error the precheck finds only after reading: exit 2 proves the read.
+    text = '{ "versions":[],   "audio": {"music": "song.mp3"} }\n'
     edl.write_text(text, encoding="utf-8")
+    folder = tmp_path / "in"
+    folder.mkdir()
 
-    reel.main(["render", "--edl", str(edl), str(tmp_path / "nope")], _settings(make_settings))
+    code = reel.main(["render", "--edl", str(edl), str(folder)], _settings(make_settings))
 
-    assert edl.read_text(encoding="utf-8") == text
+    assert code == 2
+    assert edl.read_bytes() == text.encode("utf-8")
 
 
 def test_dot_as_the_folder_names_the_default_out_from_the_real_name(
