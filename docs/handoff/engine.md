@@ -7,7 +7,7 @@ Written by the engine lane only. Newest entry on top.
 - Partly: the gate without `--local` (runs after this push's CI)
 - Blocked: —
 - Not started: STEP-03 on this branch (parked locally on `step-03-editor-loop` until #2 merges)
-- Next: Kevin reviews and merges #2; answers Needs Kevin 5, 10-16
+- Next: Kevin reviews and merges #2; answers Needs Kevin 5, 10-17
 - Ledger: Context7 entries for numpy, cv2, scenedetect, PIL, pillow_heif in `eval/doc-ledger.pending.json`
 
 ## Needs Kevin
@@ -50,6 +50,13 @@ to `EditorSettings`; 9. STEP-01 merged (6089989). Open:
     the field only mattered as a bug. In the kit it made room under music; without music (D02, D42) it
     has no purpose. The field stays (D46: the kit schema unchanged). Remove it from the schema and the
     prompt, or keep it as a no-op: your call.
+17. **STEP-03 waits on you: merge #2.** Your instruction (REVIEW-FIXES, 10 Oct): "Do not start STEP-03
+    until Kevin merges PR #2". Work done before that is parked, local only, in WIP commit `d0de906` on
+    `step-03-editor-loop`: meter, tools, loop, critic (with `tool_choice` auto, F10), prompts, `make`
+    and `reel make`, all tested with the fake client. Still to do there: `prompt.py` and the Claude
+    adapter, which the doc gate blocks until `anthropic`, `httpx2` and `jinja2` are copied from
+    `eval/doc-ledger.pending.json` into the ledger; then `make eval` (written, never run). The first
+    paid run (`make eval FIX=creami MODEL=haiku`, about $0.05) needs your go.
 Plan notes kept from the answered items: fonts (Poppins-Bold.ttf + OFL.txt) ship as package data
 under `reel_studio/editor/media/fonts/`, no host-font fallbacks. Sheets failing case:
 `test_sheet_is_1536x864_with_16_tiles` fails against a port of kit `build_sheets` (`prep.py:167-221`,
