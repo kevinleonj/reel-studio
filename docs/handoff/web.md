@@ -33,6 +33,33 @@ Written by the web lane only. Newest entry on top.
 
 ## Log
 
+### 10 Oct 2026 (night) — phase B review round 3: PASS with 4 warnings, fixed
+
+- R3-W1 Kevin's alert is sent first and needs nothing from the copy table; a customer failure email that
+  cannot be built is logged and stays unclaimed. Nothing retries it later: the sweep reports an order
+  once (the round-2 note below said otherwise; it was wrong). R3-W2 the down-mailer and log-leak tests
+  now fail the order first, so they reach the Notifier's own sends. R3-W3 pins for the dispatcher's
+  per-order guard, NFC names, the rate-limiter prune, "bytes nowhere is not complete", an older session
+  replayed after a newer upload, the Start bytes re-check and the store's path guard
+  (`tests/unit/api/test_api_pins_r3.py`). R3-W4 F310 now quotes the right Google page. Also: a status
+  query reports a short partial truthfully (it used to overstate or answer 400), file names longer than
+  255 characters are refused at the batch, the delete-skip log no longer carries the session id.
+
+### 10 Oct 2026 (night) — phase B re-review: PASS with 7 warnings, fixed
+
+- R2-W1 an SMTP refusal's traceback carried the recipient's address into the JSON log: `DeliveryFailed`
+  is now raised `from None` (test asserts the address is in no log line). R2-W2 the failure email is
+  built before it is claimed (see round 3: Kevin's alert no longer depends on it), only orders that
+  really failed get it, one order's notice error no longer skips the rest; `messages.py` reads
+  `web/src/copy/en.json`, so **the api image must COPY that file** (test pins that it exists). R2-W3 a
+  256-character path or session id is a 404, not a 500. R2-W4 session records are written via a temp
+  file and rename; an unreadable record of another order no longer blocks a delete. R2-W5 `Clip.MOV` and
+  `clip.mov` in one batch are refused (APFS treats them as one file). R2-W6 pins for every surviving
+  mutant the review listed (SMTP mapping, claim-once, concurrent Start, delete guards, exact-limit chunk,
+  batch accounting, partial removal). R2-W7 the rate limiter forgets idle addresses once per minute.
+  Also: a partial shorter than its record is reported and resent, not zero-filled; a crash after the
+  move answers complete on retry; the emulator runner always stops both containers.
+
 ### 10 Oct 2026 (night) — phase B senior review: FAIL (1 critical, 10 warnings), fixed
 
 - C1 the laptop's partial upload belonged to the file name: a re-chosen file could interleave, be
