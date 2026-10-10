@@ -72,6 +72,10 @@ class Editor(_Strict):
     transient_retries: int
 
 
+class Eval(_Strict):
+    run_cap_usd: Decimal  # make eval only: lowers editor.cost_cap_usd for one paid run
+
+
 class Sheets(_Strict):
     tile_w: int
     tile_h: int
@@ -123,6 +127,7 @@ class Limits(_Strict):
     limits: Quotas
     retention: Retention
     editor: Editor
+    eval: Eval
     sheets: Sheets
     gates: Gates
     speech: Speech

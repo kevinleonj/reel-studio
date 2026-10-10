@@ -10,8 +10,9 @@ from typing import Any
 import pytest
 
 from reel_studio.core import config
+from reel_studio.core.config import Eval
 from reel_studio.editor import evaluate, make
-from tests.fakes.claude import FakeClaude, response, text
+from tests.fakes.claude import FakeClaude, response, text, tool_use
 from tests.fakes.clock import FrozenClock
 from tests.fakes.media import FakeMedia, critic_turn, edl_turn
 
@@ -121,13 +122,50 @@ def test_a_failed_run_still_records_what_it_spent(tmp_path: Path) -> None:
     assert _gate_problems(data, "creami", "haiku") == []
 
 
-def test_a_second_run_the_same_day_keeps_its_own_request_log(tmp_path: Path) -> None:
-    _run(tmp_path, [edl_turn("e1"), critic_turn(5)], "haiku")
+def test_a_second_run_the_same_day_keeps_the_first_runs_record(tmp_path: Path) -> None:
+    _run(tmp_path, [edl_turn("e1"), critic_turn(3), edl_turn("e2"), critic_turn(3)], "haiku")
 
-    _, _, folder = _run(tmp_path, [edl_turn("e1"), critic_turn(5)], "haiku", NOW.replace(minute=45))
+    later = NOW.replace(minute=45)
+    _, _, folder = _run(tmp_path, [edl_turn("e1"), critic_turn(5)], "haiku", later)
 
-    data = _result(folder, "creami-haiku.json")
-    assert len(data["requests"]) == 1 and len(data["critic_requests"]) == 1
+    newest = _result(folder, "creami-haiku.json")
+    first = _result(folder, "creami-haiku-183005.json")
+    assert len(newest["requests"]) == 1 and len(newest["critic_requests"]) == 1
+    assert len(first["requests"]) == 2 and first["critic"]["passed"] is False
+    names = sorted(p.name for p in folder.iterdir())
+    assert names == ["creami-haiku-183005.json", "creami-haiku.json"]
+
+
+def test_the_result_carries_every_score(tmp_path: Path) -> None:
+    _, _, folder = _run(tmp_path, [edl_turn("e1"), critic_turn(5)], "haiku")
+
+    scores = _result(folder, "creami-haiku.json")["scores"]
+
+    assert scores["hook"] == 5 and sum(scores.values()) == 29
+
+
+def test_a_run_stops_at_the_eval_cap_before_any_call(tmp_path: Path) -> None:
+    tiny = Eval(run_cap_usd=Decimal("0.01"))
+    capped = CFG.model_copy(update={"limits": CFG.limits.model_copy(update={"eval": tiny})})
+    fake, media = FakeClaude([edl_turn("e1")]), FakeMedia()
+    (tmp_path / "fixtures" / "creami").mkdir(parents=True)
+    ports, steps = make.Ports(fake, FrozenClock(NOW)), make.Steps(media.prepare, media.render)
+
+    code = evaluate.run(_job(tmp_path, "sonnet"), ports, steps, capped)
+
+    data = _result(tmp_path / "repo" / "eval" / "results" / "2026-10-10", "creami-sonnet.json")
+    assert code == 1 and fake.requests == [] and data["error"] == "cost_cap"
+
+
+def test_an_unexpected_error_is_raised_after_its_spend_is_recorded(tmp_path: Path) -> None:
+    looked = response([tool_use("t", "read_transcript", {"clip": "c01"})], "tool_use")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        _run(tmp_path, [looked, RuntimeError("boom")], "haiku")
+
+    data = _result(tmp_path / "repo" / "eval" / "results" / "2026-10-10", "creami-haiku.json")
+    assert data["error"] == "RuntimeError" and len(data["requests"]) == 1
+    assert _gate_problems(data, "creami", "haiku") == []
 
 
 def test_an_unknown_model_or_fixture_is_refused(tmp_path: Path) -> None:

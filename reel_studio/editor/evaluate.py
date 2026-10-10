@@ -11,6 +11,7 @@ import json
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -50,18 +51,18 @@ class Job:
     style: str
 
 
-def with_models(cfg: Config, model: str) -> Config:
+def for_eval(cfg: Config, model: str) -> Config:
     """`haiku` runs the editor and the critic on the cheap model (plumbing, D32); `sonnet` keeps
-    limits.toml's editor and critic models."""
+    limits.toml's models. Either way the order's cap drops to the eval run cap."""
     if model not in MODELS:
         raise ValueError(f"unknown model {model!r}; choose one of {MODELS}")
     editor = cfg.limits.editor
-    if model == "sonnet":
-        return cfg
-    cheap = editor.model_copy(
-        update={"model": editor.cheap_model, "critic_model": editor.cheap_model}
-    )
-    return cfg.model_copy(update={"limits": cfg.limits.model_copy(update={"editor": cheap})})
+    cap = min(editor.cost_cap_usd, cfg.limits.eval.run_cap_usd)
+    change: dict[str, object] = {"cost_cap_usd": cap}
+    if model == "haiku":
+        change.update(model=editor.cheap_model, critic_model=editor.cheap_model)
+    limits = cfg.limits.model_copy(update={"editor": editor.model_copy(update=change)})
+    return cfg.model_copy(update={"limits": limits})
 
 
 def _calls(requests: Path) -> tuple[list[dict[str, int]], list[dict[str, int]], Decimal]:
@@ -78,20 +79,26 @@ def _calls(requests: Path) -> tuple[list[dict[str, int]], list[dict[str, int]], 
     return editor, critic, cost
 
 
-def _record(job: Job, out: Path, made: make.Made | None, error: str | None) -> dict[str, Any]:
+def _record(
+    job: Job, out: Path, made: make.Made | None, error: str | None, now: datetime
+) -> dict[str, Any]:
     editor, critic_calls, cost = _calls(out / make.REQUESTS)
+    scores: dict[str, int] = {}
     if made is not None:
         final = made.final
         critic = {"total": final.review.total, "passed": final.passed, "weakness": final.weakness}
+        scores = final.review.scores()
     else:
         critic = {"total": 0, "passed": False, "weakness": None}
     relative = out.relative_to(job.root)
     return {
         "fixture": job.fixture,
+        "started": now.isoformat(),
         "model": job.model,
         "style": job.style,
         "cost_usd": float(cost),  # exact: every call's cost has far fewer than 15 digits
         "critic": critic,
+        "scores": scores,
         "renders": made.renders if made is not None else 0,
         "error": error,
         "requests": editor,
@@ -103,15 +110,40 @@ def _record(job: Job, out: Path, made: make.Made | None, error: str | None) -> d
     }
 
 
+def _keep_earlier(target: Path) -> None:
+    """Never overwrite a result: an earlier run's file keeps its cost under a stamped name, so
+    the gate's branch budget check (results_budget) still sums it."""
+    if not target.exists():
+        return
+    earlier = json.loads(target.read_text(encoding="utf-8"))
+    stamp = datetime.fromisoformat(earlier["started"])
+    target.rename(target.with_name(f"{target.stem}-{stamp:%H%M%S}{target.suffix}"))
+
+
+def _write(job: Job, out: Path, made: make.Made | None, error: str | None, now: datetime) -> None:
+    record = _record(job, out, made, error, now)
+    target = job.root / RESULTS / now.date().isoformat() / f"{job.fixture}-{job.model}.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _keep_earlier(target)
+    target.write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
+    critic, scores = record["critic"], record["scores"]
+    sys.stdout.write(
+        f"{job.fixture} with {job.model}: cost ${record['cost_usd']}, critic {critic['total']}"
+        f" passed={critic['passed']} {scores}, error={error}\nresult: {target}\nreel: {out}\n"
+    )
+
+
 def run(job: Job, ports: make.Ports, steps: make.Steps, cfg: Config) -> int:
-    """Run `make` on the fixture and write the result file; 0 when a Reel was shipped."""
-    chosen = with_models(cfg, job.model)
+    """Run `make` on the fixture and write the result file; 0 when a Reel was shipped.
+
+    Any failure still writes the file with what was spent; one that is not a ReelError (a bug,
+    a bad request) is raised after that."""
+    chosen = for_eval(cfg, job.model)
     folder = job.fixtures / job.fixture
     if not folder.is_dir():
         raise ValueError(f"no fixture folder {folder}")
     now = ports.clock.now()
-    day = now.date().isoformat()
-    out = job.root / OUT / day / f"{job.fixture}-{job.model}-{now:%H%M%S}"
+    out = job.root / OUT / now.date().isoformat() / f"{job.fixture}-{job.model}-{now:%H%M%S}"
     order = prompt.OrderSettings(
         style=job.style,
         length_s=cfg.limits.order.default_length_s,
@@ -131,15 +163,10 @@ def run(job: Job, ports: make.Ports, steps: make.Steps, cfg: Config) -> int:
             exc,
             extra={"stage": STAGE, "event": "failed", "outcome": exc.code},
         )
-    record = _record(job, out, made, error)
-    target = job.root / RESULTS / day / f"{job.fixture}-{job.model}.json"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
-    critic = record["critic"]
-    sys.stdout.write(
-        f"{job.fixture} with {job.model}: cost ${record['cost_usd']}, critic {critic['total']}"
-        f" passed={critic['passed']}, error={error}\nresult: {target}\nreel: {out}\n"
-    )
+    except Exception as exc:
+        _write(job, out, None, type(exc).__name__, now)
+        raise
+    _write(job, out, made, error, now)
     return OK if made is not None else FAILED
 
 
