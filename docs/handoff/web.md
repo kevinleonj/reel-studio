@@ -2,7 +2,14 @@
 
 Written by the web lane only. Newest entry on top.
 
-## Status board
+## Status board — STEP-07 (branch `step-07-gate`, stacked on `step-06-website`, local only)
+- Done: task 2 (checkout with a code, place reserved with the order, released if Stripe fails), task 3 (fulfilment from the webhook, `/fulfil` and the sweep; expiry from the webhook, `/cancel` and the sweep, which asks Stripe first), task 4 (slots and queue: built in STEP-06, now under race tests; `take_slot` writes `queue.run_token`, but nothing passes it to the job yet: that is the real launcher's, with the engine lane's worker command), task 5 (4 race tests, fake and Firestore emulator), task 6 (`reelctl` commands on the ports), task 7 (write count: 19, F312), task 8's make target (`make stripe-listen`, dry-run only); `/api/config` sends the €19 price in Stripe mode.
+- Partly: task 1 — Payments port shapes, `PaymentsUpkeep`, `FakePayments` done; the Stripe adapter `reel_studio/adapters/payments_stripe.py` is not written: the doc gate blocks `import stripe` until the pending `stripe` entry reaches `.claude/doc-ledger.json`. `reelctl` cannot reach Firestore or Stripe until then (`connect()` says so).
+- Blocked: task 9 (Kevin: `stripe login`, `make stripe-listen`, the laptop checkout, the ≤ $3 Reel, the `Stripe e2e order:` line); the composition root (same `WebSettings` fields as STEP-06 task 6, plus `stripe_price_id` and `stripe_coupon_id`).
+- Not started: nothing else in the step.
+- Next: Stripe adapter + its fixture tests once the ledger has `stripe`; then `reelctl connect()`.
+
+## Status board — STEP-06
 - Done: task 1 (Orders, Storage, Mailer, Launcher ports with fakes; contract suites green on the fakes and on the real Firestore emulator and Mailpit), task 2 (every §7 route without payments, tests per route and error code), task 3 (web app), task 4 (fake editor), task 5 backend-free (128 Playwright tests, phone + laptop, axe), `web/` wired into `make ci` (ci-web) and `make prerelease` (Playwright + Lighthouse budget).
 - Partly: task 5's real-stack happy path (needs `make up`).
 - Blocked: task 6 (`compose.yaml`, `docker/api.Dockerfile`, `make up`/`make down`) and the API's composition root wait on the `WebSettings` fields below (`reel_studio/settings.py` is outside this lane).
@@ -10,6 +17,12 @@ Written by the web lane only. Newest entry on top.
 - Next: Kevin adds the settings fields → composition root `reel_studio/api/main.py` + dispatcher entry point, compose, Dockerfile, `make up`, live gate checks.
 
 ## Needs Kevin
+- **STEP-07 task 9 is yours:** `stripe login`, `make stripe-listen` (writes `STRIPE_WEBHOOK_SECRET` through `reelctl dotenv-set`, never printed), `PAYMENTS=stripe`, the laptop checkout with a test code, the real Reel (≤ $3), then the handoff line `Stripe e2e order: <order id>, <cost>`. The step07 gate fails on that line until then; I did not write it.
+- **Doc ledger: `stripe` is pending** in `web/doc-ledger.pending.json` (StripeClient, checkout sessions create/retrieve/expire, promotion codes list/create/update, `construct_event`; F19-F24, F311). The Stripe adapter waits on it.
+- **Settings for Stripe (`reel_studio/settings.py`, main lane):** `stripe_price_id` (the €19 price, `make stripe-setup`) and `stripe_coupon_id` (the 100%-off coupon that `reelctl codes create` attaches codes to); and for `reelctl`, the Firestore project (or Application Default Credentials' project, D63).
+- **Decision on D18's edge (link email after Stripe):** the webhook does not know the link token, which is stored only as a hash. The success URL Stripe keeps (`/o/<id>?t=<token>`, as STEP-07 specifies) does carry it, so fulfilment reads it back from the retrieved session, checks it against the stored hash, and sends `/o/<id>#t=<token>`. No new copy of the token is stored. Confirm, or pick another way (this also answers the "ready" email question below if the editor may call Stripe).
+- **More STEP-07 tunables in `config/limits.toml` to review:** `[firestore] timeout_s = 10`, `max_attempts = 12` (an aborted transaction retries at once keeping its place in line, so N simultaneous writers on the week document need up to N attempts; with 5, 8 of the 10 racing checkouts failed on the emulator), `[reelctl] list_limit = 200`, `[payments] price_minor = 1900`, `currency = "EUR"`.
+- **Port changes:** `PaymentsUpkeep` (`expire_session`, `create_code`, `expire_code`) and `PaymentGateway` beside the pinned `Payments`; `OrderUpkeep` gained `set_checkout`, `checkouts_to_check`, `resume_paused`, `list_orders`, `places_held`, and `sweep(*, expire_checkouts)` (with Stripe the API checks missed checkouts at Stripe before they expire, so a paid checkout whose webhook was lost is not dropped). New `reelctl dotenv-set NAME` (value from stdin) for `make stripe-listen`.
 - **`WebSettings` fields (blocks task 6).** The laptop API and dispatcher need these deployment values; `reel_studio/settings.py` is the main lane's file, so I did not touch it. Proposed, all without defaults unless marked:
   - `firestore_project: str` (the emulator's project id, e.g. `reel-studio-local`; `FIRESTORE_EMULATOR_HOST` itself is read by the Google client, F308)
   - `smtp_host: str`, `smtp_port: int` (Mailpit in compose: `mailpit`, `1025`; F309)
@@ -26,12 +39,92 @@ Written by the web lane only. Newest entry on top.
 - `public/og.png` is a 1200×630 screenshot of the landing page; replace it with real artwork when there is some.
 - **The "ready" email cannot carry the order link.** Its button needs `/o/<id>#t=<token>`, but the token is stored only as its SHA-256 (D18), so the editor or the dispatcher cannot rebuild the link after checkout. Options: the ready email says "open the link from your first email"; or keep the token encrypted with a server key; or a short re-access flow. A decision on D18's edge; until then the fake editor sends no ready email (failure emails and Kevin's alert need no token and are sent).
 - **CI does not run the Firestore/Mailpit contract cases** (they skip without the emulators; `make test-emulator` runs them and now fails instead of skipping). Adding it to `make ci` means pulling the ~1 GB gcloud emulator image on every CI run (20-minute job limit); or the step06 gate could run `make test-emulator`. Your call; the gate is protected.
-- **For the composition root (after the settings fields):** run uvicorn with `access_log=False` (its access log prints path and query: signed-link `sig=` and Stripe's `?t=`); behind Cloud Run use `--proxy-headers` with a trusted-hosts list so rate limits see the client, not the front end; give the dispatcher a restart policy in compose. Tunables still without a home: dispatcher poll seconds, Firestore `timeout_s`/`max_attempts`, SMTP `timeout_s` (this lane can add them to `config/limits.toml` with the composition root).
+- **For the composition root (after the settings fields):** run uvicorn with `access_log=False` (its access log prints path and query: signed-link `sig=` and Stripe's `?t=`); behind Cloud Run use `--proxy-headers` with a trusted-hosts list so rate limits see the client, not the front end; give the dispatcher a restart policy in compose. Tunables still without a home: dispatcher poll seconds, SMTP `timeout_s` (Firestore's are in `[firestore]` since STEP-07) (this lane can add them to `config/limits.toml` with the composition root).
 - Kevin's global hook commits every edit as `chore(auto)`; the branch was rebuilt into logical commits on top of `origin/main` before the push (TONIGHT.md rule).
 
 ## Evidence lines (the gates read these)
 
 ## Log
+
+### 10 Oct 2026 (night) — STEP-07 review round 2: PASS with 1 warning, fixed
+
+- R2-W1 the round-1 reorder let a Stripe-phase failure (listing the checkouts) discard the local
+  report, losing the failure notices of dead leases already failed; the Stripe phase is now guarded and
+  the report always returned (test: dead lease + failing listing). S3 the "completed but expired" error
+  log is pinned; S5 `report --week` names an unreadable cost instead of crashing. Not taken:
+  `STRIPE_EVENTS` in mk/web.mk repeats the two event names in `api/payments.py` (no test ties them).
+
+### 10 Oct 2026 (night) — STEP-07 review round 1: PASS with 6 warnings, fixed
+
+- W1 the sweep frees dead leases first, then checks Stripe; one checkout that errors (any error, logged)
+  is kept for the next sweep and the others are still checked. W2 events other than completed/expired
+  are acknowledged before any key is read; `make stripe-listen` forwards only those two (`--events`,
+  F313). W3 pins for complete-but-unpaid, the 502s (webhook, /fulfil, /cancel, code lookup), the link
+  token check, the expired-order guard, webhook 404 with payments off, /cancel's status gate,
+  dotenv-set's guards, the report's truncation note, and a direct 3-thread `claim_email` race (fake +
+  emulator). W4 `report --week` reads the week counter (`places_held`, new on `OrderUpkeep`) and sums
+  finished costs as Decimal. W5 `PaymentsFailed` says adapters raise it `from None` (the log prints the
+  chain; a vendor message may echo the success URL). W6 run_token, commit-timeout and price comments
+  corrected. A fulfilled session whose order had already expired now logs an ERROR.
+- Not taken (suggestions, for the Stripe adapter's review): cap the webhook body before the signature
+  check; refuse a session whose `amount_total` is not 0 (D58 defence in depth); tell "session not found"
+  from "Stripe unreachable" in the sweep; pin `payment_method_types=["card"]`; release the link-email
+  claim when delivery fails; `orders_firestore.py` is 377 lines (split by concern later).
+- **For Kevin:** the reviewer's mutation run copied the repository, including its secrets file, into this
+  session's scratchpad (`.../scratchpad/mut_tree`, owner-only permissions; never read or printed). The
+  hooks block deleting it from here: `rm -rf` that folder (full path in the session notes).
+
+### 10 Oct 2026 (night) — STEP-07 built test first on fakes and the emulator
+
+Before: `PAYMENTS=stripe` answered 501; `/fulfil` did nothing; `/cancel` only expired the order; the sweep
+expired missed checkouts without asking anyone; `reelctl` printed its help; no race tests.
+After:
+- `reel_studio/api/payments.py`: checkout (code lookup, 100%-off rule, order + place in one transaction,
+  session with `expires_at` +31 min, success/cancel URLs, `client_reference_id`; on a Stripe error the
+  place is given back), `fulfil` (re-reads the session; pays only `complete` + `paid`/`no_payment_required`
+  and only the order the session names; one link email), webhook route (signature → 400, unknown types
+  acknowledged, a Stripe error answers 502 so Stripe redelivers), `cancel` (expires an open session first;
+  a session completed meanwhile is fulfilled and `/cancel` answers 409), and the sweep's Stripe check (a
+  checkout Stripe could not be asked about is kept for the next sweep). The dispatcher takes the sweep as a
+  `Sweep(run, every_s)`, so the laptop sweep asks Stripe too.
+- Race tests `tests/contract/test_races.py` (marker `race`): fake 4 passed, Firestore emulator 4 passed.
+  The emulator run found the burst problem fixed by `[firestore] max_attempts` (see Needs Kevin).
+- `reelctl`: `codes create --name --expires` (code works through the given day, UTC; `max_redemptions`
+  from `[codes]`), `codes expire`, `orders list [--status]`, `orders resume --all-paused`, `report --week`,
+  `dotenv-set`. 12 tests on the fakes.
+- Write count 19 per order on the emulator (F312; A5 assumed about 17), pinned by
+  `tests/contract/test_write_count.py`.
+- Evidence: `make test-fast` 328 passed; `pytest -m race` 4 passed, 4 skipped (emulator cases);
+  `make test-emulator` 31 passed; ruff, mypy (74 files), literal scan clean.
+Follow-ups: the Stripe adapter and its fixture tests (`stripe` ledger entry); `reelctl connect()`; task 9.
+
+### 10 Oct 2026 (night) — STEP-07 plan (stacked branch `step-07-gate`, not pushed)
+
+TONIGHT.md's web section changed during the night: the version read at 22:45 said to push and open
+the pull request after STEP-06 (done: PR #4, CI green); the current one says "No push tonight" and adds
+this stacked STEP-07. PR #4 stays open; nothing on `step-07-gate` is pushed.
+
+Plan, test first, fakes and Stripe fixtures only (no Stripe call tonight; `stripe login`,
+`make stripe-listen`, the laptop checkout and the paid Reel are Kevin's):
+1. Payments port shapes settle (`core/ports.py`): `find_code` → `{promo_id, code, percent_off, active}`
+   or None; `create_checkout` → `{session_id, url}`; `parse_webhook` → `{type, session_id, order_id}`;
+   `get_session` → `{status, payment_status, order_id, email}`. Expiring a session and the reelctl code
+   commands go in a `PaymentsUpkeep` Protocol beside it (STEP-01 pins the binding list). Fake in
+   `tests/fakes/payments.py`; Stripe adapter `reel_studio/adapters/payments_stripe.py` (F19-F24, F311).
+2. Checkout with `PAYMENTS=stripe` (routes_public): refuse a code that is not 100% off (`code_invalid`) or
+   inactive (`code_inactive`), reserve the place and create the order in one transaction, create the
+   session (€19 price id from settings, `expires_at = now + 31 min`, success `/o/<id>?t=<token>`, cancel
+   `/new?cancel=<id>&t=<token>`), release the place if Stripe fails.
+3. Webhook `POST /api/stripe/webhook` (signature), `/fulfil` checks the session with Stripe, `/cancel`
+   expires it, the sweep asks Stripe about missed checkouts before expiring them. All idempotent.
+4. Race tests (marker `race`, fake + Firestore emulator): 10 concurrent checkouts at 45 of 50 → exactly
+   5; one webhook delivered 3 times → one paid order, one email; 3 concurrent starts with 2 slots →
+   exactly 2 running; a worker killed mid-run → the sweep fails it and frees the slot.
+5. `reelctl` (`codes create --name --expires`, `codes expire`, `orders list [--status]`,
+   `orders resume --all-paused`, `report --week`) on the ports; `make stripe-listen` in mk/web.mk.
+6. Write count for one order on the emulator (A5) into FACTS.
+Blocked the same way as STEP-06 task 6: the composition root needs the `WebSettings` fields, plus a
+Stripe price id setting (`stripe_price_id`, from `make stripe-setup`, STEP-08).
 
 ### 10 Oct 2026 (night) — phase B review round 3: PASS with 4 warnings, fixed
 
