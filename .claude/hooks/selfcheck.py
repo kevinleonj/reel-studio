@@ -95,6 +95,15 @@ RULES_BLOCKED = [
     ("bash -c 'git commit -n -m wip'", "gitleaks"), ("FOO=1 sudo -u kevin git commit --no-verify", "gitleaks"),
     ("git push --no-verify origin step-01", "gitleaks"), ("g'i't push --no-verify", "gitleaks"),
     ("gh pr merge 12 --squash", "merges pull requests"), ("gh pr merge --auto --squash", "merges pull requests"),
+    # auto-merge is allowed only as exactly `gh pr merge <N> --auto --squash`
+    ("gh pr merge 12 --auto", "merges pull requests"), ("gh pr merge 12 --auto --merge", "merges pull requests"),
+    ("gh pr merge 12 --auto --squash --admin", "merges pull requests"),
+    ("gh pr merge 12 --auto --squash -d", "merges pull requests"),
+    ("gh pr merge 12 --auto --squash --delete-branch", "merges pull requests"),
+    ("gh pr merge step-01 --auto --squash", "merges pull requests"),
+    ("gh -R kevin/reel-studio pr merge 12 --auto --squash", "merges pull requests"),
+    ("gh pr merge 12 --auto --squash && gh pr merge 13 --squash", "merges pull requests"),
+    ("gh pr merge 12 --auto --squash --auto", "merges pull requests"),
     ("terraform state rm module.bucket", "state surgery"), ("terraform -chdir=infra/main state list", "state surgery"),
     ("terraform import google_storage_bucket.b b", "state surgery"), ("terraform taint google_x.y", "state surgery"),
     ("terraform untaint google_x.y", "state surgery"),
@@ -139,6 +148,7 @@ RULES_ALLOWED = [
     "git log -n 5", "git push -n origin step-01",            # push -n is --dry-run
     "git worktree add ../reel-studio-web -b lane-web", "git worktree list",
     "gh pr view 12", "gh pr create --fill", "gh pr checks 12", "terraform plan", "terraform validate",
+    "gh pr merge 12 --auto --squash", "gh pr merge 7 --squash --auto",   # GitHub merges after required checks
     "gcloud run services list", "gcloud run services describe reel-api", "gcloud builds list",
     "stripe listen --forward-to localhost:8000/webhooks/stripe", "stripe trigger checkout.session.completed",
     "echo \"gh pr merge is for Kevin\"", "rg -n \"terraform state\" docs", "git commit -m \"gcloud run deploy later\"",

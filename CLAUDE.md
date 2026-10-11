@@ -33,7 +33,8 @@ Specs, read the parts the step names: `docs/ARCHITECTURE.md`, `docs/EDITOR.md`, 
 5. `make ci` before every push (the push hook checks `.ci-pass` equals HEAD).
 6. One commit per logical unit, `git add <explicit paths>`. Update your handoff file (before/after, follow-ups).
 7. Finish: `git fetch origin && git merge origin/main`, `make ci`, push, `gh pr create`, wait for CI, then
-   run the gate without `--local` until it prints `GATE stepNN PASS`. Kevin merges; you never do.
+   run the gate without `--local` until it prints `GATE stepNN PASS`. Then `gh pr merge <N> --auto --squash`
+   (GitHub merges once the required `ci` check passes); any other merge is Kevin's.
 8. If a mistake happened, add a line to `docs/LESSONS.md` with the test that now blocks it.
 
 ## Code rules
@@ -68,7 +69,7 @@ Specs, read the parts the step names: `docs/ARCHITECTURE.md`, `docs/EDITOR.md`, 
 - Grant IAM roles outside `docs/ARCHITECTURE.md` §5, or create an always-on cost not in `docs/INFRA.md` §5.
 - Spend more API money than the step's budget.
 - Edit the gates, the scanner, its allowlist, the hooks or `.claude/lanes.json` (protected), merge a pull
-  request, add a workflow file, or `export` a key in a shell.
+  request any way but `gh pr merge <N> --auto --squash`, add a workflow file, or `export` a key in a shell.
 
 ## Stop and write "Needs Kevin" in your handoff file when
 A decision blocks the work; a secret value appears in any output; a paid or irreversible action is

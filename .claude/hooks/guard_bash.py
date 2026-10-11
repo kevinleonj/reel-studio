@@ -68,7 +68,9 @@ NO_VERIFY_COMMIT = ("git commit --no-verify / -n bypasses the gitleaks pre-commi
 NO_VERIFY_PUSH = "git push --no-verify bypasses the gitleaks git hooks. Push without it."
 HOOKS_BYPASS = ("SKIP=gitleaks and a changed core.hooksPath switch off the gitleaks pre-commit hook. "
                 "Commit normally and fix what the hook reports.")
-MERGE = "Kevin merges pull requests after CI is green. Leave the pull request open."
+MERGE = ("Only `gh pr merge <N> --auto --squash` may run: GitHub then merges once the ruleset's "
+         "required checks pass. Kevin merges pull requests any other way.")
+AUTO_MERGE_FLAGS = {"--auto", "--squash"}
 STATE_SURGERY = ("terraform state/import/taint/untaint is state surgery, which is Kevin's. "
                  "Write what you need under 'Needs Kevin'.")
 DEPLOY = ("Deploys go through Terraform and deploy.yml, not gcloud run deploy/update/replace/"
@@ -348,6 +350,17 @@ def bypasses_hooks(assignment: str) -> bool:
         (name.startswith("GIT_CONFIG") and "hookspath" in value.lower())
 
 
+def auto_merge_only(args: list[str]) -> bool:
+    """Exactly `gh pr merge <N> --auto --squash` (flags in either order) and nothing more.
+
+    Auto-merge waits for the ruleset on main (pull request, required `ci` checks), so the merge
+    still happens only after CI is green. Any other flag (--admin, --merge, -d, -R, --body ...) or
+    a missing number falls through to the block.
+    """
+    return (len(args) == 5 and args[:2] == ["pr", "merge"]
+            and re.fullmatch(r"[0-9]+", args[2]) is not None and set(args[3:]) == AUTO_MERGE_FLAGS)
+
+
 def api_merges(args: list[str]) -> bool:
     """gh api on a merge endpoint (.../pulls/N/merge, .../merges) or a GraphQL merge mutation."""
     words = positional(args)[1:]                         # after "api"
@@ -373,7 +386,8 @@ def command_rule(prog: str, args: list[str]) -> str | None:
             return WORKTREES
         if sub == "clean" and clean_removes_ignored(rest):
             return CLEAN_IGNORED
-    elif prog == "gh" and (contains(positional(args), ("pr", "merge")) or (first(args) == "api" and api_merges(args))):
+    elif prog == "gh" and ((contains(positional(args), ("pr", "merge")) and not auto_merge_only(args))
+                           or (first(args) == "api" and api_merges(args))):
         return MERGE
     elif prog == "terraform" and first(args) in TERRAFORM_STATE:
         return STATE_SURGERY

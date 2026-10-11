@@ -1,7 +1,8 @@
 # How to build Reel Studio with Claude Code
 
 Ten steps. After STEP-01, three lanes run in parallel, each in its own git worktree. Every step is one
-session (two at most), one branch, one pull request that Kevin merges, and one gate script that decides
+session (two at most), one branch, one pull request (merged by GitHub auto-merge once `ci` is green, or by
+Kevin), and one gate script that decides
 "done" (D78). A step is not done until its gate prints `GATE stepNN PASS`.
 
 | Step | Lane | A person can now… | Gate | Paid API budget |
