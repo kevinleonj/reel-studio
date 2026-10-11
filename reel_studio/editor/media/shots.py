@@ -3,6 +3,8 @@
 prepare, measure and sheets fill it; the grade, the EDL checks, render and the loop read it.
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict
 
 from reel_studio.editor.media.colour import ColourStats
@@ -31,6 +33,21 @@ class Clip(_Frozen):
     kind: str
     color_stats: ColourStats | None
     median_sharpness: float
+
+    def as_proxy(self) -> Proxy:
+        """The proxy this clip was measured from, for strip and render calls."""
+        kind: Literal["video", "photo"] = "photo" if self.kind == "photo" else "video"
+        return Proxy(
+            self.id,
+            self.source,
+            self.proxy,
+            self.duration,
+            self.proxy_w,
+            self.proxy_h,
+            self.proxy_fps,
+            self.color,
+            kind,
+        )
 
     @classmethod
     def of(cls, proxy: Proxy, stats: ColourStats | None, median_sharpness: float) -> "Clip":

@@ -154,6 +154,8 @@ def test_stripe_mode_without_a_payments_adapter_refuses_to_start(
         payments="stripe",
         stripe_secret_key="test-stripe-key",
         stripe_webhook_secret="test-webhook-secret",
+        stripe_price_id="price_test",
+        stripe_coupon_id="coupon_test",
     )
     assert isinstance(settings, WebSettings)
     with pytest.raises(ValueError, match="Payments adapter"):

@@ -58,6 +58,10 @@ class WebSettings(_Base):
     payments: Literal["off", "stripe"]
     stripe_secret_key: SecretStr | None = None  # default-because: unused when PAYMENTS=off
     stripe_webhook_secret: SecretStr | None = None  # default-because: unused when PAYMENTS=off
+    # STEP-07: the €19 price (`make stripe-setup`) and the 100%-off coupon that `reelctl codes
+    # create` attaches promotion codes to. Ids, not secrets.
+    stripe_price_id: str | None = None  # default-because: unused when PAYMENTS=off
+    stripe_coupon_id: str | None = None  # default-because: unused when PAYMENTS=off
     site_url: str
     mail_from: str
     kevin_alert_email: str
@@ -76,10 +80,17 @@ class WebSettings(_Base):
 
     @model_validator(mode="after")
     def _stripe_needs_keys(self) -> Self:
-        if self.payments == "stripe" and (
-            self.stripe_secret_key is None or self.stripe_webhook_secret is None
-        ):
-            raise ValueError("PAYMENTS=stripe needs STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET")
+        if self.payments != "stripe":
+            return self
+        needed = {
+            "STRIPE_SECRET_KEY": self.stripe_secret_key,
+            "STRIPE_WEBHOOK_SECRET": self.stripe_webhook_secret,
+            "STRIPE_PRICE_ID": self.stripe_price_id,
+            "STRIPE_COUPON_ID": self.stripe_coupon_id,
+        }
+        missing = [name for name, value in needed.items() if value is None]
+        if missing:
+            raise ValueError(f"PAYMENTS=stripe needs {', '.join(missing)}")
         return self
 
 

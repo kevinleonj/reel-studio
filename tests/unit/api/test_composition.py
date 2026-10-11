@@ -96,6 +96,8 @@ def test_stripe_is_refused_until_its_adapter_exists(
         payments="stripe",
         stripe_secret_key="test-stripe-key",
         stripe_webhook_secret="test-webhook-secret",
+        stripe_price_id="price_test",
+        stripe_coupon_id="coupon_test",
     )
     clock = FrozenClock(START)
     with pytest.raises(SystemExit, match="PAYMENTS=stripe"):
@@ -236,6 +238,8 @@ def test_create_refuses_stripe_before_it_builds_a_firestore_client(
     monkeypatch.setenv("PAYMENTS", "stripe")
     monkeypatch.setenv("STRIPE_SECRET_KEY", "stand-in-value")
     monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "stand-in-value")
+    monkeypatch.setenv("STRIPE_PRICE_ID", "price_test")
+    monkeypatch.setenv("STRIPE_COUPON_ID", "coupon_test")
 
     def no_client(*_: object) -> None:
         raise AssertionError("built a Firestore client before refusing PAYMENTS=stripe")

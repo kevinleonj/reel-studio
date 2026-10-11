@@ -72,6 +72,10 @@ class Editor(_Strict):
     transient_retries: int
 
 
+class Eval(_Strict):
+    run_cap_usd: Decimal  # make eval only: lowers editor.cost_cap_usd for one paid run
+
+
 class Sheets(_Strict):
     tile_w: int
     tile_h: int
@@ -148,6 +152,7 @@ class Limits(_Strict):
     limits: Quotas
     retention: Retention
     editor: Editor
+    eval: Eval
     sheets: Sheets
     gates: Gates
     speech: Speech
@@ -228,6 +233,21 @@ class Styles(_Strict):
     styles: dict[str, Style]
     chips: Chips
     text_languages: Languages
+
+
+# ---------------------------------------------------------------- anthropic.toml
+
+
+class ClaudeClient(_Strict):
+    connect_timeout_s: float
+    timeout_s: float
+    retry_initial_s: float
+    retry_max_s: float
+    error_message_max_chars: int = Field(gt=0)
+
+
+class _ClaudeFile(_Strict):
+    client: ClaudeClient
 
 
 # ---------------------------------------------------------------- cloud.toml
@@ -333,6 +353,11 @@ def load(folder: Path = CONFIG_DIR) -> Config:
 def load_media(folder: Path = CONFIG_DIR) -> Media:
     """Read and validate media.toml from `folder` (only the editor needs it)."""
     return Media.model_validate(_read(folder / "media.toml"))
+
+
+def load_claude(folder: Path = CONFIG_DIR) -> ClaudeClient:
+    """Read and validate anthropic.toml: only the Claude adapter needs it."""
+    return _ClaudeFile.model_validate(_read(folder / "anthropic.toml")).client
 
 
 def load_cloud(folder: Path = CONFIG_DIR) -> Cloud:

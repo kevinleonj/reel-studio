@@ -19,6 +19,7 @@ class ErrorCode(StrEnum):
     OUTPUT_TOO_LONG = "output_too_long"
     SPEND_LIMIT = "spend_limit"
     PROVIDER_UNAVAILABLE = "provider_unavailable"
+    PROVIDER_REJECTED = "provider_rejected"  # a request the provider refused (bad key, ...)
     RENDER_ERROR = "render_error"
     JOB_KILLED = "job_killed"  # set by the sweep when a lease expires; no exception
     # website API (ARCHITECTURE.md §7, UX.md)
@@ -102,6 +103,10 @@ class SpendLimitReached(ProviderError):
 
 class ProviderUnavailable(ProviderError):
     code = ErrorCode.PROVIDER_UNAVAILABLE
+
+
+class ProviderRejected(ProviderError):
+    code = ErrorCode.PROVIDER_REJECTED
 
 
 class RenderError(MediaError):

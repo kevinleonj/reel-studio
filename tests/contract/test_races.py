@@ -92,6 +92,8 @@ def test_the_same_webhook_three_times_pays_once_and_emails_once(
         payments="stripe",
         stripe_secret_key="test-stripe-key",
         stripe_webhook_secret="test-webhook-secret",
+        stripe_price_id="price_test",
+        stripe_coupon_id="coupon_test",
     )
     assert isinstance(settings, WebSettings)
     gateway, mailer = FakePayments(), FakeMailer()

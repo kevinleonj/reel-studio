@@ -102,6 +102,8 @@ def stripe_api(tmp_path: Path, make_settings: MakeSettings) -> Iterator[Api]:
         payments="stripe",
         stripe_secret_key="test-stripe-key",
         stripe_webhook_secret="test-webhook-secret",
+        stripe_price_id="price_test",
+        stripe_coupon_id="coupon_test",
     )
     assert isinstance(settings, WebSettings)
     yield build(tmp_path, settings, payments=FakePayments())
