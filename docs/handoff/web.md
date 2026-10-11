@@ -5,7 +5,7 @@ Written by the web lane only. Newest entry on top.
 ## Status board
 Everything left in this lane needs Kevin's hands:
 1. **Stripe login (STEP-07 task 8):** `stripe login`, then `make stripe-listen` in this worktree. It writes `STRIPE_WEBHOOK_SECRET` to `.env` without printing it and forwards the two checkout events to `http://localhost:8080/api/stripe/webhook`.
-2. **Stripe dashboard values (test mode):** the €19 price (`make stripe-setup` is STEP-08's, or the dashboard) and a coupon that is 100% off, duration once, with no `max_redemptions` and no `redeem_by` (a code cannot outlast or out-redeem its coupon, and a coupon's own limit counts across all codes); test mode only, since live-mode keys are refused, then in `.env`: `STRIPE_SECRET_KEY` (sk_test), `STRIPE_PRICE_ID`, `STRIPE_COUPON_ID`, `PAYMENTS=stripe`. Then `uv run reelctl codes create --name <friend> --expires <YYYY-MM-DD>` makes a code.
+2. **Stripe dashboard values (test mode):** the €19 price (`make stripe-setup` is STEP-08's, or the dashboard) and a coupon that is 100% off, duration once, with no `max_redemptions` and no `redeem_by` (a code cannot outlast or out-redeem its coupon, and a coupon's own limit counts across all codes); test mode only, since live-mode keys are refused, then in `.env`: `STRIPE_SECRET_KEY` (sk_test), `STRIPE_PRICE_ID`, `STRIPE_COUPON_ID`, `PAYMENTS=stripe`. Then `uv run reelctl codes create --name <friend> --expires <YYYY-MM-DD>` makes a code (reelctl reads the same `.env` as the site, so every name in `.env.example`'s website block must be set; it names any that are missing).
 3. **Laptop checkout and the one paid Reel (STEP-07 task 9, ≤ $3):** `make up`, order with that code, confirm the €0 checkout, upload, get the Reel; then the handoff line `Stripe e2e order: <order id>, <cost>`.
 4. **iPhone upload (STEP-06 task 8):** from the phone on the same Wi-Fi, `http://<laptop-ip>:8080`, a 300 MB HEVC clip; then the line `iPhone upload: <result>`.
 5. **Analytics value in `.env`:** `GA4_MEASUREMENT_ID` must be empty on the laptop for the step06 gate (it checks analytics is off).
@@ -55,7 +55,6 @@ Everything left in this lane needs Kevin's hands:
 - Rate limits key on the client address; uvicorn trusts forwarded headers only from 127.0.0.1 unless `FORWARDED_ALLOW_IPS` is set (F316). Set it on the Cloud Run service, or every client shares one bucket.
 
 ## For MAIN
-- `.env.example:21` says compose mounts the data at `/data`; it is `/app/data`, and compose sets `DATA_DIR`, `WEB_DIST`, `SMTP_HOST` and `SMTP_PORT` itself.
 
 ## Needs Kevin (decisions, not blocking)
 - **Decision on D18's edge (link email after Stripe):** the webhook does not know the link token, which is stored only as a hash. The success URL Stripe keeps (`/o/<id>?t=<token>`, as STEP-07 specifies) does carry it, so fulfilment reads it back from the retrieved session, checks it against the stored hash, and sends `/o/<id>#t=<token>`. No new copy of the token is stored. Confirm, or pick another way (this also answers the "ready" email question below if the editor may call Stripe).
@@ -75,6 +74,17 @@ Everything left in this lane needs Kevin's hands:
 ## Evidence lines (the gates read these)
 
 ## Log
+
+### 11 Oct 2026 (night) — STEP-07 review round 3: PASS; follow-ups (branch `step-07-followups`)
+
+- PR #11 opened and queued with `gh pr merge 11 --auto --squash`.
+- Round 3's warnings fixed on the follow-up branch: a session index (`sessions/current/<order>/
+  <sha256(name)>`) replaces the scan of every record, and every record write and the final move in
+  `put_chunk` happen under the lock only while that session is still the name's live one, so a
+  chunk in flight cannot revive a closed session (two tests, one with the race forced). Suggestions
+  taken: the header test lists its five exception types itself; every order write route (uploads,
+  start, viewed, feedback, delete, fulfil, cancel) shares the one-at-a-time bound; the model-level
+  settings message is pinned.
 
 ### 11 Oct 2026 (night) — STEP-07 review round 2: FAIL (1 critical), fixed
 
