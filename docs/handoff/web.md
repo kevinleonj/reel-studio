@@ -2,29 +2,34 @@
 
 Written by the web lane only. Newest entry on top.
 
-## Status board — STEP-07 (branch `step-07-gate`, on origin/main since 11 Oct 2026)
+## Status board
+Everything left in this lane needs Kevin's hands:
+1. **Stripe login (STEP-07 task 8):** `stripe login`, then `make stripe-listen` in this worktree. It writes `STRIPE_WEBHOOK_SECRET` to `.env` without printing it and forwards the two checkout events to `http://localhost:8080/api/stripe/webhook`.
+2. **Stripe dashboard values (test mode):** the €19 price and the 100%-off coupon (`make stripe-setup` is STEP-08's, or create them in the dashboard), then in `.env`: `STRIPE_SECRET_KEY` (sk_test), `STRIPE_PRICE_ID`, `STRIPE_COUPON_ID`, `PAYMENTS=stripe`. Then `uv run reelctl codes create --name <friend> --expires <YYYY-MM-DD>` makes a code.
+3. **Laptop checkout and the one paid Reel (STEP-07 task 9, ≤ $3):** `make up`, order with that code, confirm the €0 checkout, upload, get the Reel; then the handoff line `Stripe e2e order: <order id>, <cost>`.
+4. **iPhone upload (STEP-06 task 8):** from the phone on the same Wi-Fi, `http://<laptop-ip>:8080`, a 300 MB HEVC clip; then the line `iPhone upload: <result>`.
+5. **Analytics value in `.env`:** `GA4_MEASUREMENT_ID` must be empty on the laptop for the step06 gate (it checks analytics is off).
+
+## Done — STEP-07 (branch `step-07-gate`)
 - Done: task 2 (checkout with a code, place reserved with the order, released if Stripe fails), task 3 (fulfilment from the webhook, `/fulfil` and the sweep; expiry from the webhook, `/cancel` and the sweep, which asks Stripe first), task 4 (slots and queue: built in STEP-06, now under race tests; `take_slot` writes `queue.run_token`, but nothing passes it to the job yet: that is the real launcher's, with the engine lane's worker command), task 5 (4 race tests, fake and Firestore emulator), task 6 (`reelctl` commands on the ports), task 7 (write count: 19, F312), task 8's make target (`make stripe-listen`, dry-run only); `/api/config` sends the €19 price in Stripe mode.
-- Partly: task 1 — Payments port shapes, `PaymentsUpkeep`, `FakePayments` done; the Stripe adapter `reel_studio/adapters/payments_stripe.py` is not written: the doc gate blocks `import stripe` until the pending `stripe` entry reaches `.claude/doc-ledger.json`. `reelctl` cannot reach Firestore or Stripe until then (`connect()` says so).
-- Blocked: task 9 (Kevin: `stripe login`, `make stripe-listen`, the laptop checkout, the ≤ $3 Reel, the `Stripe e2e order:` line); the composition root (same `WebSettings` fields as STEP-06 task 6, plus `stripe_price_id` and `stripe_coupon_id`).
-- Not started: nothing else in the step.
-- Next: Stripe adapter + its fixture tests once the ledger has `stripe`; then `reelctl connect()`.
-- Also on this branch: REVIEW-FIXES.md WEB items 1-5 (one commit each) and the npm audit triage.
+- Also done: task 1, the Stripe adapter (`adapters/payments_stripe.py`, test mode, 22 tests through the real StripeClient and a recording HTTP client), the Stripe composition root (`main.build_payments`) and `reelctl connect()`; REVIEW-FIXES.md WEB items 1-5 and the npm audit triage; the review round 1 fixes (below).
 
 ## Decided by standing orders (STEP-07 and REVIEW-FIXES)
-- Upload limits: every `/uploads` batch reserves its declared names and sizes on the order (`uploads`, `OrderUpkeep.reserve_uploads`, one transaction); a name asked for again replaces its size. Start still re-checks the finished files. Undo: revert the item-1 commit.
+- Upload limits: every `/uploads` batch reserves its declared names and sizes on the order (`uploads`, `OrderUpkeep.reserve_uploads`, one transaction), keyed by the exact stored name; asking again for a name never lowers its reservation; names are checked before anything is reserved. Start still re-checks the finished files. Undo: revert the item-1 and round-1 commits.
+- A newer upload session for a name closes the older one and its bytes (the storage contract changed from Cloud Storage's "last completed wins"; see For CLOUD). Undo: drop `_close_sessions_for` and restore the three contract tests.
+- A transaction that runs out of attempts on a busy order answers 503 `busy` with `Retry-After` (`[web] busy_retry_after_s = 2`), not 500. Undo: remove `on_busy`.
+- A Checkout Session whose `amount_total` is not 0 is expired at once and the code refused (`code_invalid`): D58's no-charge rule checked on Stripe's own total. Undo: remove the check in `payments.checkout`.
+- Stripe client: `[stripe] timeout_s = 20`, `max_network_retries = 2`, `webhook_tolerance_s = 300` (F321). A friend's code is `NAME-XXXXXX` (`PROMO_CODE_SUFFIX_BYTES`). Undo: edit the values.
 - A chunk for an order that is no longer `paid` answers 409 `wrong_status`, status queries too. Undo: revert the item-2 commit.
 - An address a mail header refuses is a 422 `invalid_request` at checkout, like the other address checks (the review said 400; 422 is what this API answers for every bad body). Undo: change `invalid()` there.
 - File names over 255 UTF-8 bytes answer 400 `name_too_long` with the file, and the page says "{name} has a name too long to store. Rename it and choose it again." (new words, not in UX.md §2). Undo: revert the item-4 commit.
 - npm audit (7 high): one chain, `braces` ReDoS via `micromatch`/`fast-glob`, all under the `shadcn` CLI. The site imports only `shadcn/tailwind.css` at build time and ships static files, so nothing of it runs in production or on user input. Accepted; `npm audit fix --force` would change shadcn's major. Revisit when shadcn ships a fixed range.
 
-## For MAIN (STEP-07)
-- Copy the `stripe` entry from `web/doc-ledger.pending.json` into `.claude/doc-ledger.json` (protected); until then the doc gate blocks the Stripe adapter.
-- `reel_studio/settings.py`: `stripe_price_id` and `stripe_coupon_id` for the adapter and `reelctl codes create`.
-
-## For CLOUD (REVIEW-FIXES WEB 2)
+## For CLOUD (REVIEW-FIXES WEB 2 and STEP-07 review round 1)
+- The storage contract now says a newer session for a name supersedes the older: the Cloud Storage adapter must cancel the older resumable session (DELETE on its session URL; check the docs first). `gcp_storage.create_upload_session` also returns `{key, url}` where the routes read `name`/`upload_url`, and reads `content_type` the routes do not send (review round 1 suggestion); reconcile before the cloud composition root.
 - Late chunks are refused on the laptop only: Cloud Storage resumable sessions go straight to the bucket. The cloud Storage adapter should cancel an order's open sessions at Start, or the editor should read only the files in the manifest.
 
-## Status board — STEP-06 task 6 (PR #8, merged 11 Oct 2026)
+## Done — STEP-06 task 6 (PR #8, merged 11 Oct 2026)
 - Done: task 6. `make up` builds `docker/api.Dockerfile` (web build stage + api), starts api (serves the site), dispatcher (fake editor), Firestore emulator and Mailpit from `compose.yaml`, and waits until the api is healthy; `make down` stops everything; uploads and results in `./data/`. Composition root `reel_studio/api/main.py` (`create` for uvicorn, `dispatch` for the dispatcher), tested with fakes.
 - Partly: the step06 gate — it also needs `iPhone upload:` (task 8, Kevin) and analytics off on the laptop (below).
 - Blocked: nothing else.
@@ -41,12 +46,8 @@ Written by the web lane only. Newest entry on top.
 - Mailpit's inbox is published on 127.0.0.1 only: it holds every order link. Only the site (8080) is on every interface (D17).
 - Stopping the dispatcher does not wait for an order the fake editor is running; it stays `running` until the lease sweep fails it (70 min). The real editor runs as its own job in the cloud, so this is a laptop-only cost. Undo: join the run threads in `dispatch()`.
 
-## Status board — STEP-06
-- Done: task 1 (Orders, Storage, Mailer, Launcher ports with fakes; contract suites green on the fakes and on the real Firestore emulator and Mailpit), task 2 (every §7 route without payments, tests per route and error code), task 3 (web app), task 4 (fake editor), task 5 backend-free (128 Playwright tests, phone + laptop, axe), `web/` wired into `make ci` (ci-web) and `make prerelease` (Playwright + Lighthouse budget).
-- Partly: task 5's real-stack happy path (needs `make up`).
-- Blocked: task 6 (`compose.yaml`, `docker/api.Dockerfile`, `make up`/`make down`) and the API's composition root wait on the `WebSettings` fields below (`reel_studio/settings.py` is outside this lane).
-- Not started: task 8 (Kevin does it, TONIGHT.md).
-- Next: Kevin adds the settings fields → composition root `reel_studio/api/main.py` + dispatcher entry point, compose, Dockerfile, `make up`, live gate checks.
+## Done — STEP-06 (PR #4, merged)
+- Tasks 1-5 and 7; task 6 in PR #8; task 8 is Kevin's (Status board).
 
 ## For CLOUD (the same image on Cloud Run, STEP-08)
 - `docker/api.Dockerfile` needs `--build-arg SITE_URL=<the service URL>` (F61); without it the build stops with "build arg SITE_URL is required". `.github/workflows/deploy.yml` builds it without one today.
@@ -57,24 +58,11 @@ Written by the web lane only. Newest entry on top.
 - `.dockerignore` (REVIEW-FIXES MAIN item 2) is still missing. BuildKit sends only the paths a COPY names, so no secret reaches the daemon today, but host `__pycache__` rides into the image with `reel_studio/`.
 - `.env.example:21` says compose mounts the data at `/data`; it is `/app/data`, and compose sets `DATA_DIR`, `WEB_DIST`, `SMTP_HOST` and `SMTP_PORT` itself.
 
-## Needs Kevin
-- **STEP-07 task 9 is yours:** `stripe login`, `make stripe-listen` (writes `STRIPE_WEBHOOK_SECRET` through `reelctl dotenv-set`, never printed), `PAYMENTS=stripe`, the laptop checkout with a test code, the real Reel (≤ $3), then the handoff line `Stripe e2e order: <order id>, <cost>`. The step07 gate fails on that line until then; I did not write it.
-- **Doc ledger: `stripe` is pending** in `web/doc-ledger.pending.json` (StripeClient, checkout sessions create/retrieve/expire, promotion codes list/create/update, `construct_event`; F19-F24, F311). The Stripe adapter waits on it.
-- **Settings for Stripe (`reel_studio/settings.py`, main lane):** `stripe_price_id` (the €19 price, `make stripe-setup`) and `stripe_coupon_id` (the 100%-off coupon that `reelctl codes create` attaches codes to); and for `reelctl`, the Firestore project (or Application Default Credentials' project, D63).
+## Needs Kevin (decisions, not blocking)
 - **Decision on D18's edge (link email after Stripe):** the webhook does not know the link token, which is stored only as a hash. The success URL Stripe keeps (`/o/<id>?t=<token>`, as STEP-07 specifies) does carry it, so fulfilment reads it back from the retrieved session, checks it against the stored hash, and sends `/o/<id>#t=<token>`. No new copy of the token is stored. Confirm, or pick another way (this also answers the "ready" email question below if the editor may call Stripe).
 - **More STEP-07 tunables in `config/limits.toml` to review:** `[firestore] timeout_s = 10`, `max_attempts = 12` (an aborted transaction retries at once keeping its place in line, so N simultaneous writers on the week document need up to N attempts; with 5, 8 of the 10 racing checkouts failed on the emulator), `[reelctl] list_limit = 200`, `[payments] price_minor = 1900`, `currency = "EUR"`.
 - **Port changes:** `PaymentsUpkeep` (`expire_session`, `create_code`, `expire_code`) and `PaymentGateway` beside the pinned `Payments`; `OrderUpkeep` gained `set_checkout`, `checkouts_to_check`, `resume_paused`, `list_orders`, `places_held`, and `sweep(*, expire_checkouts)` (with Stripe the API checks missed checkouts at Stripe before they expire, so a paid checkout whose webhook was lost is not dropped). New `reelctl dotenv-set NAME` (value from stdin) for `make stripe-listen`.
 
-- **Analytics on the laptop:** this worktree's `.env` sets `GA4_MEASUREMENT_ID`, so `/api/config` says analytics is on; the step06 gate needs it off on the laptop. Empty it there (or keep it and accept that gate line failing).
-- **Task 8:** the iPhone upload and the `iPhone upload:` line.
-- **Done (PR #6): `WebSettings` fields.** The laptop API and dispatcher need these deployment values; `reel_studio/settings.py` is the main lane's file, so I did not touch it. Proposed, all without defaults unless marked:
-  - `firestore_project: str` (the emulator's project id, e.g. `reel-studio-local`; `FIRESTORE_EMULATOR_HOST` itself is read by the Google client, F308)
-  - `smtp_host: str`, `smtp_port: int` (Mailpit in compose: `mailpit`, `1025`; F309)
-  - `data_dir: Path` (the filesystem Storage root, `./data/` mounted at `/data`)
-  - `web_dist: Path` (the Astro build the API serves)
-  - `voice_available: bool` (D14/D62: the API never holds the Gemini key, so it is told whether this server can transcribe)
-  - `dispatcher_poll_seconds: int` is a tunable, so it goes in `config/limits.toml` instead (this lane can add it).
-  Also `.env.example` lines for them.
 - **New tunables in `config/limits.toml` to review (added 10 Oct 2026):** `[upload] backoff_ms = 1000`; `[web] request_timeout_ms = 15000`, `chunk_timeout_ms = 90000` (one 8 MiB chunk at 1 Mbit/s ≈ 67 s), `signed_url_minutes = 60`, `rating_max = 5`, `comment_max_chars = 1000` (both ARCHITECTURE §7), `google_tag_url` (F70). `core/config.py` models them.
 - **New ports beyond ARCHITECTURE §3's list:** `OrderUpkeep` in `core/ports.py` (`mark_viewed`, `set_feedback`, `mark_deleted`, `sweep`, `queue_position`) — kept separate so STEP-01's binding-method test for `Orders` stays as pinned. Please confirm or move them into §3.
 - `.claude/doc-ledger.json`: the global doc gate (`~/.claude/hooks/gate-docs.sh`) reads `<session cwd>/.claude/doc-ledger.json`, which is outside every lane and hook-protected. Kevin installed it by hand on 9 Oct 2026. Pending entries for phase B are in `web/doc-ledger.pending.json` (git-ignored). The gate misreads multi-line `import type {` as a library named `type`, and `node:fs`/`node:path` as non-stdlib.
@@ -88,6 +76,18 @@ Written by the web lane only. Newest entry on top.
 ## Evidence lines (the gates read these)
 
 ## Log
+
+### 11 Oct 2026 (night) — STEP-07 review round 1 fixed, Stripe adapter, Stripe composition root
+
+Review of the rebased branch: FAIL, 1 critical (the upload reservation could be bypassed by asking
+again at size 0, or by re-asking a name for more sessions), 5 warnings (contention answered 500;
+a refused name left a reservation; the address check missed AttributeError/IndexError; the race
+guard, the composed sweep and the Stripe refusal were unpinned; the copy contract and FACTS lacked
+`name_too_long`). All fixed with tests (see Decided above; L301, L302, F320). Then main's STEP-03
+and its `STRIPE_PRICE_ID`/`STRIPE_COUPON_ID` were merged, and task 1 finished: the Stripe adapter
+(F19-F24, F311, F321), the D58 check on `amount_total`, `main.build_payments` and `reelctl
+connect()`. Evidence: `make test-fast` 837 passed, adapter suite 22 passed, `make test-emulator`
+35 passed.
 
 ### 11 Oct 2026 — STEP-07 rebased on main; REVIEW-FIXES WEB items 1-5
 
