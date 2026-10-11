@@ -2,14 +2,42 @@
 
 Written by the web lane only. Newest entry on top.
 
-## Status board
+## Status board — STEP-06 task 6 (branch `step-06-make-up`)
+- Done: task 6. `make up` builds `docker/api.Dockerfile` (web build stage + api), starts api (serves the site), dispatcher (fake editor), Firestore emulator and Mailpit from `compose.yaml`, and waits until the api is healthy; `make down` stops everything; uploads and results in `./data/`. Composition root `reel_studio/api/main.py` (`create` for uvicorn, `dispatch` for the dispatcher), tested with fakes.
+- Partly: the step06 gate — it also needs `iPhone upload:` (task 8, Kevin) and analytics off on the laptop (below).
+- Blocked: nothing else.
+- Next: STEP-07 rebased on main.
+
+## Decided by standing orders
+- The laptop's signed-link key is random per process (`SIGNING_KEY_BYTES`): links are re-signed on every status poll, so a restart only breaks links that were about to be replaced, and there is no key to store. Undo: add a `LOCAL_SIGNING_KEY` setting and pass it in `main._storage`.
+- Orders live in the Firestore emulator's memory; `make down` forgets them while `./data/` keeps the files. Undo: add an export/import volume to the `firestore` service.
+- The dispatcher runs the fake editor (STEP-06 task 4) until the engine lane's worker command exists. Undo: swap `FakeEditorLauncher` in `main.build_dispatcher`.
+- `[firestore] max_attempts = 12`, not 5: STEP-07's emulator race test lost 8 of 10 checkouts with 5 (an aborted transaction retries at once with its old id, so N writers need N attempts). Undo: edit the value.
+- `make up` runs `python -m reel_studio.api.main check` in the built image first: WebSettings' own rules, bad names printed, values never. Undo: delete that line in `mk/web.mk`.
+- Compose passes each WebSettings name on purpose (the `x-website-settings` block), no `env_file`, so the Anthropic, Gemini and cloud keys never reach the website (D62). The dispatcher gets the same block; when the real editor lands it needs the Anthropic key added to its own `environment` only. Undo: not advised.
+- api and dispatcher run as the host user (`HOST_UID`/`HOST_GID` from `make up`, default the image's 10001), so `./data` is writable on Linux as well as macOS. Undo: drop the two `user:` lines.
+- Mailpit's inbox is published on 127.0.0.1 only: it holds every order link. Only the site (8080) is on every interface (D17).
+- Stopping the dispatcher does not wait for an order the fake editor is running; it stays `running` until the lease sweep fails it (70 min). The real editor runs as its own job in the cloud, so this is a laptop-only cost. Undo: join the run threads in `dispatch()`.
+
+## Status board — STEP-06
 - Done: task 1 (Orders, Storage, Mailer, Launcher ports with fakes; contract suites green on the fakes and on the real Firestore emulator and Mailpit), task 2 (every §7 route without payments, tests per route and error code), task 3 (web app), task 4 (fake editor), task 5 backend-free (128 Playwright tests, phone + laptop, axe), `web/` wired into `make ci` (ci-web) and `make prerelease` (Playwright + Lighthouse budget).
 - Partly: task 5's real-stack happy path (needs `make up`).
 - Blocked: task 6 (`compose.yaml`, `docker/api.Dockerfile`, `make up`/`make down`) and the API's composition root wait on the `WebSettings` fields below (`reel_studio/settings.py` is outside this lane).
 - Not started: task 8 (Kevin does it, TONIGHT.md).
 - Next: Kevin adds the settings fields → composition root `reel_studio/api/main.py` + dispatcher entry point, compose, Dockerfile, `make up`, live gate checks.
 
+## For CLOUD (the same image on Cloud Run, STEP-08)
+- `docker/api.Dockerfile` needs `--build-arg SITE_URL=<the service URL>` (F61); without it the build stops with "build arg SITE_URL is required". `.github/workflows/deploy.yml` builds it without one today.
+- `WebSettings` now requires `FIRESTORE_PROJECT`, `SMTP_HOST`, `SMTP_PORT`, `DATA_DIR`, `WEB_DIST`, `VOICE_AVAILABLE`; `infra/main/locals.tf` sets none of them. `reel_studio/api/main.py` is the laptop root (LocalStorage, SMTP); the cloud root (GCS, Resend, Stripe) is still to write, and `create()` refuses `PAYMENTS=stripe` until STEP-07's adapter.
+- Rate limits key on the client address; uvicorn trusts forwarded headers only from 127.0.0.1 unless `FORWARDED_ALLOW_IPS` is set (F316). Set it on the Cloud Run service, or every client shares one bucket.
+
+## For MAIN
+- `.dockerignore` (REVIEW-FIXES MAIN item 2) is still missing: the api image copies named paths only, but the build context still sends the settings file to the Docker daemon.
+- `.env.example:21` says compose mounts the data at `/data`; it is `/app/data`, and compose sets `DATA_DIR`, `WEB_DIST`, `SMTP_HOST` and `SMTP_PORT` itself.
+
 ## Needs Kevin
+- **Analytics on the laptop:** this worktree's `.env` sets `GA4_MEASUREMENT_ID`, so `/api/config` says analytics is on; the step06 gate needs it off on the laptop. Empty it there (or keep it and accept that gate line failing).
+- **Task 8:** the iPhone upload and the `iPhone upload:` line.
 - **`WebSettings` fields (blocks task 6).** The laptop API and dispatcher need these deployment values; `reel_studio/settings.py` is the main lane's file, so I did not touch it. Proposed, all without defaults unless marked:
   - `firestore_project: str` (the emulator's project id, e.g. `reel-studio-local`; `FIRESTORE_EMULATOR_HOST` itself is read by the Google client, F308)
   - `smtp_host: str`, `smtp_port: int` (Mailpit in compose: `mailpit`, `1025`; F309)
@@ -32,6 +60,32 @@ Written by the web lane only. Newest entry on top.
 ## Evidence lines (the gates read these)
 
 ## Log
+
+### 11 Oct 2026 — STEP-06 task 6: make up
+
+Before: no way to run the site except the test fixtures; task 6 waited on the WebSettings fields (PR #6).
+After: `reel_studio/api/main.py` builds the API and the dispatcher from WebSettings + config
+(`[firestore]`, `[smtp]`, `[dispatcher]` added to `config/limits.toml`); `docker/api.Dockerfile`
+(node 24.21.0 stage builds `web/dist`, F314; uvicorn `--factory`, `--no-access-log`, F316);
+`compose.yaml` (F315); `make up`/`make down`. `routes_local` exports its two paths so the storage
+adapter and the routes cannot disagree.
+Review round 1 FAILED (2 critical: Mailpit's inbox on every interface, `env_file` handing every
+key to the website against D62; 8 warnings) and was fixed: explicit settings names, loopback
+Mailpit, restart policy on all four services, host uid, `check` inside the image instead of a
+names-only preflight, a named logger (under `python -m` the module is `__main__`), a stop handler that
+only sets the event, Stripe refused before the Firestore client, tests that run every fake stage, a
+chunk and a signed download through the composed app, and `compose.yaml`'s safety properties.
+Evidence, on the committed compose (`make up` exit 0, `check` printed `settings ok`): `/` and
+`/privacy` 200, `/new` and `/o/gate-check` 200 with `noindex, nofollow`; a PAYMENTS=off order went
+checkout → chunk 200 → start → queued → running (reading) → done; signed download 200; Mailpit got
+"Your Reel Studio link". Order `385afc5981872f15509e2f44b23b2af4`. From the laptop's LAN address the
+site answers 200 and Mailpit does not answer; neither container has the Anthropic, Gemini, Resend
+or Cloudflare names; both run as uid 501; the dispatcher logged "dispatcher started" and, on
+`docker compose stop`, "dispatcher stopped" and exited 0.
+Follow-ups: a dispatcher heartbeat healthcheck; `next_queued` logs one INFO line per 2 s poll. Not run: the step06 gate (needs task 8 and the
+`.env` lines) and `make prerelease` (web/ is unchanged since PR #4, where it passed).
+For MAIN: `.dockerignore` (REVIEW-FIXES MAIN item 2) still missing; the api image copies named paths
+only, but the build context still carries `.env` to the Docker daemon.
 
 ### 10 Oct 2026 (night) — phase B review round 3: PASS with 4 warnings, fixed
 
