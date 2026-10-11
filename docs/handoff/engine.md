@@ -36,6 +36,15 @@ Written by the engine lane only. Newest entry on top.
   null in result.json (0 in the eval result, where the gate wants a number). Undo: revert 991fe50.
 
 ## For MAIN
+- Doc ledger entry for STEP-05: library `google.genai`, version 2.29.0, source
+  https://ai.google.dev/gemini-api/docs/transcribe (read 11 Oct 2026) and the installed package;
+  used: `genai.Client(api_key=)`, `client.files.upload(file=)` (gives `.uri`, `.mime_type`),
+  `client.interactions.create(model="gemini-3.5-transcribe", input=[{"type": "audio", "uri",
+  "mime_type"}], generation_config={"transcription_config": {"mode": {"type": "verbatim",
+  "timestamp_granularities": ["word"]}}})`; words in `steps[].content[].annotations[]` with
+  `type == "word_info"`, `text`, `start_offset`/`end_offset` like `"0.100s"`;
+  `errors.APIError(.code, .message)`; no `language_codes` = auto-detect; word timestamps cap
+  audio at 30 min.
 - `docs/EDITOR.md` §2 lists the brief's inventory: add brightness (mean luma 0-255 with QA's
   luma_jump), every format's length range with the order target, and the text reading time.
 - `web/src/copy/en.json` `failed.messages`: add `"provider_rejected": "Something broke while
