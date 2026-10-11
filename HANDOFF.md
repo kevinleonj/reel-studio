@@ -4,13 +4,13 @@ The main checkout's log and the status of every lane. Lanes write their own file
 Newest entry on top.
 
 ## Status board
-- Done: starter kit v1.1; STEP-01 skeleton, guardrails, CI: PR #1 open with CI green, ruleset on `main`
-  (https://github.com/kevinleonj/reel-studio/pull/1); waits for Kevin's merge
-- Partly: STEP-00 on the Mac (ffmpeg-full and node@24 not on PATH, see Needs Kevin)
+- Done: starter kit v1.1; STEP-01 (#1), STEP-02 (#2), STEP-08 short of the real project (#3), STEP-06
+  except task 6 (#4), all merged
+- Partly: STEP-00 on the Mac (ffmpeg-full and node@24 not on PATH, see Needs Kevin); branch
+  `main-settings` declares `httpx2` and the laptop `WebSettings` fields (unblocks STEP-06 task 6)
 - Blocked: —
-- Not started: STEP-02 to STEP-09
-- Next: Kevin merges PR #1; the lanes then merge origin/main (TONIGHT.md): engine STEP-02, web STEP-06,
-  cloud STEP-08
+- Not started: STEP-04, STEP-05, STEP-07, STEP-09
+- Next: Kevin merges `main-settings`; lane web then does STEP-06 task 6 (`make up`)
 
 ## Lanes
 | Lane | Worktree | Steps | File |
@@ -36,6 +36,16 @@ Newest entry on top.
   (one class per consumer; a test keeps the two in step). A lane that needs a new variable asks here.
 
 ## Log
+### 11 Oct 2026 — main-settings: httpx2 and the laptop WebSettings
+- Before: `httpx2` only transitive (via `anthropic`) although the engine's Claude adapter imports it
+  (engine.md Needs Kevin 21); `WebSettings` lacked the laptop runtime values (web.md Needs Kevin).
+- After: `httpx2>=2.13.1` in `[editor]` (F87; no new package, already locked); a test fails on any
+  third-party import under `reel_studio/` that pyproject does not declare. `WebSettings` gains
+  `firestore_project`, `smtp_host`, `smtp_port`, `data_dir`, `web_dist`, `voice_available`, all required,
+  with `.env.example` lines for the laptop (compose service names, `VOICE_AVAILABLE=false`).
+- Follow-ups: lane web wires these into `api/deps.py` and the compose file (task 6);
+  `dispatcher_poll_seconds` stays a `config/limits.toml` tunable, as the web lane proposed.
+
 ### 9 Oct 2026 — STEP-01 skeleton, guardrails, CI
 - Before: docs, hooks, scanner and gates only; no package, no Makefile, no CI, `main` unprotected.
 - After: `reel_studio` package (D70) with every dependency locked (F80); `settings.py` (EditorSettings,
