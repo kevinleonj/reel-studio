@@ -5,12 +5,12 @@ Newest entry on top.
 
 ## Status board
 - Done: starter kit v1.1; STEP-01 (#1), STEP-02 (#2), STEP-08 short of the real project (#3), STEP-06
-  except task 6 (#4), all merged
+  except task 6 (#4), `httpx2` and laptop `WebSettings` (#6), all merged
 - Partly: STEP-00 on the Mac (ffmpeg-full and node@24 not on PATH, see Needs Kevin); branch
-  `main-settings` declares `httpx2` and the laptop `WebSettings` fields (unblocks STEP-06 task 6)
+  `guard-auto-merge` lets sessions queue their own pull requests for GitHub auto-merge
 - Blocked: —
 - Not started: STEP-04, STEP-05, STEP-07, STEP-09
-- Next: Kevin merges `main-settings`; lane web then does STEP-06 task 6 (`make up`)
+- Next: Kevin merges `guard-auto-merge`; then every session ends with `gh pr merge <N> --auto --squash`
 
 ## Lanes
 | Lane | Worktree | Steps | File |
@@ -36,6 +36,20 @@ Newest entry on top.
   (one class per consumer; a test keeps the two in step). A lane that needs a new variable asks here.
 
 ## Log
+### 11 Oct 2026 — guard-auto-merge: sessions may queue their own pull requests (Kevin approved)
+- Before: `guard_bash.py` blocked every `gh pr merge`; Kevin merged every pull request by hand.
+- After: exactly `gh pr merge <N> --auto --squash` is allowed (any other flag, a branch name instead of a
+  number, `-R`, `--admin`, `gh api …/merge` and GraphQL merges stay blocked); `selfcheck.py` has 9 new
+  block cases and 2 allow cases (476 checks). Repository setting `allow_auto_merge` is on. Ruleset
+  `protect main` (id 24815348, active) already requires the `ci` check, the only CI check:
+  `{"checks":[{"context":"ci"}],"type":"required_status_checks"}`, so auto-merge waits for green CI.
+  CLAUDE.md, the hooks README and docs/build/README.md say so.
+- Also: `[tool.ruff] force-exclude = true`. Kevin's format-on-save hook runs `ruff format <file>`, and
+  without it ruff reformatted the protected `guard_bash.py` (235 insertions) despite `extend-exclude`;
+  that commit was dropped before anything was pushed.
+- Follow-up: the required check names no `integration_id`, so any status named `ci` satisfies it; only
+  repository writers can post statuses. Pin it to GitHub Actions if that ever matters.
+
 ### 11 Oct 2026 — main-settings: httpx2 and the laptop WebSettings
 - Before: `httpx2` only transitive (via `anthropic`) although the engine's Claude adapter imports it
   (engine.md Needs Kevin 21); `WebSettings` lacked the laptop runtime values (web.md Needs Kevin).
