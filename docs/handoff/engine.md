@@ -7,9 +7,7 @@ Written by the engine lane only. Newest entry on top.
   `critic.passed` failed after 3 rounds: 24, 21, 23 of 35, gate 26; $1.4731 of $5). STEP-04 tasks 1,
   2 and 4 built on `step-04-ab`: `make ab` (both engines, same files, our critic judges both, budget
   guard) and `make ab-pick` (blind X/Y picks, ab.json, eval/AB-RESULT.md). The paid A/B ran on 11
-  Oct: $8.58 of $15; judge totals new vs old: cookies 19/19, creami 23/21, meat 24/24, mercadona
-  16/20, pastav2 23/22 (means 21.0 vs 21.2, inside the 1-point margin); mean new cost $0.38;
-  neither engine passed the critic gates on any fixture. See eval/AB-RESULT.md.
+  Oct: $8.58 of $15. Scores are in eval/AB-RESULT.md: read them after your picks, not before.
 - Needs Kevin's hands: STEP-04 task 3, the blind picks: run `make ab-pick` in a terminal, open the
   page it prints, type x, y or tie and a reason for each of the 5 fixtures. It writes ab.json and
   the verdict; the step04 gate reads ab.json, so the STEP-04 PR waits for the picks

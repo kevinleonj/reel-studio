@@ -136,6 +136,10 @@ def report(rows: list[Row], cfg: Ab, root: Path, source: Path) -> Path:
     if any("pick" not in r for r in rows):  # before make ab-pick: the pick rule cannot be judged
         checks = checks[1:]
         lines += ["", "Verdict: pending Kevin's blind picks (make ab-pick)", ""]
+        lines.insert(
+            1, "\n**Kevin: run `make ab-pick` before reading this page; the scores would**"
+        )
+        lines.insert(2, "**anchor the blind picks.**")
     else:
         passed = all(ok for ok, _ in checks)
         lines += ["", f"Verdict: {'PASS' if passed else 'FAIL'}", ""]

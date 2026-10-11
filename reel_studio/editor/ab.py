@@ -208,14 +208,15 @@ class Harness:
             outputs={"text": self._relative(folder / render.TEXT)},
         )
 
-    def _contained(self, attempt: Path, call: Callable[[], Row]) -> Row:
-        """Run one arm; any failure becomes a recorded arm with what it cost."""
+    def _contained(self, attempt: Path, call: Callable[[], Row], unknown: Decimal) -> Row:
+        """Run one arm; any failure becomes a recorded arm with what it cost. `unknown` is
+        counted when the spend cannot be read (a kit stopped mid-run: its cap)."""
         started = time.monotonic()
         try:
             return call()
         except BaseException as exc:  # noqa: BLE001 - recorded with its cost; run() re-raises stops
             paid = exc.__cause__ if isinstance(exc, _ArmFailed) else exc
-            known = exc.cost if isinstance(exc, (_ArmFailed, ab_kit.KitRefused)) else Decimal(0)
+            known = exc.cost if isinstance(exc, (_ArmFailed, ab_kit.KitRefused)) else unknown
             cost = known + _cost_on_disk(attempt)  # only this attempt's calls
             code = paid.code if isinstance(paid, ReelError) else type(paid).__name__
             log.error(
@@ -292,7 +293,8 @@ class Harness:
                     if side == "new"
                     else partial(self._old, name, files, attempt)
                 )
-                arm = self._contained(attempt, arm_call)
+                unread = caps[side] if side == "old" else Decimal(0)  # new: requests.jsonl
+                arm = self._contained(attempt, arm_call, unread)
                 raised = arm.pop("raise", None)
                 arm["cost_usd"] = float(
                     Decimal(str(arm["cost_usd"])) + earlier

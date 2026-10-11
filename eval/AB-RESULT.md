@@ -1,5 +1,8 @@
 # A/B result: new engine vs the old kit (STEP-04)
 
+**Kevin: run `make ab-pick` before reading this page; the scores would**
+**anchor the blind picks.**
+
 Source: `eval/results/2026-10-11/ab-runs.json`. Same files and order to both engines;
 our critic judges both finished cuts.
 

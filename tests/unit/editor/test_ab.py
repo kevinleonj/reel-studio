@@ -475,3 +475,23 @@ def test_before_the_picks_the_report_says_pending_and_shows_the_other_checks(
 
     assert "Verdict: pending Kevin's blind picks" in report
     assert "mean critic new" in report and "picked or tied" not in report
+
+
+def test_an_interrupted_kit_arm_stays_on_the_ledger_at_its_cap(tmp_path: Path) -> None:
+    class Interrupted(FakeKit):
+        def run(self, name: str, files: list[Path], cap: Decimal, context: str) -> ab_kit.KitRun:
+            raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        _harness(tmp_path, Interrupted(), FakeJudge()).run()
+
+    rows = _json(tmp_path / "repo" / "eval" / "results" / "2026-10-12" / "ab-runs.json")["fixtures"]
+    assert rows[0]["old"]["cost_usd"] == AB.kit_run_cap_usd
+
+
+def test_the_pending_report_asks_for_the_picks_before_the_scores(tmp_path: Path) -> None:
+    runs = _harness(tmp_path, FakeKit(), FakeJudge()).run()
+
+    report = ab_pick.write_pending(runs, tmp_path / "repo").read_text(encoding="utf-8")
+
+    assert report.index("make ab-pick` before reading") < report.index("| fixture |")
