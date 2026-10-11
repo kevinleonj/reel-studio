@@ -92,9 +92,13 @@ def test_the_system_prompt_holds_the_style_structure_and_every_reference() -> No
 
 
 def test_a_style_without_prompt_files_is_refused() -> None:
-    assert prompt.available_styles(CFG) == ["montage", "recipe"]
-    with pytest.raises(ValueError, match="long_take"):
-        prompt.system_prompt("long_take", CFG)
+    vlog = CFG.styles.styles["talking"].model_copy(update={"skill": "vlog"})
+    styles = CFG.styles.model_copy(update={"styles": {**CFG.styles.styles, "vlog": vlog}})
+    cfg = CFG.model_copy(update={"styles": styles})
+
+    assert prompt.available_styles(cfg) == list(CFG.styles.styles)
+    with pytest.raises(ValueError, match="vlog"):
+        prompt.system_prompt("vlog", cfg)
 
 
 def test_the_critic_prompt_has_the_rubric_and_colour_but_not_the_editor() -> None:
@@ -206,3 +210,19 @@ def test_the_crop_effect_is_given_as_typical_and_most() -> None:
     text = prompt.brief(_order(), CFG, MEDIA, SHOTS, transcripts={})
 
     assert "usually by 10-15 and\nup to about 30" in text
+
+
+@pytest.mark.parametrize("style", ["long_take", "talking", "tutorial"])
+def test_every_speech_style_has_its_prompts_and_the_speech_rules(style: str) -> None:
+    system = prompt.system_prompt(style, CFG)
+
+    assert style in prompt.available_styles(CFG)
+    assert len(system) > OFFLINE_MIN_CHARS and system == prompt.system_prompt(style, CFG)
+    words = " ".join(system.split())
+    assert "read_transcript" in words and "quote" in words and "visual_check" in words
+
+
+def test_the_last_take_wins_unless_the_editor_says_why() -> None:
+    words = " ".join(prompt.system_prompt("talking", CFG).split())
+
+    assert "last clean take" in words
