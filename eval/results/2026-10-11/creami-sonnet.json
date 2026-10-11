@@ -1,0 +1,121 @@
+{
+ "fixture": "creami",
+ "started": "2026-10-11T17:57:38.815657+00:00",
+ "model": "sonnet",
+ "style": "montage",
+ "cost_usd": 0.4218734,
+ "critic": {
+  "total": 23,
+  "passed": false,
+  "weakness": "total 23 < 26"
+ },
+ "scores": {
+  "hook": 4,
+  "retention": 3,
+  "story": 4,
+  "peak": 3,
+  "craft": 3,
+  "share": 3,
+  "colour": 3
+ },
+ "reviews": [
+  {
+   "render": 1,
+   "total": 22,
+   "passed": false,
+   "scores": {
+    "hook": 4,
+    "retention": 3,
+    "story": 3,
+    "peak": 3,
+    "craft": 3,
+    "share": 3,
+    "colour": 3
+   }
+  },
+  {
+   "render": 2,
+   "total": 23,
+   "passed": false,
+   "scores": {
+    "hook": 4,
+    "retention": 3,
+    "story": 4,
+    "peak": 3,
+    "craft": 3,
+    "share": 3,
+    "colour": 3
+   }
+  }
+ ],
+ "renders": 2,
+ "error": null,
+ "requests": [
+  {
+   "input_tokens": 4,
+   "output_tokens": 109,
+   "cache_read_input_tokens": 0,
+   "cache_creation_input_tokens": 17450
+  },
+  {
+   "input_tokens": 2,
+   "output_tokens": 386,
+   "cache_read_input_tokens": 17450,
+   "cache_creation_input_tokens": 4005
+  },
+  {
+   "input_tokens": 2,
+   "output_tokens": 492,
+   "cache_read_input_tokens": 21455,
+   "cache_creation_input_tokens": 11744
+  },
+  {
+   "input_tokens": 2,
+   "output_tokens": 210,
+   "cache_read_input_tokens": 33199,
+   "cache_creation_input_tokens": 9140
+  },
+  {
+   "input_tokens": 2,
+   "output_tokens": 4041,
+   "cache_read_input_tokens": 42339,
+   "cache_creation_input_tokens": 6490
+  },
+  {
+   "input_tokens": 4,
+   "output_tokens": 3630,
+   "cache_read_input_tokens": 48829,
+   "cache_creation_input_tokens": 5201
+  },
+  {
+   "input_tokens": 2,
+   "output_tokens": 166,
+   "cache_read_input_tokens": 54030,
+   "cache_creation_input_tokens": 7917
+  },
+  {
+   "input_tokens": 2,
+   "output_tokens": 2525,
+   "cache_read_input_tokens": 61947,
+   "cache_creation_input_tokens": 4451
+  }
+ ],
+ "critic_requests": [
+  {
+   "input_tokens": 4,
+   "output_tokens": 2428,
+   "cache_read_input_tokens": 0,
+   "cache_creation_input_tokens": 13899
+  },
+  {
+   "input_tokens": 4,
+   "output_tokens": 2061,
+   "cache_read_input_tokens": 0,
+   "cache_creation_input_tokens": 13068
+  }
+ ],
+ "outputs": {
+  "text": "out/eval/2026-10-11/creami-sonnet-175738/text.mp4",
+  "clean": "out/eval/2026-10-11/creami-sonnet-175738/clean.mp4"
+ }
+}

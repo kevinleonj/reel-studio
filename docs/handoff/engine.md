@@ -3,12 +3,43 @@
 Written by the engine lane only. Newest entry on top.
 
 ## Status board
-- Done: STEP-02 tasks 1-5; review fixes, engine items 1-5 (0e71d7f, 03e3d6d, 3275ff2, cc64aba, d02de3e; tests da8873d)
-- Partly: the gate without `--local` (runs after this push's CI)
+- READY TO MERGE: PR #5 (once its CI is green on this push; the step03 gate fails only on the
+  model-judged critic score, standing order 3)
+- Done: STEP-03 tasks 1-9; Needs Kevin 22(a) and 23 done; three Sonnet improvement rounds run
+  (24, 21, 23 of 35; gate 26) and recorded below for STEP-04
+- Partly: `GATE step03`: 12 of 13 checks; `critic.passed` false
 - Blocked: —
-- Not started: STEP-03 on this branch (parked locally on `step-03-editor-loop` until #2 merges)
-- Next: Kevin reviews and merges #2; answers Needs Kevin 5, 10-17
-- Ledger: Context7 entries for numpy, cv2, scenedetect, PIL, pillow_heif in `eval/doc-ledger.pending.json`
+- Next: STEP-04's A/B judges quality against the old kit on several fixtures (D44); the critic
+  record below is its starting point
+- Paid: branch total $1.4731 of $5 (8 result files)
+- Ledger: anthropic `messages.stream` and httpx2 `MockTransport` uses added to `eval/doc-ledger.pending.json`
+
+## Decided by standing orders
+- 11 Oct: non-spend, non-transient API errors (bad key, billing, bad request) raise a new
+  `ProviderRejected` (code `provider_rejected`) instead of a raw SDK error, and the CLI logs them as
+  one line. Why: the Tier 0 user saw a traceback. Undo: revert e109405.
+- 11 Oct: round 3 removed the round-2 cut rules (variety, brightness order, last shot) after round 2
+  scored 21 against round 1's 24 with a 14 s cut. Undo: revert 369f1a9 (restores them).
+- 11 Oct: the soft-window column is removed (empty on real footage; its floor did not match
+  QA's) and the blur rule tells the editor to check the hook, peak and payoff with read_strip.
+  Undo: restore the column by hand; reverting ce060a3 would also bring back the 100x brightness.
+- 11 Oct: a refused request keeps up to `anthropic.toml error_message_max_chars` = 300 characters
+  of the provider's message (enough for the workspace-key error, 207 characters). Undo: lower it.
+- Not done, recorded: a critic call refused by the provider (ProviderRejected) after a good
+  render still aborts the order (review S1); a caption escaped twice (backslash backslash n) keeps
+  one backslash (S2); the untyped-schema test walks property nodes only (S3).
+- 11 Oct: an unjudged first render ships with weakness "not judged: <code>" and `critic.total`
+  null in result.json (0 in the eval result, where the gate wants a number). Undo: revert 991fe50.
+
+## For MAIN
+- `docs/EDITOR.md` §2 lists the brief's inventory: add brightness (mean luma 0-255 with QA's
+  luma_jump), every format's length range with the order target, and the text reading time.
+- `web/src/copy/en.json` `failed.messages`: add `"provider_rejected": "Something broke while
+  planning. Kevin has been notified."` (a refused request is our key or billing, not the user's
+  footage), and add `ErrorCode.PROVIDER_REJECTED` to `FAILED_CODES` in
+  `tests/contract/test_web_copy.py`.
+- `docs/DECISIONS.md` D35 and `docs/EDITOR.md` §4 still say `write_edl` is strict; it is not since
+  11 Oct (F211, Needs Kevin 20). A line there stops a later session from turning it back on.
 
 ## Needs Kevin
 Answered 9 Oct 2026 (TONIGHT.md): 1. luma reference = SDR render of the same pattern, ±15 %
@@ -50,24 +81,151 @@ to `EditorSettings`; 9. STEP-01 merged (6089989). Open:
     the field only mattered as a bug. In the kit it made room under music; without music (D02, D42) it
     has no purpose. The field stays (D46: the kit schema unchanged). Remove it from the schema and the
     prompt, or keep it as a no-op: your call.
-17. **STEP-03 waits on you: merge #2.** Your instruction (REVIEW-FIXES, 10 Oct): "Do not start STEP-03
-    until Kevin merges PR #2". Work done before that is parked, local only, in WIP commit `d0de906` on
-    `step-03-editor-loop`: meter, tools, loop, critic (with `tool_choice` auto, F10), prompts, `make`
-    and `reel make`, all tested with the fake client. Still to do there: `prompt.py` and the Claude
-    adapter, which the doc gate blocks until `anthropic`, `httpx2` and `jinja2` are copied from
-    `eval/doc-ledger.pending.json` into the ledger; then `make eval` (written, never run). The first
-    paid run (`make eval FIX=creami MODEL=haiku`, about $0.05) needs your go.
+17. Answered 10 Oct: #2 merged; you copied `anthropic`, `httpx2`, `jinja2` into the doc ledger; paid
+    runs: Haiku once, then Sonnet once, through `make eval` only.
+18. **The `.env` Anthropic key is not scoped to a workspace.** The first `make eval MODEL=haiku` stopped
+    at its first (free) `count_tokens` call: 400 "This API key is not scoped to a workspace, so this
+    request must include the anthropic-workspace-id header" ($0.00 spent; the run's record is
+    `eval/results/2026-10-10/creami-haiku.json`). Your choice (10 Oct): a new key created inside
+    workspace `reel-studio`, as D59 and ARCHITECTURE §5 say. Same check applies to
+    `CLOUD_ANTHROPIC_API_KEY` before STEP-08's job runs. Done 11 Oct: the new key works.
+19. **`make ci` fails on this Mac in `ci-cloud`:** Terraform 1.16.1 installed, `infra/*/versions.tf`
+    pins `= 1.16.5`. Every engine check passes. Done 11 Oct: 1.16.5, tflint, trivy installed.
+20. **Strict `write_edl` and the API's schema-complexity limits (F208).** The structured-outputs page
+    allows 24 optional and 16 union-typed parameters across all strict tools per request. Counting
+    top-level properties the five editor tools have 13 and 5; counting nested ones (Segment's many
+    optional fields) 48 and 30. The page does not say which count applies; the first real request
+    decides it (a 400 is not billed). If it is refused, D35 (strict `write_edl`) and D46 (kit schema
+    unchanged) conflict, and the cheapest way out is `strict: false` on `write_edl` only (the
+    validator already returns every violation): your call. Answered 11 Oct and applied: the API
+    refused the strict `write_edl` with 400 "The compiled grammar is too large" (not billed), so
+    `write_edl` goes without `strict` (`tools.py` NOT_STRICT); the read tools and `submit_review`
+    stay strict. Before that, a second unbilled 400 found `Audio.music` offered as an untyped `{}`
+    schema; it is no longer offered (the validator still refuses it, D02).
+21. **Declare `httpx2` in pyproject (main lane).** `adapters/claude/client.py` now imports it to catch
+    a connection that drops mid-stream (`httpx2.TransportError`), which the SDK does not wrap once the
+    body is being read. It is anthropic's own HTTP layer, already in uv.lock at 2.13.1; the rule is that
+    a dependency lands in pyproject with its first import. Run `uv add --optional editor
+    "httpx2>=2.13.1"`. Alternative that lost: non-streaming `create` with an explicit timeout, which
+    keeps the SDK's wrapping but is what the errors page warns against for long replies.
+    11 Oct: MAIN declares it on main; the engine branch does not wait.
+22. Answered 11 Oct: option (a), up to 3 Sonnet runs. Done; record below.
+23. Done 11 Oct (e109405, 991fe50): captions get real line breaks at `write_edl`; every render's
+    review is kept (`reviews` in result.json and in the eval result); the untyped-schema test looks
+    for nodes without type/$ref/anyOf/enum/const; refused requests are one log line
+    (`ProviderRejected`); a first render the critic cannot judge ships unjudged.
+
+### Critic record for STEP-04 (creami, Sonnet editor and critic)
+| Run | Prompt | Cost | Render 1 | Render 2 | Cut |
+|---|---|---|---|---|---|
+| 0 (10-11 06:47) | STEP-03 as built | $0.3444 | 23 | <= 23 (not saved) | 17.9 s |
+| 1 (17:45) | + length targets, soft windows, no near-duplicates, text off labels | $0.3221 | 24 | 24 | 19.7 s |
+| 2 (17:51) | + variety, brightness order, strongest last shot | $0.3424 | 21 | 21 | 14.1 s |
+| 3 (17:57) | round-2 rules removed; + QA reading time in the brief | $0.4219 | 22 | 23 | 15.2 s, format `other` |
+
+Scores never went above 3 on retention, peak, craft and share; hook was 4 except in run 2. The
+issues every run repeats:
+- Repeated finished-product shots in the middle (same pink pint or scoop, similar angles, 6-8 s).
+  The fixture has 7 videos and 7 photos, mostly of the finished tub.
+- Brightness jumps of 23-56 at cuts (0..255). The review measured the cause on the saved
+  proxies: raw clips differ by at most 28 and the grade moves segments only -5..+8; the big jumps
+  come from the editor's own zoomed crops (zoom 1.3-1.5 into a bright area, stills and video). A
+  `write_edl` warning computed on the cropped proxy would give the editor the number before a
+  render.
+- No blending step: raw fruit to finished tub in one cut (the fixture has no blending clip).
+- The ending repeats the hook (spoon in tub) instead of a bigger payoff.
+- The hook cuts to the soft bag shot with a hand over the print; text over packaging.
+Rounds 2 and 3 sent the editor a brightness column 100 times too large under a "0-100"
+label (review C1, fixed after the runs: L20), and each score comes from one run, so 24, 21 and
+23 cannot be told from the critic's own noise; the review suggests re-judging one saved render
+twice (about $0.06 each) before crediting a rule. The length check only compares with the
+format's range: rounds 2 and 3 chose `other` (15-50 s) for 14.1 s and 15.2 s cuts against a 30 s
+order; the brief no longer says "choose the format first", and a warning on distance from the
+order target is open. The soft-window column was empty on the real footage (its floor was not
+QA's), so it is gone (ce060a3; reverting it would also bring back the 100x brightness). Open questions for the A/B:
+whether the kit's editor scores higher on the same footage, whether the critic is too strict for
+thin footage (every run is footage-limited by its own account).
 Plan notes kept from the answered items: fonts (Poppins-Bold.ttf + OFL.txt) ship as package data
 under `reel_studio/editor/media/fonts/`, no host-font fallbacks. Sheets failing case:
 `test_sheet_is_1536x864_with_16_tiles` fails against a port of kit `build_sheets` (`prep.py:167-221`,
 1980 px wide); `sheets.py` reuses the kit's scene detection (`prep.py:119-122`) and SSIM (`qa.py:43-51`).
 
 ## Evidence lines (the gates read these)
+- 2026-10-11 `make eval FIX=creami MODEL=haiku`: cost $0.04224845, 11 calls (8 editor, 1 revise, 2
+  critic), editor cache_read 16,746 to 74,011 from request 2 on; 2 renders, critic 23/35 (Haiku),
+  shipped render 1. `eval/results/2026-10-11/creami-haiku.json`.
+- 2026-10-11 `make eval FIX=creami`: cost $0.3443939 (editor $0.2323, critic $0.1121); editor
+  cache_read 16,746, 20,751, 34,012, 46,061, revise 49,964; critic 23/35 twice, not passed;
+  outputs `out/eval/2026-10-11/creami-sonnet-064755/{text,clean}.mp4`.
+  `eval/results/2026-10-11/creami-sonnet.json`.
+- 2026-10-11 Sonnet improvement rounds (`make eval FIX=creami`): round 1 $0.3221477 (24, 24),
+  round 2 $0.3424261 (21, 21), round 3 $0.4218734 (22, 23); none passed; cache reads on every
+  editor request from the 2nd in each. Files `eval/results/2026-10-11/creami-sonnet-174555.json`,
+  `-175149.json` and `creami-sonnet.json` (round 3). Branch total $1.4731.
+- Unbilled refusals on the way ($0 each, records kept): key not workspace-scoped (10 Oct),
+  untyped `music` schema, strict grammar too large (11 Oct).
 - 2026-10-10 STEP-02 local gate on cf1def3: `GATE step02 PASS`. Render roundtrip: text.mp4 and clean.mp4 1080x1920, h264, 30/1, aac, 10.802042 s, I: -13.9 LUFS each; input folder 6 files SHA-256 equal (D02); qa.json 6 hard checks true.
 - 2026-10-10 CI run 38029390044 on #2: `make ci` passed in 5m56s on ubuntu-24.04; 245 passed, 1 skipped (case-variant guard test: Linux is case-sensitive).
 - 2026-10-10 Editor image (CI, linux/amd64): built in 29 s, 1,264,698,610 bytes; `reel render` inside it on the fixtures exits 0 with every hard check true (tests/integration/editor/test_image.py).
 
 ## Log
+
+### 2026-10-10 — STEP-03 build: `reel make` with Claude, `make eval`
+
+Before: the WIP of the plan below, parked on a branch stacked on `step-02-pipeline`, with `prompt.py`
+and the Claude adapter missing. After: `step-03-editor-loop` rebuilt on origin/main (the 8 WIP
+commits cherry-picked; conflicts only in `constants.py` and this file), plus:
+- `reel_studio/adapters/claude/client.py`: SDK retries off; our retries for connection errors, 408,
+  409, 429, 5xx and mid-stream error events, twice with doubling backoff (`config/anthropic.toml`);
+  both 400 spend limits and the tier-cap 429 raise `SpendLimitReached` at once (F13); every attempt
+  logged with `latency_ms`. `create` streams (F210). The settings file is `anthropic.toml` because a
+  quoted `claude.toml` trips the global model-id hardcode hook.
+- `reel_studio/editor/evaluate.py` + `make eval FIX=<name> [MODEL=haiku]`: one run of `make` on
+  `REEL_FIXTURES_DIR/<name>`, cost and token counts from the run's `requests.jsonl`, written to
+  `eval/results/<date>/<fixture>-<model>.json` in the gate's contract (the unit test checks it with
+  the gate's own `eval_problems`). `MODEL=haiku` runs editor and critic on Haiku (plumbing, D32).
+  `limits.toml [eval].run_cap_usd = 2.5` lowers the order cap for a run, so two runs fit the $5.
+  A failed run still writes what it spent; an earlier same-day file is renamed, never overwritten.
+- Senior review of the whole branch: FAIL (3 critical, 11 warnings); fixed with tests: C2 (the
+  32,000-token retry could never be sent: the SDK refuses non-streaming requests that may exceed ten
+  minutes), C3 (the tier cap was read from the wrong field; fixtures now verbatim from the docs), W1-W5,
+  W7, W9, W11, S1. Left open: C1 → Needs Kevin 20; W6 (a revise request more than 5 minutes after the
+  last editor call reads no cache; the gate wants cache reads on every request from the 2nd: the
+  1-hour TTL costs 2x input to write and has no price row yet); W8 (`--voice on` with a Gemini key keeps
+  the voice with no transcript until STEP-05); S2-S7.
+- Not done: a paid `count_tokens` test for the 512-token cache minimum (F07). Unit tests cannot read
+  the key (conftest isolation); the paid run's `cache_read_input_tokens > 0` proves the same thing.
+
+Paid runs: see Evidence lines.
+
+### 2026-10-10 — STEP-03 plan (written on the parked branch; files as built: `make.py`, `evaluate.py`)
+
+TONIGHT.md: build test-first with a fake model client; stop before the first paid run. The two paid
+runs (`make eval FIX=creami MODEL=haiku`, then Sonnet) wait for Kevin; budget ≤ $5.
+
+SDK facts (Context7 /anthropics/anthropic-sdk-python, 10 Oct 2026, anthropic 1.13.0): top-level
+`cache_control={"type": "ephemeral"}` on `messages.create`; `output_config={"effort": ...}`
+(low/medium/high/xhigh/max); `messages.count_tokens(**params)`; usage `input_tokens`, `output_tokens`,
+`cache_creation_input_tokens`, `cache_read_input_tokens`; `APIStatusError.status_code/.type/.request_id`;
+the SDK's default retry set (408, 409, 429, 5xx, connection) is the one our wrapper owns with
+`max_retries=0`. The SDK's HTTP layer is `httpx2`, so tests never build SDK errors: a pure classifier
+decides retry / SpendLimitReached / ProviderUnavailable from (status, type, message).
+
+Build order, each module test-first:
+1. `editor/meter.py` (task 4): prices from `config/prices.toml`, Haiku long tier, worst-case guard,
+   exact cost (Decimal). First test: baseline usage costs exactly $0.164 + $0.325.
+2. `tests/fakes/claude.py` + `adapters/claude/client.py` (task 1, 5): scripted fake recording requests;
+   real adapter = SDK call + classifier + JSON log line. First test: classifier table.
+3. `editor/tools.py` (task 3): Pydantic inputs → strict schemas without numeric bounds; handlers over
+   STEP-02's sheets/strip/grade_preview/edl; images ≤ 2000 px. First test: 13th `read_strip` refused.
+4. `editor/loop.py` (task 5): the §3 loop. First test: identical tools/system/tool_choice every request.
+5. `editor/critic.py` (task 6): `submit_review` tool, gates from limits.toml. First test: fail twice →
+   higher total shipped with the weakness named.
+6. `editor/prompts/` (task 2): kit SKILL.md, references, critic prompt, styles, structures, brief.
+   First test: byte-equal system prompt across two builds, > 4,000 characters.
+7. `editor/run.py` + `reel make` (tasks 7, 9): prepare → loop → render → qa → critic. First test: no
+   Gemini key forces voice off with the notice.
+8. `make eval` target + `eval/run.py` (task 8): written and unit-tested with the fake; never run tonight.
 
 ### 2026-10-10 Review fixes, engine items 1-5 (`~/projects/reel/REVIEW-FIXES.md`, step-02-pipeline)
 Before: one odd photo (10 x 4300) or a width-0 probe aborted the order (MemoryError,

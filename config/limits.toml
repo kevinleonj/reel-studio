@@ -45,6 +45,12 @@ haiku_drop = false                  # D39
 sdk_max_retries = 0                 # SDK retries off; our wrapper retries transient errors only (D45)
 transient_retries = 2
 
+[eval]
+# One `make eval` run stops before it would cross this, so two runs fit STEP-03's $5 budget even
+# when the Sonnet run goes wrong (STEP-03 targets <= $1.20; Kevin 10 Oct 2026: Haiku once, then
+# Sonnet once).
+run_cap_usd = 2.5
+
 [sheets]
 tile_w = 384                        # D38
 tile_h = 216

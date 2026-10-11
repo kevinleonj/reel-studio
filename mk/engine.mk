@@ -1,5 +1,5 @@
 # Lane engine owns this file (STEP-02 to 05).
-.PHONY: ci-engine image-editor
+.PHONY: ci-engine image-editor eval
 
 # The media tests need an ffmpeg with zscale (F45); this prints which one they found: on the Mac
 # Homebrew's keg-only ffmpeg-full, in CI Ubuntu's ffmpeg (F201). make ci runs it after the tests.
@@ -10,3 +10,10 @@ ci-engine:
 # tests/integration/editor/test_image.py.
 image-editor:
 	docker build --platform linux/amd64 -f docker/editor.Dockerfile -t reel-studio-editor .
+
+# One paid run of `reel make` on REEL_FIXTURES_DIR/$(FIX), recorded in eval/results/<date>/
+# (STEP-03 task 8). MODEL=haiku proves the plumbing for cents; the default is Sonnet.
+MODEL ?= sonnet
+eval:
+	@test -n "$(FIX)" || { echo "usage: make eval FIX=<fixture> [MODEL=haiku]"; exit 2; }
+	$(UV) python -m reel_studio.editor.evaluate --fixture $(FIX) --model $(MODEL)

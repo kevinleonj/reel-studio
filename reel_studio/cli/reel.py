@@ -1,23 +1,30 @@
 """`reel`: the command line (render arrives in STEP-02, make in STEP-03).
 
     reel render --edl <edl.json> <folder> [--out <dir>]
+    reel make <folder> --style <style> [--length <s>] [--text-lang <code>] [--voice on|off]
+              [--out <dir>]
 
-Prepares the folder's clips, checks the hand-written edit list against them, renders text.mp4
-and clean.mp4 and writes qa.json, all into --out. The folder is only read (D02); proxies, sheets
-and review images go to <out>/work. Exit codes: 0 rendered and every hard check passed,
-1 rendered but a hard check failed, or ffmpeg failed; 2 bad arguments, an EDL with errors, or a
-folder with nothing usable in it.
+`render` prepares the folder's clips, checks the hand-written edit list against them, renders
+text.mp4 and clean.mp4 and writes qa.json, all into --out. `make` has Claude write the edit list
+on your own key, renders, has the critic judge it, and writes ./out/<name>/ (or --out). The folder
+is only read (D02); proxies, sheets and review images go to <out>/work. Exit codes: 0 rendered and
+every hard check passed, 1 rendered but a hard check failed, ffmpeg failed or the model stopped;
+2 bad arguments, an EDL with errors, a folder with nothing usable in it, or a style whose prompts
+are not written yet.
 """
 
 import argparse
 import json
 import os
-from collections.abc import Sequence
+import sys
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from reel_studio.core import config
-from reel_studio.core.errors import NoUsableInput, ReelError
+from reel_studio.core.errors import NoUsableInput, ProviderError, ReelError
 from reel_studio.core.logging import configure, get_logger
+from reel_studio.editor import critic, make, prompt
 from reel_studio.editor.media import edl, pipeline, qa, render
 from reel_studio.editor.media.tools import Ffmpeg
 from reel_studio.settings import EditorSettings
@@ -27,6 +34,36 @@ log = get_logger(__name__)
 STAGE = "cli"
 OK, FAILED, BAD_INPUT = 0, 1, 2
 WORK = "work"
+OUT = "out"  # `reel make` writes ./out/<name>/ by default (STEP-03 task 7)
+VOICE = {"on": True, "off": False}
+NO_KEY_NOTICE = "No Gemini key: natural sound only, no transcription."  # EDITOR.md §5, D14
+
+
+@dataclass(frozen=True)
+class Deps:
+    """What `make` reaches outside the process; tests pass fakes, a real run the defaults."""
+
+    ports: Callable[[EditorSettings], make.Ports]
+    steps: Callable[[Path, EditorSettings], make.Steps]
+    on_request: Callable[[make.Request], None] = lambda request: None
+
+
+def real_deps() -> Deps:
+    def ports(settings: EditorSettings) -> make.Ports:
+        # Imported here so `reel render` and `--help` never load the SDK.
+        from reel_studio.adapters.claude import client  # noqa: PLC0415
+        from reel_studio.adapters.clock import SystemClock  # noqa: PLC0415
+
+        editor = config.load().limits.editor
+        claude = client.connect(settings.anthropic_api_key, config.load_claude(), editor)
+        return make.Ports(claude, SystemClock())
+
+    def steps(folder: Path, settings: EditorSettings) -> make.Steps:
+        media = config.load_media()
+        ffmpeg = Ffmpeg(settings.ffmpeg_path, settings.ffprobe_path, media.tools)
+        return make.media_steps(folder, ffmpeg, media, config.load())
+
+    return Deps(ports=ports, steps=steps)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -38,6 +75,16 @@ def build_parser() -> argparse.ArgumentParser:
     cmd.add_argument("--edl", required=True, type=Path, help="edit list (JSON)")
     cmd.add_argument("folder", type=Path, help="folder of clips and photos; only read")
     cmd.add_argument("--out", type=Path, help="output folder (default: <folder>-reel beside it)")
+    cfg = config.load()
+    order = cfg.limits.order
+    languages = [lang.code for lang in cfg.styles.text_languages.items]
+    cmd = commands.add_parser("make", help="edit a Reel with Claude on your own key")
+    cmd.add_argument("folder", type=Path, help="folder of clips and photos; only read")
+    cmd.add_argument("--style", required=True, choices=list(cfg.styles.styles))
+    cmd.add_argument("--length", type=int, choices=order.lengths_s, default=order.default_length_s)
+    cmd.add_argument("--text-lang", choices=languages, default=languages[0])
+    cmd.add_argument("--voice", choices=list(VOICE), help="default: the style's own")
+    cmd.add_argument("--out", type=Path, help=f"output folder (default: ./{OUT}/<folder name>)")
     return parser
 
 
@@ -113,18 +160,65 @@ def render_command(args: argparse.Namespace, settings: EditorSettings) -> int:
     return OK if passed else FAILED
 
 
-def main(argv: Sequence[str] | None = None, settings: EditorSettings | None = None) -> int:
+def _say(line: str) -> None:
+    """The person's summary on stdout; log lines stay machine-readable JSON."""
+    sys.stdout.write(line + "\n")
+
+
+def _voice(args: argparse.Namespace, settings: EditorSettings) -> bool:
+    style = config.load().styles.styles[args.style]
+    wanted = VOICE[args.voice] if args.voice is not None else style.voice_default
+    if settings.gemini_api_key is None:  # one Claude key is enough to run Reel Studio (D14)
+        _say(NO_KEY_NOTICE)
+        return False
+    return wanted
+
+
+def make_command(args: argparse.Namespace, settings: EditorSettings, deps: Deps) -> int:
+    cfg = config.load()
+    folder: Path = args.folder.resolve()
+    if not folder.is_dir():
+        return _bad(f"input folder not found: {folder}")
+    if args.style not in prompt.available_styles(cfg):
+        return _bad(f"style {args.style} is not available yet: {prompt.available_styles(cfg)}")
+    out: Path = (args.out if args.out is not None else Path.cwd() / OUT / folder.name).resolve()
+    if _overlaps(folder, out):
+        return _bad(f"--out {out} overlaps the input folder {folder}; it is only read (D02)")
+    order = prompt.OrderSettings(args.style, args.length, args.text_lang, _voice(args, settings))
+    request = make.Request(folder=folder, out=out, order=order)
+    deps.on_request(request)
+    made = make.make(request, deps.ports(settings), deps.steps(folder, settings), cfg)
+    final = made.final
+    verdict = "passed" if final.passed else f"not passed: {final.weakness}"
+    total = final.review.total if final.review is not None else "-"
+    _say(f"Reel: {out / render.TEXT} | {out / render.CLEAN}")
+    _say(f"Critic: {total}/{critic.TOTAL_MAX}, {verdict} ({made.renders} renders)")
+    _say(f"Cost: ${made.cost}")
+    return OK if all(final.render.qa.hard_checks.model_dump().values()) else FAILED
+
+
+def main(
+    argv: Sequence[str] | None = None,
+    settings: EditorSettings | None = None,
+    deps: Deps | None = None,
+) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.command != "render":
+    if args.command not in ("render", "make"):
         parser.print_help()
         return OK
     configure()
+    settings = settings if settings is not None else EditorSettings()
     try:
-        return render_command(args, settings if settings is not None else EditorSettings())
+        if args.command == "make":
+            return make_command(args, settings, deps if deps is not None else real_deps())
+        return render_command(args, settings)
     except NoUsableInput as exc:  # nothing in the folder could be read: the input is the problem
         log.error("%s", exc, extra={"stage": STAGE, "event": "failed", "outcome": exc.code})
         return BAD_INPUT
+    except ProviderError as exc:  # the provider's own words say what to fix: no traceback
+        log.error("%s", exc, extra={"stage": STAGE, "event": "failed", "outcome": exc.code})
+        return FAILED
     except ReelError as exc:
         log.exception(
             "%s", type(exc).__name__, extra={"stage": STAGE, "event": "failed", "outcome": exc.code}

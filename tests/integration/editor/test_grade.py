@@ -39,7 +39,8 @@ def test_preview_fits_2000_px(
     media = config.load_media()
     ref = grade.reference_of(shots, clips_dir, media)
 
-    image = grade_preview.preview(work, shots, grade.Choice("natural", 0.6, 0.6), ref, media)
+    request = grade_preview.PreviewRequest(grade.Choice("natural", 0.6, 0.6), ref)
+    image = grade_preview.preview(work, shots, request, media)
 
     assert max(image.size) <= config.load().limits.sheets.max_image_side_px
     assert image.size[0] > 0 and image.size[1] > 0
