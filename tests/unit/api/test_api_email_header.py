@@ -1,12 +1,13 @@
 """REVIEW-FIXES WEB 3: an address no mail header accepts never reaches the mailer."""
 
+from email.errors import HeaderParseError
 from email.message import EmailMessage
 
 import pytest
 
 from reel_studio.adapters.mailer_smtp import SmtpMailer
 from reel_studio.core.errors import DeliveryFailed
-from reel_studio.core.mail_address import HEADER_ERRORS, header_accepts
+from reel_studio.core.mail_address import header_accepts
 from tests.unit.api.conftest import Api
 from tests.unit.api.test_api_orders import SETTINGS
 from tests.unit.api.test_api_pins import LINK_DATA
@@ -40,7 +41,11 @@ def test_the_mailer_turns_an_unusable_address_into_a_delivery_failure(address: s
         mailer.send("link", address, LINK_DATA)
 
 
-@pytest.mark.parametrize("error", HEADER_ERRORS)
+# Listed here, not taken from HEADER_ERRORS: dropping a member must fail its own case.
+PARSER_ERRORS = (ValueError, HeaderParseError, AttributeError, IndexError, TypeError)
+
+
+@pytest.mark.parametrize("error", PARSER_ERRORS)
 def test_every_header_error_refuses_the_address_and_fails_the_delivery(
     monkeypatch: pytest.MonkeyPatch, api: Api, error: type[Exception]
 ) -> None:

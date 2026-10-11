@@ -1,5 +1,6 @@
 """The order routes behind the `X-Order-Token` header (docs/ARCHITECTURE.md §7)."""
 
+from collections.abc import Iterator
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Request
@@ -60,6 +61,22 @@ def authorised(
 Authorised = Annotated[Order, Depends(authorised)]
 
 
+def exclusive(order: Authorised, request: Request) -> Iterator[Order]:
+    """One write per order at a time. A second one is refused at once with 503 and Retry-After
+    instead of holding a worker thread on the contended order record (review rounds 2 and 3);
+    the page reports it as a network failure and the person tries again."""
+    in_flight = limiters_of(request).order_writes
+    if not in_flight.enter(order.id):
+        raise OrderBusy("order write")
+    try:
+        yield order
+    finally:
+        in_flight.leave(order.id)
+
+
+Exclusive = Annotated[Order, Depends(exclusive)]
+
+
 @router.get("")
 def status(order: Authorised) -> dict[str, object]:
     deps = order.deps
@@ -74,7 +91,7 @@ def status(order: Authorised) -> dict[str, object]:
 
 
 @router.post("/fulfil")
-def fulfil(order: Authorised) -> None:
+def fulfil(order: Exclusive) -> None:
     """Stripe's success page: the same fulfilment as the webhook (§7). With PAYMENTS=off the
     order is already paid, and an order without a session has nothing to check."""
     stripe = order.doc["stripe"]
@@ -89,7 +106,7 @@ def fulfil(order: Authorised) -> None:
 
 
 @router.post("/cancel")
-def cancel(order: Authorised) -> dict[str, object]:
+def cancel(order: Exclusive) -> dict[str, object]:
     """Stripe's Cancel: release an unpaid checkout's place, refill the form. With PAYMENTS=off
     it changes nothing once paid."""
     if order.deps.settings.payments == "off":
@@ -112,18 +129,8 @@ class UploadBatch(BaseModel):
 
 
 @router.post("/uploads")
-def uploads(batch: UploadBatch, order: Authorised, request: Request) -> dict[str, object]:
+def uploads(batch: UploadBatch, order: Exclusive) -> dict[str, object]:
     """Limits are checked on the whole batch plus what is already reserved (docs/UX.md §2)."""
-    in_flight = limiters_of(request).uploads_in_flight
-    if not in_flight.enter(order.id):
-        raise OrderBusy("uploads")  # the page's own retry comes back after Retry-After
-    try:
-        return _uploads(batch, order)
-    finally:
-        in_flight.leave(order.id)
-
-
-def _uploads(batch: UploadBatch, order: Order) -> dict[str, object]:
     if order.status != "paid":
         raise wrong_status()
     if not batch.files:
@@ -170,7 +177,7 @@ STARTED = {"queued", "running", "done"}
 
 
 @router.post("/start")
-def start(order: Authorised) -> None:
+def start(order: Exclusive) -> None:
     """Write the manifest and queue; the dispatcher (or the cloud launcher) takes the slot.
     Safe to call twice: a second Start (a double tap, a retried request) answers 200."""
     if order.status in STARTED:
@@ -206,7 +213,7 @@ def start(order: Authorised) -> None:
 
 
 @router.post("/viewed")
-def viewed(order: Authorised) -> None:
+def viewed(order: Exclusive) -> None:
     order.deps.orders.mark_viewed(order.id)
 
 
@@ -217,7 +224,7 @@ class FeedbackBody(BaseModel):
 
 
 @router.post("/feedback")
-def feedback(body: FeedbackBody, order: Authorised) -> None:
+def feedback(body: FeedbackBody, order: Exclusive) -> None:
     web = order.deps.config.limits.web
     if not 1 <= body.rating <= web.rating_max or len(body.comment) > web.comment_max_chars:
         raise invalid("rating or comment out of range")
@@ -227,7 +234,7 @@ def feedback(body: FeedbackBody, order: Authorised) -> None:
 
 
 @router.delete("/files")
-def delete_files(order: Authorised) -> None:
+def delete_files(order: Exclusive) -> None:
     """ "Delete my files now" (D19): in/, work/, out/ go, then the status says so."""
     if order.status in {"running", "queued", "awaiting_payment"}:
         raise wrong_status()
