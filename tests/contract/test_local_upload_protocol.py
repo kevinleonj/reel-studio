@@ -363,10 +363,51 @@ def test_an_order_id_that_is_not_one_path_part_deletes_nothing(
     assert sorted(str(p) for p in (tmp_path / "data").rglob("*")) == before
 
 
-@pytest.mark.parametrize("order_id", ["..", "../..", "../sessions"])
-def test_an_upload_session_needs_a_one_part_order_id(storage: LocalStorage, order_id: str) -> None:
+HOSTILE_IDS = ["..", "../..", "../sessions", "a/b", "a/", f"x/../{ORDER}", f"x/../../{ORDER}"]
+
+
+@pytest.mark.parametrize("order_id", HOSTILE_IDS)
+def test_an_upload_session_needs_a_one_part_order_id(
+    storage: LocalStorage, tmp_path: Path, order_id: str
+) -> None:
+    """Review round 6: the argument itself is checked, not a part of the key made from it."""
+    before = sorted(str(p) for p in (tmp_path / "data").rglob("*"))
     with pytest.raises(ValueError, match="order id"):
         storage.create_upload_session(order_id, {"name": "a.mp4", "size": 1, "type": "video/mp4"})
+    assert sorted(str(p) for p in (tmp_path / "data").rglob("*")) == before
+
+
+@pytest.mark.parametrize("order_id", HOSTILE_IDS)
+def test_listing_needs_a_one_part_order_id(storage: LocalStorage, order_id: str) -> None:
+    session = session_of(storage, 2)
+    storage.put_chunk(session, "bytes 0-1/2", b"01")  # ORDER now has a file to leak
+    with pytest.raises(ValueError, match="order id"):
+        storage.list_inputs(order_id)
+
+
+def test_a_chunk_landing_during_a_delete_is_refused(
+    storage: LocalStorage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review round 6: the index goes first, so a chunk arriving while the folders are being
+    removed is refused instead of writing into them."""
+    session = session_of(storage, 4)
+    real_path = storage._path
+    landed: list[BaseException] = []
+
+    def path_then_chunk(key: str) -> Path:
+        if key.startswith("in/") and not landed:
+            try:
+                storage.put_chunk(session, "bytes 0-3/4", b"0123")
+            except SessionNotFound as refused:
+                landed.append(refused)
+            else:
+                landed.append(AssertionError("the chunk was accepted mid-delete"))
+        return real_path(key)
+
+    monkeypatch.setattr(storage, "_path", path_then_chunk)
+    storage.delete_order(ORDER)
+    assert len(landed) == 1
+    assert isinstance(landed[0], SessionNotFound)
 
 
 def test_deleting_waits_for_the_sessions_lock(storage: LocalStorage) -> None:

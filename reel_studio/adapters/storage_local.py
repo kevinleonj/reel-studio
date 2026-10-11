@@ -133,6 +133,7 @@ class LocalStorage:
     # ------------------------------------------------------------ port
 
     def create_upload_session(self, order_id: str, file: Record) -> UploadTarget:
+        order_id = one_part(order_id)  # the argument itself, before any key is made from it
         name = check_file_name(str(file["name"]))
         size = int(str(file["size"]))
         session = secrets.token_urlsafe(UPLOAD_SESSION_BYTES)
@@ -155,7 +156,7 @@ class LocalStorage:
         return {"name": name, "upload_url": f"{self._upload_path}/{session}"}
 
     def list_inputs(self, order_id: str) -> list[Record]:
-        folder = self._path(f"in/{order_id}")
+        folder = self._path(f"in/{one_part(order_id)}")
         if not folder.is_dir():
             return []
         files = sorted(p for p in folder.iterdir() if p.is_file())  # partials live with sessions
