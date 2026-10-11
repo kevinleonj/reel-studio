@@ -156,6 +156,15 @@ class FakeOrders:
             found.sort(key=lambda d: d["created_at"], reverse=True)
             return [deepcopy(d) for d in found[:limit]]
 
+    def reserve_uploads(
+        self, order_id: str, *, files: Sequence[Record], max_files: int, max_bytes: int
+    ) -> None:
+        listed = [dict(f) for f in files]
+        with self._lock:
+            self._write(
+                rules.reserve_uploads(self.orders.get(order_id), listed, max_files, max_bytes)
+            )
+
     def places_held(self, week: str) -> int:
         with self._lock:
             counter = self.weeks.get(week)

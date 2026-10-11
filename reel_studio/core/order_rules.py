@@ -8,12 +8,13 @@ Documents: `orders/{order_id}`, `limits/week-YYYY-Www` {count, cap}, `limits/cap
 {slots: {order_id: lease_until}, paused}.
 """
 
+import unicodedata
 from copy import deepcopy
 from datetime import datetime, timedelta
 from typing import Any
 
 from reel_studio.core.config import Config
-from reel_studio.core.errors import ErrorCode, WeekFull
+from reel_studio.core.errors import ErrorCode, TooLarge, TooManyFiles, WeekFull
 from reel_studio.core.ports import NewOrder, QueueLimits
 
 
@@ -70,6 +71,7 @@ def new_order(order: NewOrder, now: datetime, order_days: int) -> Doc:
         "stripe": {},
         "files": [],
         "bytes_declared": 0,
+        "uploads": [],
         "queue": {},
         "stage": None,
         "stages_done": [],
@@ -280,4 +282,29 @@ def resume(doc: Doc | None) -> Doc | None:
     changed = _moved(doc, "paused")
     if changed is not None:
         changed.update(status="queued", error=None)
+    return changed
+
+
+def upload_key(name: str) -> str:
+    """One file per name whatever its case or Unicode form (the API refuses such twins)."""
+    return unicodedata.normalize("NFC", name).casefold()
+
+
+def reserve_uploads(
+    doc: Doc | None, files: list[dict[str, object]], max_files: int, max_bytes: int
+) -> Doc:
+    """Every upload session first reserves its declared name and size here, in the order's own
+    transaction, so batches opened before any file finishes still meet the limits (review W1).
+    Asking again for a name replaces its size: a resumed or replaced upload counts once."""
+    changed = _moved(doc, "paid")
+    if changed is None:
+        raise WrongState("uploads need a paid order")
+    held = {r["key"]: r["size"] for r in changed.get("uploads") or []}
+    for file in files:
+        held[upload_key(str(file["name"]))] = int(str(file["size"]))
+    if len(held) > max_files:
+        raise TooManyFiles
+    if sum(held.values()) > max_bytes:
+        raise TooLarge
+    changed["uploads"] = [{"key": key, "size": size} for key, size in sorted(held.items())]
     return changed

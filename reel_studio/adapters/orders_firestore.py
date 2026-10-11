@@ -15,7 +15,7 @@ from google.cloud import firestore
 
 from reel_studio.core import order_rules as rules
 from reel_studio.core.constants import MS_PER_S, RUN_TOKEN_BYTES
-from reel_studio.core.errors import ErrorCode, WeekFull
+from reel_studio.core.errors import ErrorCode, TooLarge, TooManyFiles, WeekFull
 from reel_studio.core.logging import get_logger
 from reel_studio.core.ports import Clock, NewOrder, QueueLimits, Record, SweepReport
 
@@ -64,7 +64,7 @@ class FirestoreOrders:
         extra: dict[str, Any] = {"order_id": order_id, "stage": "orders", "event": event}
         try:
             result = call()
-        except (WeekFull, rules.WrongState) as refusal:
+        except (WeekFull, TooManyFiles, TooLarge, rules.WrongState) as refusal:
             # Expected refusals, not failures: one INFO line, no traceback (D74).
             extra.update(
                 latency_ms=round((time.monotonic() - started) * MS_PER_S),
@@ -260,6 +260,16 @@ class FirestoreOrders:
 
     def pause(self, order_id: str, *, code: ErrorCode) -> None:
         self._end_run("pause", order_id, lambda doc: rules.pause(doc, code), pause=True)
+
+    def reserve_uploads(
+        self, order_id: str, *, files: Sequence[Record], max_files: int, max_bytes: int
+    ) -> None:
+        listed = [dict(f) for f in files]
+        self._single(
+            "reserve_uploads",
+            order_id,
+            lambda doc: rules.reserve_uploads(doc, listed, max_files, max_bytes),
+        )
 
     def places_held(self, week: str) -> int:
         def run() -> int:

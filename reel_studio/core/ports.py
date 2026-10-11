@@ -97,6 +97,10 @@ class OrderUpkeep(Protocol):
     def resume_paused(self) -> list[str]: ...  # D26 `reelctl orders resume --all-paused`
     def list_orders(self, *, status: str | None, limit: int) -> list[Record]: ...  # newest first
     def places_held(self, week: str) -> int: ...  # the week counter, e.g. week 2026-W42
+    # Raises TooManyFiles or TooLarge over the limits, WrongState unless paid.
+    def reserve_uploads(
+        self, order_id: str, *, files: Sequence[Record], max_files: int, max_bytes: int
+    ) -> None: ...
 
 
 class OrderStore(Orders, OrderUpkeep, Protocol):

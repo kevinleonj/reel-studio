@@ -1,6 +1,5 @@
 """The order routes behind the `X-Order-Token` header (docs/ARCHITECTURE.md §7)."""
 
-import unicodedata
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Request
@@ -21,7 +20,7 @@ from reel_studio.core.errors import (
     TooManyFiles,
 )
 from reel_studio.core.logging import get_logger
-from reel_studio.core.order_rules import WrongState
+from reel_studio.core.order_rules import WrongState, upload_key
 from reel_studio.core.ports import Record
 
 log = get_logger(__name__)
@@ -116,20 +115,21 @@ def uploads(batch: UploadBatch, order: Authorised) -> dict[str, object]:
         raise wrong_status()
     if not batch.files:
         raise NoFiles
-    if len({unicodedata.normalize("NFC", f.name).casefold() for f in batch.files}) != len(
-        batch.files
-    ):
+    if len({upload_key(f.name) for f in batch.files}) != len(batch.files):
         raise invalid("the same file name twice in one batch")
     rules = order.deps.config.limits.order
-    already = list(order.deps.storage.list_inputs(order.id))
-    if len(already) + len(batch.files) > rules.max_files:
-        raise TooManyFiles
-    total = sum(int(str(f["size"])) for f in already) + sum(f.size for f in batch.files)
-    if total > rules.max_total_bytes:
-        raise TooLarge
     for file in batch.files:
         if file.type not in rules.allowed_types:
             raise BadType(file.name)
+    try:
+        order.deps.orders.reserve_uploads(
+            order.id,
+            files=[{"name": f.name, "size": f.size} for f in batch.files],
+            max_files=rules.max_files,
+            max_bytes=rules.max_total_bytes,
+        )
+    except WrongState:  # Start won the race
+        raise wrong_status() from None
     try:
         targets = [
             order.deps.storage.create_upload_session(order.id, f.model_dump()) for f in batch.files
