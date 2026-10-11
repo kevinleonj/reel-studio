@@ -4,13 +4,16 @@ The main checkout's log and the status of every lane. Lanes write their own file
 Newest entry on top.
 
 ## Status board
-- Done: starter kit v1.1; STEP-01 (#1), STEP-02 (#2), STEP-08 short of the real project (#3), STEP-06
-  except task 6 (#4), `httpx2` and laptop `WebSettings` (#6), all merged
-- Partly: STEP-00 on the Mac (ffmpeg-full and node@24 not on PATH, see Needs Kevin); branch
-  `guard-auto-merge` lets sessions queue their own pull requests for GitHub auto-merge
+READY TO MERGE: PR #9 (queued with `gh pr merge 9 --auto --squash`; GitHub merges once `ci` passes)
+- Done: starter kit v1.1; STEP-01 (#1), STEP-02 (#2), STEP-03 (#5), STEP-08 short of the real project
+  (#3), STEP-06 except task 8 (#4, #8), `httpx2` and laptop `WebSettings` (#6), auto-merge guardrail
+  (#7), all merged
+- Partly: STEP-00 on the Mac (ffmpeg-full and node@24 not on PATH, see Needs Kevin); PR #9 gives
+  STEP-07 its Stripe settings and adds `.dockerignore`
 - Blocked: —
-- Not started: STEP-04, STEP-05, STEP-07, STEP-09
-- Next: Kevin merges `guard-auto-merge`; then every session ends with `gh pr merge <N> --auto --squash`
+- Not started: STEP-04, STEP-05, STEP-07 (web lane, waits on #9), STEP-09
+- Next: #9 merges by itself; lane web then wires `stripe_price_id`/`stripe_coupon_id` into the Stripe
+  adapter and `reelctl codes create`
 
 ## Lanes
 | Lane | Worktree | Steps | File |
@@ -36,6 +39,16 @@ Newest entry on top.
   (one class per consumer; a test keeps the two in step). A lane that needs a new variable asks here.
 
 ## Log
+### 11 Oct 2026 — step07-settings (PR #9): Stripe ids and .dockerignore
+- Before: `WebSettings` had no Stripe price or coupon id (web.md "For MAIN (STEP-07)"); no
+  `.dockerignore`, so every build context carried the dotenv file (web.md "For MAIN").
+- After: `stripe_price_id`, `stripe_coupon_id` (optional with `PAYMENTS=off`; with `PAYMENTS=stripe` all
+  four Stripe values required, the error names the missing ones), passed by `compose.yaml`, lines in
+  `.env.example`; `.dockerignore` with `tests/unit/test_dockerignore.py` (secrets out, every COPY source
+  in); the `DATA_DIR` comment fixed. `make ci` green: 768 passed. PR #9 queued for auto-merge.
+- Not done: the `stripe` doc-ledger entry for the web worktree (protected, another worktree: Kevin).
+- Lesson L21: `origin/main` moved mid-session because worktrees share refs; squash onto the merge base.
+
 ### 11 Oct 2026 — guard-auto-merge: sessions may queue their own pull requests (Kevin approved)
 - Before: `guard_bash.py` blocked every `gh pr merge`; Kevin merged every pull request by hand.
 - After: exactly `gh pr merge <N> --auto --squash` is allowed (any other flag, a branch name instead of a
