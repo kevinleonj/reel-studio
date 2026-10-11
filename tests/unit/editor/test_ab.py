@@ -464,3 +464,14 @@ def test_a_cut_off_log_counts_the_cap(tmp_path: Path) -> None:
     run = _kit(_stub_kit(tmp_path / "kit", "cut")).run("abx", [tmp_path], Decimal("2.5"), "")
 
     assert run.cost_usd == Decimal("2.5") and run.error is not None
+
+
+def test_before_the_picks_the_report_says_pending_and_shows_the_other_checks(
+    tmp_path: Path,
+) -> None:
+    runs = _harness(tmp_path, FakeKit(), FakeJudge()).run()
+
+    report = ab_pick.write_pending(runs, tmp_path / "repo").read_text(encoding="utf-8")
+
+    assert "Verdict: pending Kevin's blind picks" in report
+    assert "mean critic new" in report and "picked or tied" not in report

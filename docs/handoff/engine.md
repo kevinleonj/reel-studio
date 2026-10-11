@@ -6,11 +6,14 @@ Written by the engine lane only. Newest entry on top.
 - Done: STEP-03 merged (PR #5, 11 Oct 19:28 UTC; gate 12 of 13, only the model-judged
   `critic.passed` failed after 3 rounds: 24, 21, 23 of 35, gate 26; $1.4731 of $5). STEP-04 tasks 1,
   2 and 4 built on `step-04-ab`: `make ab` (both engines, same files, our critic judges both, budget
-  guard) and `make ab-pick` (blind X/Y picks, ab.json, eval/AB-RESULT.md)
-- Partly: STEP-04 paid A/B run (`make ab`)
-- Needs Kevin's hands: STEP-04 task 3, the blind picks (`make ab-pick`); the step04 gate reads
-  ab.json, which only exists after them
-- Next: STEP-04 PR; then STEP-05
+  guard) and `make ab-pick` (blind X/Y picks, ab.json, eval/AB-RESULT.md). The paid A/B ran on 11
+  Oct: $8.58 of $15; judge totals new vs old: cookies 19/19, creami 23/21, meat 24/24, mercadona
+  16/20, pastav2 23/22 (means 21.0 vs 21.2, inside the 1-point margin); mean new cost $0.38;
+  neither engine passed the critic gates on any fixture. See eval/AB-RESULT.md.
+- Needs Kevin's hands: STEP-04 task 3, the blind picks: run `make ab-pick` in a terminal, open the
+  page it prints, type x, y or tie and a reason for each of the 5 fixtures. It writes ab.json and
+  the verdict; the step04 gate reads ab.json, so the STEP-04 PR waits for the picks
+- Next: STEP-05 (speech) tasks that need no filming
 - Ledger: anthropic `messages.stream` and httpx2 `MockTransport` uses added to `eval/doc-ledger.pending.json`
 
 ## Decided by standing orders
@@ -19,8 +22,17 @@ Written by the engine lane only. Newest entry on top.
   dish as pastav2, half photos), melocotonjuice (one 9 s clip). The kit takes at most 15 files, so
   both engines get the same first 15 (videos first, by name). Order style montage for all; the kit
   gets no style. Undo: edit `limits.toml [eval.ab]`.
-- 11 Oct, STEP-04: the harness lives in `reel_studio/editor/ab.py` and `ab_pick.py` (STEP-04 names
-  `eval/ab.py`; the package keeps it under mypy, ruff and the unit tests). Undo: move the files.
+- 11 Oct, STEP-04: the harness lives in `reel_studio/editor/ab*.py` (STEP-04 names `eval/ab.py`;
+  the package keeps it under mypy, ruff and the unit tests). Undo: move the files.
+- 11 Oct, STEP-04: one order for both engines (montage, 30 s, English, voice off), given to the
+  kit as `--context`; one judge (`ab_judge.CriticJudge`, our QA sheets + our critic) scores both
+  finished cuts; the new engine's in-loop score is kept apart as `loop_critic_total`. Undo: revert
+  0ca9696.
+- 11 Oct, STEP-04 money rules: kit cap `kit_run_cap_usd` 2.5 per run; `judge_reserve_usd` 0.15 kept
+  free; a ledger summed from every ab-runs.json (a rerun never spends twice); an arm in flight is
+  on the ledger at its cap; a kit run refused for its key or billing stops the harness. `make ab`
+  resumes, `ONLY=` limits it, `REDO=` reruns finished fixtures after a tune (it pays the kit again).
+  Undo: `limits.toml [eval.ab]`.
 - 11 Oct: non-spend, non-transient API errors (bad key, billing, bad request) raise a new
   `ProviderRejected` (code `provider_rejected`) instead of a raw SDK error, and the CLI logs them as
   one line. Why: the Tier 0 user saw a traceback. Undo: revert e109405.

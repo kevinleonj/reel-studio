@@ -133,8 +133,12 @@ def report(rows: list[Row], cfg: Ab, root: Path, source: Path) -> Path:
             f"| {new['wall_s']:.0f} | {old['wall_s']:.0f} |"
         )
     checks = verdict(rows, cfg)
-    passed = all(ok for ok, _ in checks)
-    lines += ["", f"Verdict: {'PASS' if passed else 'FAIL'}", ""]
+    if any("pick" not in r for r in rows):  # before make ab-pick: the pick rule cannot be judged
+        checks = checks[1:]
+        lines += ["", "Verdict: pending Kevin's blind picks (make ab-pick)", ""]
+    else:
+        passed = all(ok for ok, _ in checks)
+        lines += ["", f"Verdict: {'PASS' if passed else 'FAIL'}", ""]
     lines += [f"- `{'ok  ' if ok else 'FAIL'}  {text}`" for ok, text in checks]
     lines += _tune(checks)
     target = root / REPORT
@@ -173,6 +177,12 @@ def pick(
     target.write_text(json.dumps({**data, "fixtures": rows}, indent=1) + "\n", encoding="utf-8")
     report(rows, config.load().limits.eval.ab, root, target)
     return target
+
+
+def write_pending(runs: Path, root: Path) -> Path:
+    """The report from ab-runs.json alone, before the picks."""
+    data: dict[str, Any] = json.loads(runs.read_text(encoding="utf-8"))  # Any: JSON
+    return report(data["fixtures"], config.load().limits.eval.ab, root, runs)
 
 
 def main() -> int:
