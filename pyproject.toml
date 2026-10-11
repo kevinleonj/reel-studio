@@ -20,6 +20,7 @@ reelctl = "reel_studio.cli.reelctl:main"
 editor = [
     "anthropic>=1.13.0",
     "google-genai>=2.29.0",
+    "httpx2>=2.13.1",
     "numpy>=2.5.3",
     "opencv-python-headless>=5.0.0.93",
     "pillow>=12.3.0",
