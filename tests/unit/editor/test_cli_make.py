@@ -1,5 +1,6 @@
 """`reel make` (STEP-03 tasks 7, 9): arguments, voice rule, output place, summary, exit codes."""
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -7,6 +8,7 @@ from typing import Any
 import pytest
 
 from reel_studio.cli import reel
+from reel_studio.core.errors import ProviderRejected
 from reel_studio.editor import make
 from reel_studio.settings import EditorSettings
 from tests.conftest import MakeSettings
@@ -132,3 +134,17 @@ def test_a_refusal_exits_1(tmp_path: Path, make_settings: MakeSettings) -> None:
     args = ["make", str(_folder(tmp_path)), "--style", "montage", "--out", str(tmp_path / "o")]
 
     assert reel.main(args, _settings(make_settings), wiring.deps()) == 1
+
+
+def test_a_rejected_request_exits_1_with_one_line_and_no_traceback(
+    tmp_path: Path, make_settings: MakeSettings, capsys: pytest.CaptureFixture[str]
+) -> None:
+    wiring = _Wiring([ProviderRejected("claude_create: http_401 authentication_error")])
+    args = ["make", str(_folder(tmp_path)), "--style", "montage", "--out", str(tmp_path / "o")]
+
+    assert reel.main(args, _settings(make_settings), wiring.deps()) == 1
+
+    lines = [json.loads(x) for x in capsys.readouterr().out.splitlines() if x.startswith("{")]
+    failed = [x for x in lines if x.get("event") == "failed"]
+    assert len(failed) == 1 and "http_401" in failed[0]["message"]
+    assert "exc_info" not in failed[0] and "Traceback" not in json.dumps(failed[0])

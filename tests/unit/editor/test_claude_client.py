@@ -16,7 +16,7 @@ from pydantic import SecretStr
 
 from reel_studio.adapters.claude import client
 from reel_studio.core import config
-from reel_studio.core.errors import ProviderUnavailable, SpendLimitReached
+from reel_studio.core.errors import ProviderRejected, ProviderUnavailable, SpendLimitReached
 
 URL = "https://api.anthropic.test/v1/messages"
 # Verbatim from https://platform.claude.com/docs/en/api/rate-limits (F13, read 10 Oct 2026).
@@ -199,14 +199,18 @@ def test_a_spend_limit_stops_at_once_without_a_retry(error: anthropic.APIStatusE
     assert len(sdk.messages.calls) == 1 and sleeps == []
 
 
-def test_any_other_client_error_propagates_unretried() -> None:
-    error = status_error(400, "invalid_request_error", "tools.0: bad schema")
+@pytest.mark.parametrize(
+    ("status", "kind"),
+    [(400, "invalid_request_error"), (401, "authentication_error"), (402, "billing_error")],
+)
+def test_any_other_client_error_is_rejected_unretried(status: int, kind: str) -> None:
+    error = status_error(status, kind, "tools.0: bad schema")
     claude, sdk, sleeps = make([error, message()])
 
-    with pytest.raises(anthropic.APIStatusError) as raised:
+    with pytest.raises(ProviderRejected, match=f"http_{status}") as raised:
         claude.create(REQUEST)
 
-    assert raised.value is error and len(sdk.messages.calls) == 1 and sleeps == []
+    assert raised.value.__cause__ is error and len(sdk.messages.calls) == 1 and sleeps == []
 
 
 def test_the_backoff_doubles_up_to_its_cap() -> None:

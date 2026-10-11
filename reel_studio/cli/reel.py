@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from reel_studio.core import config
-from reel_studio.core.errors import NoUsableInput, ReelError
+from reel_studio.core.errors import NoUsableInput, ProviderError, ReelError
 from reel_studio.core.logging import configure, get_logger
 from reel_studio.editor import critic, make, prompt
 from reel_studio.editor.media import edl, pipeline, qa, render
@@ -190,8 +190,9 @@ def make_command(args: argparse.Namespace, settings: EditorSettings, deps: Deps)
     made = make.make(request, deps.ports(settings), deps.steps(folder, settings), cfg)
     final = made.final
     verdict = "passed" if final.passed else f"not passed: {final.weakness}"
+    total = final.review.total if final.review is not None else "-"
     _say(f"Reel: {out / render.TEXT} | {out / render.CLEAN}")
-    _say(f"Critic: {final.review.total}/{critic.TOTAL_MAX}, {verdict} ({made.renders} renders)")
+    _say(f"Critic: {total}/{critic.TOTAL_MAX}, {verdict} ({made.renders} renders)")
     _say(f"Cost: ${made.cost}")
     return OK if all(final.render.qa.hard_checks.model_dump().values()) else FAILED
 
@@ -215,6 +216,9 @@ def main(
     except NoUsableInput as exc:  # nothing in the folder could be read: the input is the problem
         log.error("%s", exc, extra={"stage": STAGE, "event": "failed", "outcome": exc.code})
         return BAD_INPUT
+    except ProviderError as exc:  # the provider's own words say what to fix: no traceback
+        log.error("%s", exc, extra={"stage": STAGE, "event": "failed", "outcome": exc.code})
+        return FAILED
     except ReelError as exc:
         log.exception(
             "%s", type(exc).__name__, extra={"stage": STAGE, "event": "failed", "outcome": exc.code}

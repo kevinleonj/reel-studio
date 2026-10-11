@@ -19,7 +19,7 @@ from pydantic import SecretStr
 from reel_studio.core import constants
 from reel_studio.core.config import ClaudeClient as ClientConfig
 from reel_studio.core.config import Editor
-from reel_studio.core.errors import ProviderUnavailable, SpendLimitReached
+from reel_studio.core.errors import ProviderRejected, ProviderUnavailable, SpendLimitReached
 from reel_studio.core.logging import get_logger
 
 type Record = dict[str, Any]  # Any: a request or reply as plain JSON
@@ -157,7 +157,8 @@ class ClaudeClient:
             return
         if _transient(error):
             raise ProviderUnavailable(f"{name}: {_outcome(error)} after retries") from error
-        raise error
+        kind = status.type if status is not None else None  # bad key, billing, bad request
+        raise ProviderRejected(f"{name}: {_outcome(error)} {kind}") from error
 
     def count_tokens(self, request: Mapping[str, Any]) -> int:  # Any: request JSON
         counted = self._call(
