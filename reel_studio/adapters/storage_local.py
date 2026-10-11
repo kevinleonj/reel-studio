@@ -48,6 +48,14 @@ class ChunkAnswer:
     range: str | None
 
 
+def one_part(order_id: str) -> str:
+    """An order id is one path component: `..` or `a/b` would reach other orders' folders
+    (STEP-07 review round 5). The API only ever passes its own 32-hex ids."""
+    if order_id in {"", ".", ".."} or Path(order_id).name != order_id:
+        raise ValueError(f"unsafe order id: {order_id!r}")
+    return order_id
+
+
 class LocalStorage:
     def __init__(
         self,
@@ -94,7 +102,7 @@ class LocalStorage:
 
     def _current_file(self, key: str) -> Path:
         _, order_id, name = key.split("/", 2)
-        return self._current / order_id / hashlib.sha256(name.encode()).hexdigest()
+        return self._current / one_part(order_id) / hashlib.sha256(name.encode()).hexdigest()
 
     def _is_current(self, session: str, key: str) -> bool:
         try:
@@ -179,6 +187,12 @@ class LocalStorage:
     def delete_order(self, order_id: str) -> None:
         """Removes in/, work/ and out/ of the order; any other failure propagates, so a caller
         never reports files as deleted that are still there."""
+        with self._sessions_lock:
+            # The index first: a chunk still in flight for this order then refuses at its commit
+            # and removes its own bytes instead of writing into folders being deleted.
+            index = self._current / one_part(order_id)
+            if index.exists():
+                shutil.rmtree(index)
         for prefix in PREFIXES:
             folder = self._path(f"{prefix}/{order_id}")
             if folder.exists():
@@ -196,7 +210,6 @@ class LocalStorage:
             if owner == order_id:
                 self.partial_of(session.stem).unlink(missing_ok=True)
                 session.unlink(missing_ok=True)
-        shutil.rmtree(self._current / order_id, ignore_errors=True)  # no live session remains
 
     # ------------------------------------------------------------ laptop-only transport
 
