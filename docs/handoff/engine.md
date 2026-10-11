@@ -3,15 +3,19 @@
 Written by the engine lane only. Newest entry on top.
 
 ## Status board
-- READY TO MERGE: PR #5 (once its CI is green on this push; the step03 gate fails only on the
-  model-judged critic score, standing order 3)
-- Done: STEP-03 tasks 1-9; Needs Kevin 22(a) and 23 done; three Sonnet improvement rounds run
-  (24, 21, 23 of 35; gate 26) and recorded below for STEP-04
-- Partly: `GATE step03`: 12 of 13 checks; `critic.passed` false
-- Blocked: —
-- Next: STEP-04's A/B judges quality against the old kit on several fixtures (D44); the critic
-  record below is its starting point
-- Paid: branch total $1.4731 of $5 (8 result files)
+- Done: STEP-03 merged (PR #5). STEP-04 built and paid ($8.58 of $15) on PR #10 (see that
+  branch's handoff). STEP-05 on `step-05-speech`: words from a transcription, the packed
+  transcript, speech-cut checks in `write_edl` (D41), the QA word diff function, and the five
+  speech prompts (styles story_trim, talking; structures story, talk, tutorial)
+- Needs Kevin's hands:
+  1. PR #10 (STEP-04): run `make ab-pick` (blind picks); the step04 gate reads ab.json.
+  2. STEP-05 task 6: film the speech fixtures (long_take, talking_es1, talking_es2, tutorial).
+  3. For MAIN: add `google-genai` to the doc ledger (entry below); the Gemini adapter cannot be
+     written until then (the doc gate blocks the import, and the ledger is main's file).
+- Not done, engine (after 3): the Gemini transcriber adapter; wiring transcription into `make`
+  (audio per clip, the §8 audio cost guard, transcripts in the brief); the QA speech check on the
+  render; renderer padding and 30 ms fades at speech cuts (F59); `eval/SPEECH-RESULT.md`
+- Paid on STEP-05: $0
 - Ledger: anthropic `messages.stream` and httpx2 `MockTransport` uses added to `eval/doc-ledger.pending.json`
 
 ## Decided by standing orders
@@ -32,6 +36,15 @@ Written by the engine lane only. Newest entry on top.
   null in result.json (0 in the eval result, where the gate wants a number). Undo: revert 991fe50.
 
 ## For MAIN
+- Doc ledger entry for STEP-05: library `google.genai`, version 2.29.0, source
+  https://ai.google.dev/gemini-api/docs/transcribe (read 11 Oct 2026) and the installed package;
+  used: `genai.Client(api_key=)`, `client.files.upload(file=)` (gives `.uri`, `.mime_type`),
+  `client.interactions.create(model="gemini-3.5-transcribe", input=[{"type": "audio", "uri",
+  "mime_type"}], generation_config={"transcription_config": {"mode": {"type": "verbatim",
+  "timestamp_granularities": ["word"]}}})`; words in `steps[].content[].annotations[]` with
+  `type == "word_info"`, `text`, `start_offset`/`end_offset` like `"0.100s"`;
+  `errors.APIError(.code, .message)`; no `language_codes` = auto-detect; word timestamps cap
+  audio at 30 min.
 - `docs/EDITOR.md` §2 lists the brief's inventory: add brightness (mean luma 0-255 with QA's
   luma_jump), every format's length range with the order target, and the text reading time.
 - `web/src/copy/en.json` `failed.messages`: add `"provider_rejected": "Something broke while

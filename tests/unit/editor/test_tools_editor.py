@@ -4,6 +4,7 @@ import base64
 import io
 import json
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -303,3 +304,42 @@ def test_the_tool_descriptions_say_the_budget_is_per_order(box: tools.Toolbox) -
 
     assert "per order" in described["read_strip"] and "per edit" not in described["read_strip"]
     assert "per order" in described["read_grade_preview"]
+
+
+def _spoken(box: tools.Toolbox) -> tools.Toolbox:
+    """Voice on, and c01 says 'so the trick is' then, after a clean gap, 'brown the butter'."""
+    words = [("so", 1.0, 1.2), ("the", 1.21, 1.3), ("trick", 1.31, 1.6), ("is", 1.62, 1.8)]
+    words += [("brown", 2.4, 2.7), ("the", 2.71, 2.8), ("butter", 2.81, 3.2)]
+    folder = box.ctx.work / "transcript"
+    folder.mkdir()
+    (folder / "c01.words.json").write_text(
+        json.dumps([{"text": t, "start": s, "end": e} for t, s, e in words]), encoding="utf-8"
+    )
+    box.ctx = replace(box.ctx, voice=True)
+    return box
+
+
+def _cut_at(out: float) -> dict[str, Any]:  # Any: EDL JSON
+    segments = [
+        {"clip": "c01", "in": 0.5, "out": out, "role": "hook"},
+        {"clip": "c02", "in": 0, "out": 2, "role": "payoff"},
+    ]
+    return {"versions": [{"name": "A", "segments": segments}]}
+
+
+def test_write_edl_refuses_a_cut_inside_a_word_and_names_the_clean_gap(box: tools.Toolbox) -> None:
+    result = _spoken(box).run("write_edl", _cut_at(1.5))
+
+    assert result.is_error and "inside 'trick'" in result.text() and "1.80-2.40" in result.text()
+
+
+def test_write_edl_accepts_a_cut_in_a_clean_gap(box: tools.Toolbox) -> None:
+    result = _spoken(box).run("write_edl", _cut_at(2.0))
+
+    assert not result.is_error
+
+
+def test_without_the_voice_speech_cuts_are_not_checked(box: tools.Toolbox) -> None:
+    _spoken(box).ctx = replace(box.ctx, voice=False)
+
+    assert not box.run("write_edl", _cut_at(1.5)).is_error

@@ -9,7 +9,7 @@ import pytest
 
 from reel_studio.cli import reel
 from reel_studio.core.errors import ProviderRejected
-from reel_studio.editor import make
+from reel_studio.editor import make, prompt
 from reel_studio.settings import EditorSettings
 from tests.conftest import MakeSettings
 from tests.fakes.claude import FakeClaude, response, text
@@ -111,7 +111,10 @@ def test_values_outside_the_choices_are_refused_by_the_parser(
     assert done.value.code == 2 and wiring.fake.requests == []
 
 
-def test_a_style_without_prompts_yet_exits_2(tmp_path: Path, make_settings: MakeSettings) -> None:
+def test_a_style_without_prompts_yet_exits_2(
+    tmp_path: Path, make_settings: MakeSettings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(prompt, "available_styles", lambda _cfg: ["montage", "recipe"])
     wiring = _Wiring([])
     args = ["make", str(_folder(tmp_path)), "--style", "long_take"]
 
