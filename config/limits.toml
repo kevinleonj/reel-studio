@@ -84,3 +84,19 @@ signed_url_minutes = 60             # result page play/download links; re-signed
 rating_max = 5                      # docs/ARCHITECTURE.md §7: rating 1-5
 comment_max_chars = 1000            # docs/ARCHITECTURE.md §7: comment up to 1,000 characters
 google_tag_url = "https://www.googletagmanager.com/gtag/js"  # gtag.js loader (F70), sent only when analytics is on; hardcode-ok: config is its home
+
+[firestore]                          # STEP-06 task 6 composition root; added 11 Oct 2026, Kevin to review
+timeout_s = 10                      # every read and query; @transactional commits pass no timeout
+                                    # in google-cloud-firestore 2.34.1 and use the client's default
+# An aborted transaction retries at once, reusing its transaction id (google-cloud-firestore
+# transaction.py), so N writers on one document need up to N attempts: STEP-07's race test lost
+# 8 of 10 checkouts at the week document with 5 attempts on the emulator.
+max_attempts = 12
+
+[smtp]                               # STEP-06 task 6; added 11 Oct 2026, Kevin to review
+timeout_s = 10                      # connect and send to Mailpit; no outside call without a timeout
+
+[dispatcher]                         # STEP-06 task 6 laptop dispatcher; added 11 Oct 2026, Kevin to review
+poll_seconds = 2                    # how often it looks for queued orders; a start feels instant
+sweep_seconds = 60                  # STEP-06 task 2: the dispatcher calls the sweep every 60 s locally
+fake_stage_seconds = 3              # the fake editor's pause per stage, so the progress list is visible

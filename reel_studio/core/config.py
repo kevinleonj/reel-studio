@@ -102,6 +102,21 @@ class Codes(_Strict):
     max_redemptions: int
 
 
+class Firestore(_Strict):
+    timeout_s: int
+    max_attempts: int
+
+
+class Smtp(_Strict):
+    timeout_s: int
+
+
+class DispatcherTimes(_Strict):
+    poll_seconds: int
+    sweep_seconds: int
+    fake_stage_seconds: int
+
+
 class Upload(_Strict):
     chunk_mib: int
     parallel_files: int
@@ -128,6 +143,9 @@ class Limits(_Strict):
     speech: Speech
     codes: Codes
     upload: Upload
+    firestore: Firestore
+    smtp: Smtp
+    dispatcher: DispatcherTimes
     web: Web
 
 
