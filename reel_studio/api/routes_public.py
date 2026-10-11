@@ -2,6 +2,8 @@
 
 import re
 from datetime import timedelta
+from email.errors import HeaderParseError
+from email.message import EmailMessage
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -39,6 +41,16 @@ class CheckoutBody(BaseModel):
 # and typos; the mail server decides the rest.
 EMAIL_SHAPE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 SETTING_KEYS = {"style", "length_s", "text_lang", "keep_voice", "chips", "note"}
+
+
+def header_accepts(address: str) -> bool:
+    """The checkout asks before any order exists (review W3): EMAIL_SHAPE alone lets an
+    encoded word through that decodes to a line break."""
+    try:
+        EmailMessage()["To"] = address
+    except (ValueError, HeaderParseError):
+        return False
+    return True
 
 
 def check_settings(deps: ApiDeps, raw: dict[str, Any]) -> dict[str, object]:
@@ -143,6 +155,8 @@ def checkout(body: CheckoutBody, request: Request) -> dict[str, str] | JSONRespo
     email = body.email.strip()
     if email and not EMAIL_SHAPE.match(email):  # also refuses CR/LF: no header injection
         raise invalid("email shape")
+    if email and not header_accepts(email):
+        raise invalid("email header")
     order_id, token = new_order_id(), new_token()
     now = deps.clock.now()
     expires = now + timedelta(minutes=deps.config.limits.limits.checkout_expiry_minutes)
