@@ -16,7 +16,7 @@ Everything left in this lane needs Kevin's hands:
 
 ## Decided by standing orders (STEP-07 and REVIEW-FIXES)
 - Upload limits: every `/uploads` batch reserves its declared names and sizes on the order (`uploads`, `OrderUpkeep.reserve_uploads`, one transaction), keyed by the exact stored name; asking again for a name never lowers its reservation; names are checked before anything is reserved. Start still re-checks the finished files. Undo: revert the item-1 and round-1 commits.
-- A newer upload session for a name closes the older one and its bytes (the storage contract changed from Cloud Storage's "last completed wins"; see For CLOUD). Undo: drop `_close_sessions_for` and restore the three contract tests.
+- A newer upload session for a name closes the older one and its bytes (the storage contract changed from Cloud Storage's "last completed wins"; see For CLOUD). The session index (`_current_file`, `_is_current`, `_commit` in `storage_local.py`) holds the live session per name; a session opened before the index existed is refused with 404 and its partial bytes stay until the order is deleted. Undo: drop the index and restore the three contract tests.
 - A transaction that runs out of attempts on a busy order answers 503 `busy` with `Retry-After` (`[web] busy_retry_after_s = 2`), not 500. Undo: remove `on_busy`.
 - A Checkout Session whose `amount_total` is not 0 is expired at once and the code refused (`code_invalid`): D58's no-charge rule checked on Stripe's own total. Undo: remove the check in `payments.checkout`.
 - Stripe client: `[stripe] timeout_s = 20`, `max_network_retries = 2`, `webhook_tolerance_s = 300` (F321). A friend's code is `NAME-XXXXXX` (`PROMO_CODE_SUFFIX_BYTES`). Undo: edit the values.
@@ -54,7 +54,6 @@ Everything left in this lane needs Kevin's hands:
 - `WebSettings` now requires `FIRESTORE_PROJECT`, `SMTP_HOST`, `SMTP_PORT`, `DATA_DIR`, `WEB_DIST`, `VOICE_AVAILABLE`; `infra/main/locals.tf` sets none of them. `reel_studio/api/main.py` is the laptop root (LocalStorage, SMTP); the cloud root (GCS, Resend, Stripe) is still to write, and `create()` builds the Stripe adapter with `PAYMENTS=stripe`.
 - Rate limits key on the client address; uvicorn trusts forwarded headers only from 127.0.0.1 unless `FORWARDED_ALLOW_IPS` is set (F316). Set it on the Cloud Run service, or every client shares one bucket.
 
-## For MAIN
 
 ## Needs Kevin (decisions, not blocking)
 - **Decision on D18's edge (link email after Stripe):** the webhook does not know the link token, which is stored only as a hash. The success URL Stripe keeps (`/o/<id>?t=<token>`, as STEP-07 specifies) does carry it, so fulfilment reads it back from the retrieved session, checks it against the stored hash, and sends `/o/<id>#t=<token>`. No new copy of the token is stored. Confirm, or pick another way (this also answers the "ready" email question below if the editor may call Stripe).
@@ -85,6 +84,13 @@ Everything left in this lane needs Kevin's hands:
   taken: the header test lists its five exception types itself; every order write route (uploads,
   start, viewed, feedback, delete, fulfil, cancel) shares the one-at-a-time bound; the model-level
   settings message is pinned.
+- Review round 4: PASS. Also fixed: the order's write slot is released before the answer is
+  sent (`scope="function"`; a client's next write was sometimes refused by its own previous
+  one), the commit guard, its lock, the cleanup of refused bytes and the no-index rule are each
+  pinned, and `delete_order` removes the index first under the lock without swallowing errors.
+- Review round 5: PASS with one regression fixed: that reorder ran `rmtree` on an unchecked order
+  id (`../..` would have emptied `data/`; unreachable over HTTP, which only passes 32-hex ids). An
+  order id must now be one path part (`one_part`), checked before anything is removed; pinned.
 
 ### 11 Oct 2026 (night) — STEP-07 review round 2: FAIL (1 critical), fixed
 
