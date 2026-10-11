@@ -68,6 +68,9 @@ markers = [
 target-version = "py313"
 line-length = 100
 extend-exclude = [".claude", "scripts/check_literals.py", "scripts/gates"]
+# Honour the excludes even for a file named on the command line: editor and format-on-save hooks
+# pass single paths, and the protected hooks, scanner and gates must never be reformatted.
+force-exclude = true
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "UP", "S", "BLE", "SIM", "RUF", "PL", "G", "LOG", "T20", "DTZ"]
