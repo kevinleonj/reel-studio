@@ -18,7 +18,7 @@ class FakePayments:
         self.created: list[dict[str, object]] = []
         self.expired: list[str] = []
         self.fail_next_checkout = False
-        self.next_amount_total = 0  # what Stripe would charge for the next session
+        self.next_amount_total: int | None = 0  # what Stripe would charge next
 
     def add_code(self, code: str, *, percent_off: float, active: bool = True) -> None:
         self.codes[code.upper()] = {

@@ -251,3 +251,20 @@ def test_connect_needs_stripe(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
     monkeypatch.setenv("WEB_DIST", str(tmp_path))
     with pytest.raises(SystemExit, match="PAYMENTS=stripe"):
         connect()
+
+
+def test_connect_names_missing_settings_without_their_values(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    for name, value in STRIPE_ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("SMTP_PORT", "not-a-port-value")
+    monkeypatch.delenv("KEVIN_ALERT_EMAIL")
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("WEB_DIST", str(tmp_path))
+    with pytest.raises(SystemExit) as stopped:
+        connect()
+    message = str(stopped.value)
+    assert "KEVIN_ALERT_EMAIL" in message
+    assert "SMTP_PORT" in message
+    assert "not-a-port-value" not in message

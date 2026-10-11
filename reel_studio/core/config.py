@@ -9,7 +9,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, PositiveInt, model_validator
 
 from reel_studio.core.media_config import Media
 
@@ -131,9 +131,9 @@ class DispatcherTimes(_Strict):
 
 
 class StripeTimes(_Strict):
-    timeout_s: int
-    max_network_retries: int
-    webhook_tolerance_s: int
+    timeout_s: PositiveInt
+    max_network_retries: NonNegativeInt  # 0 is a valid choice: no retries
+    webhook_tolerance_s: PositiveInt  # 0 would turn Stripe's replay check off
 
 
 class Upload(_Strict):

@@ -77,7 +77,7 @@ def checkout(deps: ApiDeps, settings: Record, code: str) -> dict[str, str]:
         log.exception("stripe call failed", extra=failure("create_checkout", order_id))
         deps.orders.expire(order_id)
         raise unavailable() from None
-    if session.get("amount_total") not in (0, None):
+    if session.get("amount_total") != 0:  # nullable in Stripe's spec: unknown is not zero
         # D58: a code's restrictions can leave the price due even at 100% off; nobody pays.
         log.error(
             "checkout session would charge; expired",

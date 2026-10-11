@@ -10,7 +10,7 @@ import re
 import secrets
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -48,7 +48,7 @@ class StripeSetup:
 
     price_id: str  # the 19 EUR price (D58)
     coupon_id: str  # the 100%-off coupon friends' codes are attached to
-    webhook_secret: str
+    webhook_secret: str = field(repr=False)  # never in a log or a traceback
     tolerance_s: int  # how old a signed event may be
 
 

@@ -1,10 +1,12 @@
 """REVIEW-FIXES WEB 3: an address no mail header accepts never reaches the mailer."""
 
+from email.message import EmailMessage
+
 import pytest
 
 from reel_studio.adapters.mailer_smtp import SmtpMailer
 from reel_studio.core.errors import DeliveryFailed
-from reel_studio.core.mail_address import header_accepts
+from reel_studio.core.mail_address import HEADER_ERRORS, header_accepts
 from tests.unit.api.conftest import Api
 from tests.unit.api.test_api_orders import SETTINGS
 from tests.unit.api.test_api_pins import LINK_DATA
@@ -36,3 +38,26 @@ def test_the_mailer_turns_an_unusable_address_into_a_delivery_failure(address: s
     mailer = SmtpMailer("127.0.0.1", 1, sender="r@example.test", timeout_s=1.0)
     with pytest.raises(DeliveryFailed):
         mailer.send("link", address, LINK_DATA)
+
+
+@pytest.mark.parametrize("error", HEADER_ERRORS)
+def test_every_header_error_refuses_the_address_and_fails_the_delivery(
+    monkeypatch: pytest.MonkeyPatch, api: Api, error: type[Exception]
+) -> None:
+    """The stdlib bug behind each member exists only on some patch releases; pin all of them."""
+    real = EmailMessage.__setitem__
+
+    def broken(self: EmailMessage, name: str, value: object) -> None:
+        if name == "To":
+            raise error("broken header")
+        real(self, name, value)
+
+    monkeypatch.setattr(EmailMessage, "__setitem__", broken)
+    assert header_accepts("ana@example.test") is False
+    response = api.client.post(
+        "/api/checkout", json={"settings": SETTINGS, "code": "", "email": "ana@example.test"}
+    )
+    assert response.status_code == 422
+    mailer = SmtpMailer("127.0.0.1", 1, sender="r@example.test", timeout_s=1.0)
+    with pytest.raises(DeliveryFailed):
+        mailer.send("link", "ana@example.test", LINK_DATA)

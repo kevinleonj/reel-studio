@@ -44,6 +44,7 @@ from reel_studio.settings import WebSettings
 # Named, not __name__: run with `python -m` this module is __main__, outside the `reel_studio`
 # logger tree that configure() wires, and its lines would be dropped.
 log = get_logger("reel_studio.api.main")
+LIVE_KEY_PREFIXES = ("sk_live_", "rk_live_")  # Stripe's live-mode secret and restricted keys
 USAGE_ERROR = 2
 
 
@@ -78,6 +79,8 @@ def build_payments(settings: WebSettings, config: Config, clock: Clock) -> Strip
     price, coupon = settings.stripe_price_id, settings.stripe_coupon_id
     if key is None or secret is None or price is None or coupon is None:
         raise SystemExit("PAYMENTS=stripe needs its four STRIPE_ settings")  # unreachable
+    if key.get_secret_value().startswith(LIVE_KEY_PREFIXES):
+        raise SystemExit("the beta runs in Stripe test mode (D58): use a test-mode key")
     times = config.limits.stripe
     client = build_client(
         key.get_secret_value(),
@@ -149,14 +152,20 @@ def firestore_orders(settings: WebSettings, config: Config, clock: Clock) -> Ord
     )
 
 
+def settings_problem(error: ValidationError) -> str:
+    """Field names only: a pydantic message carries the input, which can be a key."""
+    names = sorted({str(e["loc"][0]).upper() for e in error.errors() if e["loc"]})
+    rule = [str(e["msg"]) for e in error.errors() if not e["loc"]]  # model-level, no input
+    return " ".join(["settings missing or invalid (see .env.example):", *names, *rule])
+
+
 def check(out: TextIO) -> int:
     """Validate the settings by the app's own rules, naming each bad field, never its value
     (a pydantic error message carries the input)."""
     try:
         WebSettings()
     except ValidationError as error:
-        names = sorted({str(e["loc"][0]).upper() for e in error.errors() if e["loc"]})
-        out.write(f"settings missing or invalid (see .env.example): {' '.join(names)}\n")
+        out.write(f"{settings_problem(error)}\n")
         return USAGE_ERROR
     out.write("settings ok\n")
     return 0

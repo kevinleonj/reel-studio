@@ -203,12 +203,22 @@ def connect() -> Ports:
     """The real adapters, from the same settings and composition root as the API (D63: run on
     Kevin's laptop with his own Google login). Codes live in Stripe, so PAYMENTS=stripe."""
     # Imported here: `reelctl --help` must work without the api extra's clients.
+    from pydantic import ValidationError  # noqa: PLC0415
+
     from reel_studio.adapters.clock import SystemClock  # noqa: PLC0415
-    from reel_studio.api.main import build_payments, firestore_orders  # noqa: PLC0415
+    from reel_studio.api.main import (  # noqa: PLC0415
+        build_payments,
+        firestore_orders,
+        settings_problem,
+    )
     from reel_studio.core.config import load  # noqa: PLC0415
     from reel_studio.settings import WebSettings  # noqa: PLC0415
 
-    settings, config, clock = WebSettings(), load(), SystemClock()
+    try:
+        settings = WebSettings()
+    except ValidationError as error:
+        raise SystemExit(settings_problem(error)) from None
+    config, clock = load(), SystemClock()
     payments = build_payments(settings, config, clock)
     if payments is None:
         raise SystemExit("reelctl needs PAYMENTS=stripe and the Stripe settings in .env")

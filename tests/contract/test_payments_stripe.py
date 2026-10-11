@@ -9,15 +9,20 @@ import secrets
 import time
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
 import stripe
 
-from reel_studio.adapters.payments_stripe import StripePayments, StripeSetup
+from reel_studio.adapters.payments_stripe import StripePayments, StripeSetup, build_client
+from reel_studio.api.main import build_payments
+from reel_studio.core.config import load
 from reel_studio.core.constants import STRIPE_API_VERSION
 from reel_studio.core.errors import BadSignature, PaymentsFailed
+from reel_studio.settings import WebSettings
+from tests.conftest import MakeSettings
 from tests.fakes.clock import FrozenClock
 
 NOW = datetime(2026, 10, 12, 9, 0, tzinfo=UTC)
@@ -345,3 +350,91 @@ def test_a_signed_body_that_is_not_json_is_refused() -> None:
     body = b"not json"
     with pytest.raises(BadSignature):
         payments.parse_webhook(body, signed(body))
+
+
+def test_the_client_carries_the_version_timeout_and_retries() -> None:
+    client = build_client(
+        ACCOUNT, api_version=STRIPE_API_VERSION, timeout_s=7, max_network_retries=3
+    )
+    options = client._requestor._options  # private: stripe 16.0.0 keeps them here (F321)
+    assert options.stripe_version == STRIPE_API_VERSION
+    assert options.max_network_retries == 3
+    http = client._requestor._client
+    assert isinstance(http, stripe.RequestsClient)
+    assert http._timeout == 7
+
+
+def test_the_composition_root_uses_the_configured_stripe_values(
+    tmp_path: Path, make_settings: MakeSettings
+) -> None:
+    settings = make_settings(
+        WebSettings,
+        payments="stripe",
+        stripe_secret_key="stand-in-value",
+        stripe_webhook_secret="stand-in-value",
+        stripe_price_id="price_test",
+        stripe_coupon_id="coupon_test",
+        firestore_project="p",
+        smtp_host="h",
+        smtp_port=1,
+        data_dir=tmp_path,
+        web_dist=tmp_path,
+        voice_available=False,
+    )
+    assert isinstance(settings, WebSettings)
+    times = load().limits.stripe
+    built = build_payments(settings, load(), FrozenClock(NOW))
+    assert built is not None
+    options = built._client._requestor._options
+    assert options.stripe_version == STRIPE_API_VERSION
+    assert options.max_network_retries == times.max_network_retries
+    http = built._client._requestor._client
+    assert isinstance(http, stripe.RequestsClient)
+    assert http._timeout == times.timeout_s
+
+
+def test_two_codes_for_one_friend_differ() -> None:
+    created = promo(code="X", id="promo_9")
+    payments, sent = adapter({("POST", "/v1/promotion_codes"): (200, created)})
+    later = NOW + timedelta(days=1)
+    payments.create_code(name="Ana", expires_at=later, max_redemptions=1)
+    payments.create_code(name="Ana", expires_at=later, max_redemptions=1)
+    first, second = (r["form"]["code"][0] for r in sent.sent)
+    assert first != second
+
+
+def test_expire_code_looks_only_at_active_codes() -> None:
+    payments, sent = adapter({LIST: (200, listing())})
+    payments.expire_code("ANA-1A2B3C")
+    assert [r["query"].get("active") for r in sent.sent] == [["true"]]
+
+
+def test_the_setup_never_prints_the_webhook_secret() -> None:
+    assert WEBHOOK_KEY not in repr(SETUP)
+
+
+LIVE_PREFIXES = ("sk_" + "live_", "rk_" + "live_")  # built, so no scanner mistakes it for a key
+
+
+@pytest.mark.parametrize("prefix", LIVE_PREFIXES)
+def test_a_live_mode_key_is_refused_during_the_beta(
+    prefix: str, tmp_path: Path, make_settings: MakeSettings
+) -> None:
+    """D58: the friends beta runs in Stripe test mode; live mode starts with paid orders."""
+    settings = make_settings(
+        WebSettings,
+        payments="stripe",
+        stripe_secret_key=prefix + secrets.token_hex(12),
+        stripe_webhook_secret="stand-in-value",
+        stripe_price_id="price_test",
+        stripe_coupon_id="coupon_test",
+        firestore_project="p",
+        smtp_host="h",
+        smtp_port=1,
+        data_dir=tmp_path,
+        web_dist=tmp_path,
+        voice_available=False,
+    )
+    assert isinstance(settings, WebSettings)
+    with pytest.raises(SystemExit, match="test mode"):
+        build_payments(settings, load(), FrozenClock(NOW))

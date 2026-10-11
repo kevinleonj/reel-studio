@@ -139,7 +139,9 @@ export function UploadPanel({ id, token, config, onStarted }: Props) {
         url: targets[index]?.upload_url,
       }))
       reported.current = false
-      setRows((current) => [...current, ...added])
+      // A name asked for again replaces its row: the server closed that name's older session.
+      const names = new Set(added.map((row) => row.name))
+      setRows((current) => [...current.filter((row) => !names.has(row.name)), ...added])
       await Promise.all(added.map((row) => send(row)))
     } catch (err) {
       console.error("could not create upload sessions", { error: String(err) })

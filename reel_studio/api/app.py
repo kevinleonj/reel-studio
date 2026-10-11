@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from reel_studio.api import payments, routes_local, routes_orders, routes_public, static
 from reel_studio.api.deps import ApiDeps, Limiters, deps_of
 from reel_studio.api.errors import Refused, on_api_error, on_busy, on_refused, on_validation
-from reel_studio.api.ratelimit import SlidingWindow
+from reel_studio.api.ratelimit import InFlight, SlidingWindow
 from reel_studio.core.constants import MS_PER_S
 from reel_studio.core.errors import ApiError, OrderBusy
 from reel_studio.core.logging import get_logger
@@ -32,6 +32,7 @@ def create_app(deps: ApiDeps) -> FastAPI:
     app.state.limiters = Limiters(
         checkout=SlidingWindow(quotas.checkout_per_minute_per_address, deps.clock),
         order_calls=SlidingWindow(quotas.order_calls_per_minute_per_address, deps.clock),
+        uploads_in_flight=InFlight(),
     )
     app.add_exception_handler(ApiError, on_api_error)
     app.add_exception_handler(Refused, on_refused)

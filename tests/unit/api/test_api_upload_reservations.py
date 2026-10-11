@@ -128,3 +128,20 @@ def test_a_busy_order_record_answers_503_with_retry_after(api: Api) -> None:
     )
     assert (response.status_code, response.json()) == (503, {"error": "busy"})
     assert response.headers["Retry-After"] == str(load().limits.web.busy_retry_after_s)
+
+
+def test_a_second_upload_batch_while_one_runs_answers_busy_at_once(api: Api) -> None:
+    """Review round 2: a 503 after 12 Firestore attempts still held a worker thread for
+    seconds; a batch already in flight for this order now refuses the next one at once."""
+    order_id, auth = new_order(api)
+    in_flight = cast(FastAPI, api.client.app).state.limiters.uploads_in_flight
+    assert in_flight.enter(order_id)
+    response = api.client.post(
+        f"/api/orders/{order_id}/uploads", json={"files": [file("a.mp4", 1)]}, headers=auth
+    )
+    assert (response.status_code, response.json()) == (503, {"error": "busy"})
+    in_flight.leave(order_id)
+    again = api.client.post(
+        f"/api/orders/{order_id}/uploads", json={"files": [file("a.mp4", 1)]}, headers=auth
+    )
+    assert again.status_code == 200

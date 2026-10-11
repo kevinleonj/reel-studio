@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from reel_studio.adapters.launcher_local import Dispatcher
 from reel_studio.adapters.mailer_smtp import SmtpMailer
@@ -262,3 +263,10 @@ def test_create_builds_the_stripe_app_from_the_environment(
     monkeypatch.setattr(main, "firestore_orders", fake_orders)
     client = TestClient(main.create())
     assert client.get("/api/config").json()["payments"] == "stripe"
+
+
+def test_the_stripe_knobs_must_be_positive() -> None:
+    """A webhook tolerance of 0 turns Stripe's replay check off (review round 2)."""
+    stripe_times = load().limits.stripe
+    with pytest.raises(ValidationError):
+        type(stripe_times)(timeout_s=20, max_network_retries=2, webhook_tolerance_s=0)

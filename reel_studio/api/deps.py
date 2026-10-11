@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import Request
 
 from reel_studio.adapters.storage_local import LocalStorage
-from reel_studio.api.ratelimit import SlidingWindow
+from reel_studio.api.ratelimit import InFlight, SlidingWindow
 from reel_studio.core.config import Config
 from reel_studio.core.ports import Clock, Mailer, OrderStore, PaymentGateway, Storage
 from reel_studio.settings import WebSettings
@@ -37,6 +37,7 @@ class ApiDeps:
 class Limiters:
     checkout: SlidingWindow
     order_calls: SlidingWindow
+    uploads_in_flight: InFlight  # one /uploads per order at a time
 
 
 def deps_of(request: Request) -> ApiDeps:

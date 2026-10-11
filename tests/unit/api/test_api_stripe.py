@@ -435,3 +435,11 @@ def test_a_session_that_would_charge_is_expired_and_refused(stripe_api: Api) -> 
     assert doc["status"] == "expired"
     assert held(stripe_api) == 0
     assert pay(stripe_api).expired == ["cs_test_0"]
+
+
+def test_a_session_with_no_total_is_refused_too(stripe_api: Api) -> None:
+    """amount_total is nullable in Stripe's spec; unknown is not proof of zero (review round 2)."""
+    pay(stripe_api).add_code(CODE, percent_off=100)
+    pay(stripe_api).next_amount_total = None
+    assert checkout(stripe_api) == (400, {"error": "code_invalid"})
+    assert held(stripe_api) == 0

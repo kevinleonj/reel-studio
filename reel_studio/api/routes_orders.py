@@ -15,6 +15,7 @@ from reel_studio.core.errors import (
     BadType,
     NameTooLong,
     NoFiles,
+    OrderBusy,
     PaymentsFailed,
     RateLimited,
     TooLarge,
@@ -111,8 +112,18 @@ class UploadBatch(BaseModel):
 
 
 @router.post("/uploads")
-def uploads(batch: UploadBatch, order: Authorised) -> dict[str, object]:
-    """Limits are checked on the whole batch plus what is already uploaded (docs/UX.md §2)."""
+def uploads(batch: UploadBatch, order: Authorised, request: Request) -> dict[str, object]:
+    """Limits are checked on the whole batch plus what is already reserved (docs/UX.md §2)."""
+    in_flight = limiters_of(request).uploads_in_flight
+    if not in_flight.enter(order.id):
+        raise OrderBusy("uploads")  # the page's own retry comes back after Retry-After
+    try:
+        return _uploads(batch, order)
+    finally:
+        in_flight.leave(order.id)
+
+
+def _uploads(batch: UploadBatch, order: Order) -> dict[str, object]:
     if order.status != "paid":
         raise wrong_status()
     if not batch.files:

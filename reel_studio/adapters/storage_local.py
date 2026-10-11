@@ -12,6 +12,7 @@ import json
 import re
 import secrets
 import shutil
+import threading
 from dataclasses import dataclass
 from http import HTTPStatus
 from pathlib import Path
@@ -59,6 +60,9 @@ class LocalStorage:
     ) -> None:
         self._objects = root / "objects"
         self._sessions = root / "sessions"
+        # One process serves the laptop's uploads (compose runs a single api), so a thread
+        # lock is enough to make closing the older session and opening the new one one step.
+        self._sessions_lock = threading.Lock()
         self._upload_path = upload_path
         self._download_path = download_path
         self._key = signing_key
@@ -100,9 +104,10 @@ class LocalStorage:
         size = int(str(file["size"]))
         session = secrets.token_urlsafe(UPLOAD_SESSION_BYTES)
         key = f"in/{order_id}/{name}"
-        self._close_sessions_for(key)  # one live session per stored name (review round 1)
         record = {"order_id": order_id, "key": key, "size": size, "received": 0}
-        self._write_record(session, record)
+        with self._sessions_lock:  # one live session per stored name, also under concurrency
+            self._close_sessions_for(key)
+            self._write_record(session, record)
         return {"name": name, "upload_url": f"{self._upload_path}/{session}"}
 
     def _close_sessions_for(self, key: str) -> None:

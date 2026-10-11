@@ -2,6 +2,7 @@
 app's upload code works unchanged against both. Same cases as tests/e2e/upload-*.spec.ts."""
 
 import os
+import threading
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,8 @@ import pytest
 from reel_studio.adapters.storage_local import ChunkAnswer, LocalStorage, SessionNotFound
 from tests.contract.storage_adapters import NOW
 from tests.fakes.clock import FrozenClock
+
+ASKERS = 8
 
 ORDER = "a" * 32
 SECRET = b"k" * 32
@@ -212,3 +215,22 @@ def test_signed_url_verifies_and_expires(storage: LocalStorage) -> None:
     assert storage.verify_download(path.rsplit("/", 1)[1], params, now_s=int(params["exp"]) - 1)
     assert not storage.verify_download(path.rsplit("/", 1)[1], params, now_s=int(params["exp"]) + 1)
     assert not storage.verify_download(path.rsplit("/", 1)[1], {**params, "sig": "0" * 64}, now_s=0)
+
+
+def test_concurrent_asks_for_one_name_leave_one_live_session(
+    storage: LocalStorage, tmp_path: Path
+) -> None:
+    """STEP-07 review round 2: closing the older session and writing the new one is one step."""
+    barrier = threading.Barrier(ASKERS)
+
+    def ask() -> None:
+        barrier.wait()
+        storage.create_upload_session(ORDER, {"name": "a.mp4", "size": 4, "type": "video/mp4"})
+
+    threads = [threading.Thread(target=ask) for _ in range(ASKERS)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    live = list((tmp_path / "data" / "sessions").glob("*.json"))
+    assert len(live) == 1
