@@ -1,0 +1,109 @@
+{
+ "fixture": "creami",
+ "started": "2026-10-11T17:51:49.574443+00:00",
+ "model": "sonnet",
+ "style": "montage",
+ "cost_usd": 0.3424261,
+ "critic": {
+  "total": 21,
+  "passed": false,
+  "weakness": "hook 3 < 4; total 21 < 26"
+ },
+ "scores": {
+  "hook": 3,
+  "retention": 3,
+  "story": 3,
+  "peak": 3,
+  "craft": 3,
+  "share": 3,
+  "colour": 3
+ },
+ "reviews": [
+  {
+   "render": 1,
+   "total": 21,
+   "passed": false,
+   "scores": {
+    "hook": 3,
+    "retention": 3,
+    "story": 3,
+    "peak": 3,
+    "craft": 3,
+    "share": 3,
+    "colour": 3
+   }
+  },
+  {
+   "render": 2,
+   "total": 21,
+   "passed": false,
+   "scores": {
+    "hook": 3,
+    "retention": 3,
+    "story": 3,
+    "peak": 3,
+    "craft": 3,
+    "share": 3,
+    "colour": 3
+   }
+  }
+ ],
+ "renders": 2,
+ "error": null,
+ "requests": [
+  {
+   "input_tokens": 4,
+   "output_tokens": 109,
+   "cache_read_input_tokens": 0,
+   "cache_creation_input_tokens": 17573
+  },
+  {
+   "input_tokens": 2,
+   "output_tokens": 425,
+   "cache_read_input_tokens": 17573,
+   "cache_creation_input_tokens": 4005
+  },
+  {
+   "input_tokens": 2,
+   "output_tokens": 2953,
+   "cache_read_input_tokens": 21578,
+   "cache_creation_input_tokens": 11783
+  },
+  {
+   "input_tokens": 2,
+   "output_tokens": 1504,
+   "cache_read_input_tokens": 33361,
+   "cache_creation_input_tokens": 5135
+  },
+  {
+   "input_tokens": 4,
+   "output_tokens": 280,
+   "cache_read_input_tokens": 38496,
+   "cache_creation_input_tokens": 2552
+  },
+  {
+   "input_tokens": 2,
+   "output_tokens": 3740,
+   "cache_read_input_tokens": 41048,
+   "cache_creation_input_tokens": 8884
+  }
+ ],
+ "critic_requests": [
+  {
+   "input_tokens": 4,
+   "output_tokens": 2385,
+   "cache_read_input_tokens": 0,
+   "cache_creation_input_tokens": 13955
+  },
+  {
+   "input_tokens": 4,
+   "output_tokens": 2065,
+   "cache_read_input_tokens": 0,
+   "cache_creation_input_tokens": 13138
+  }
+ ],
+ "outputs": {
+  "text": "out/eval/2026-10-11/creami-sonnet-175149/text.mp4",
+  "clean": "out/eval/2026-10-11/creami-sonnet-175149/clean.mp4"
+ }
+}

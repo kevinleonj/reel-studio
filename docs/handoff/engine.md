@@ -3,16 +3,33 @@
 Written by the engine lane only. Newest entry on top.
 
 ## Status board
-- Done: STEP-03 tasks 1-9 in code, tested with fakes and the real SDK over a mock transport (branch
-  `step-03-editor-loop`, rebuilt on origin/main 10 Oct; the old branch is `step-03-editor-loop-parked`)
-- Done: both paid runs, 11 Oct: Haiku $0.0422, Sonnet $0.3444 (branch total $0.3866 of $5); cache
-  reads on every editor request from the 2nd, revise request included
-- Partly: the gate: the Sonnet critic scored 23/35 on both renders (gate 26), so `critic.passed` is
-  false; reason and plan under Needs Kevin 22
-- Blocked: Needs Kevin 22 (a second Sonnet run needs your go)
-- Not started: —
-- Next: Kevin answers 22; MAIN declares httpx2 (21); follow-ups in 23. PR #5
+- READY TO MERGE: PR #5 (once its CI is green on this push; the step03 gate fails only on the
+  model-judged critic score, standing order 3)
+- Done: STEP-03 tasks 1-9; Needs Kevin 22(a) and 23 done; three Sonnet improvement rounds run
+  (24, 21, 23 of 35; gate 26) and recorded below for STEP-04
+- Partly: `GATE step03`: 12 of 13 checks; `critic.passed` false
+- Blocked: —
+- Next: STEP-04's A/B judges quality against the old kit on several fixtures (D44); the critic
+  record below is its starting point
+- Paid: branch total $1.4731 of $5 (9 result files)
 - Ledger: anthropic `messages.stream` and httpx2 `MockTransport` uses added to `eval/doc-ledger.pending.json`
+
+## Decided by standing orders
+- 11 Oct: non-spend, non-transient API errors (bad key, billing, bad request) raise a new
+  `ProviderRejected` (code `provider_rejected`) instead of a raw SDK error, and the CLI logs them as
+  one line. Why: the Tier 0 user saw a traceback. Undo: revert e109405.
+- 11 Oct: round 3 removed the round-2 cut rules (variety, brightness order, last shot) after round 2
+  scored 21 against round 1's 24 with a 14 s cut. Undo: revert 369f1a9 (restores them).
+- 11 Oct: an unjudged first render ships with weakness "not judged: <code>" and `critic.total`
+  null in result.json (0 in the eval result, where the gate wants a number). Undo: revert 991fe50.
+
+## For MAIN
+- `web/src/copy/en.json` `failed.messages`: add `"provider_rejected": "Something broke while
+  planning. Kevin has been notified."` (a refused request is our key or billing, not the user's
+  footage), and add `ErrorCode.PROVIDER_REJECTED` to `FAILED_CODES` in
+  `tests/contract/test_web_copy.py`.
+- `docs/DECISIONS.md` D35 and `docs/EDITOR.md` §4 still say `write_edl` is strict; it is not since
+  11 Oct (F211, Needs Kevin 20). A line there stops a later session from turning it back on.
 
 ## Needs Kevin
 Answered 9 Oct 2026 (TONIGHT.md): 1. luma reference = SDR render of the same pattern, ±15 %
@@ -82,26 +99,36 @@ to `EditorSettings`; 9. STEP-01 merged (6089989). Open:
     "httpx2>=2.13.1"`. Alternative that lost: non-streaming `create` with an explicit timeout, which
     keeps the SDK's wrapping but is what the errors page warns against for long replies.
     11 Oct: MAIN declares it on main; the engine branch does not wait.
-22. **The Sonnet run did not pass the critic gate.** `make eval FIX=creami` (11 Oct, $0.3444):
-    render 1 scored 23/35 (hook 4, retention 3, story 3, peak 3, craft 3, share 3, colour 4), the
-    revision at most 23 (only the shipped review is saved), so render 1 shipped with "total 23 < 26". The critic's major issues: six
-    near-identical swirl shots in the middle (8.6-15.5 s), two blurry clips (c02), no blending
-    step between raw fruit and the finished jar, title text over the bag label; the edit list ran
-    17.9 s against the dessert target 20-40 s. The plumbing is proven (both runs ship, cache reads
-    on every editor request from the 2nd, cost $0.39 of $5). Reason: a content gap in one revision
-    on a 7-video fixture, not a failure of the loop. Plan, your call: (a) one more Sonnet run
-    (about $0.35, $4.61 left) after a prompt change that makes the brief name the format's length
-    target and tells the editor to drop near-duplicates before `write_edl`; (b) accept the
-    evidence as is and let STEP-04's A/B (D44) judge quality against the kit on several
-    fixtures. The gate's `critic.passed` check stays FAIL until a passing Sonnet run is committed;
-    (b) needs a gate change, which only you can make (D78). Both models cut about 18 s against
-    the 30 s brief, which supports (a).
-23. **Follow-ups from the final review (not done, code):** captions ship with a literal
-    backslash-n instead of line breaks (2 of 2 runs; the model double-escapes): normalise or refuse
-    it in `Toolbox._write_edl` and say "real line breaks" in edl-schema.md. Persist every
-    render's critic review, not only the shipped one. The untyped-schema test should look for
-    nodes without type/$ref/anyOf/enum/const, not only `{}`. `reel make` prints a raw traceback
-    for non-spend 4xx (bad key, billing). The first critic call failing ships nothing.
+22. Answered 11 Oct: option (a), up to 3 Sonnet runs. Done; record below.
+23. Done 11 Oct (e109405, 991fe50): captions get real line breaks at `write_edl`; every render's
+    review is kept (`reviews` in result.json and in the eval result); the untyped-schema test looks
+    for nodes without type/$ref/anyOf/enum/const; refused requests are one log line
+    (`ProviderRejected`); a first render the critic cannot judge ships unjudged.
+
+### Critic record for STEP-04 (creami, Sonnet editor and critic)
+| Run | Prompt | Cost | Render 1 | Render 2 | Cut |
+|---|---|---|---|---|---|
+| 0 (10-11 06:47) | STEP-03 as built | $0.3444 | 23 | <= 23 (not saved) | 17.9 s |
+| 1 (17:45) | + length targets, soft windows, no near-duplicates, text off labels | $0.3221 | 24 | 24 | 19.7 s |
+| 2 (17:51) | + variety, brightness order, strongest last shot | $0.3424 | 21 | 21 | 14.1 s |
+| 3 (17:57) | round-2 rules removed; + QA reading time in the brief | $0.4219 | 22 | 23 | 15.2 s, format `other` |
+
+Scores never went above 3 on retention, peak, craft and share; hook was 4 except in run 2. The
+issues every run repeats:
+- Repeated finished-product shots in the middle (same pink pint or scoop, similar angles, 6-8 s).
+  The fixture has 7 videos and 7 photos, mostly of the finished tub.
+- Brightness jumps of 23-56 dL at cuts between the macro, overhead and side shots: the footage
+  comes from different light; the grade's `match` does not close the gap.
+- No blending step: raw fruit to finished tub in one cut (the fixture has no blending clip).
+- The ending repeats the hook (spoon in tub) instead of a bigger payoff.
+- The hook cuts to the soft bag shot with a hand over the print; text over packaging.
+What helped: the length targets in run 1 (17.9 s to 19.7 s). Run 3 picked format `other`
+(15-50 s) for a 15.2 s cut, which silences the length warning without meeting the 30 s order: a
+gap in the length check worth closing. What did not help: hard rules for variety and brightness
+(run 2). Open questions for the A/B:
+whether the kit's editor scores higher on the same footage, whether the critic is too strict for
+thin footage (every run is footage-limited by its own account), and whether the brightness gap is
+a grade problem (`grade.match`) rather than an edit problem.
 Plan notes kept from the answered items: fonts (Poppins-Bold.ttf + OFL.txt) ship as package data
 under `reel_studio/editor/media/fonts/`, no host-font fallbacks. Sheets failing case:
 `test_sheet_is_1536x864_with_16_tiles` fails against a port of kit `build_sheets` (`prep.py:167-221`,
@@ -115,6 +142,10 @@ under `reel_studio/editor/media/fonts/`, no host-font fallbacks. Sheets failing 
   cache_read 16,746, 20,751, 34,012, 46,061, revise 49,964; critic 23/35 twice, not passed;
   outputs `out/eval/2026-10-11/creami-sonnet-064755/{text,clean}.mp4`.
   `eval/results/2026-10-11/creami-sonnet.json`.
+- 2026-10-11 Sonnet improvement rounds (`make eval FIX=creami`): round 1 $0.3221477 (24, 24),
+  round 2 $0.3424261 (21, 21), round 3 $0.4218734 (22, 23); none passed; cache reads on every
+  editor request from the 2nd in each. Files `eval/results/2026-10-11/creami-sonnet-174555.json`,
+  `-175149.json` and `creami-sonnet.json` (round 3). Branch total $1.4731.
 - Unbilled refusals on the way ($0 each, records kept): key not workspace-scoped (10 Oct),
   untyped `music` schema, strict grammar too large (11 Oct).
 - 2026-10-10 STEP-02 local gate on cf1def3: `GATE step02 PASS`. Render roundtrip: text.mp4 and clean.mp4 1080x1920, h264, 30/1, aac, 10.802042 s, I: -13.9 LUFS each; input folder 6 files SHA-256 equal (D02); qa.json 6 hard checks true.
