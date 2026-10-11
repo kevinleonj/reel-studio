@@ -38,6 +38,7 @@ TIER_CAP_BODY = {
         "details": {"error_code": "enforced_spend_limit_reached"},
     },
 }
+MESSAGE_MAX = config.load_claude().error_message_max_chars
 POLICY = client.RetryPolicy(retries=2, initial_s=0.5, max_s=8.0)
 REQUEST: dict[str, Any] = {  # Any: request JSON
     "model": "claude-haiku-5-5",
@@ -142,7 +143,7 @@ class _Sdk:
 
 def make(script: Sequence[object]) -> tuple[client.ClaudeClient, _Sdk, list[float]]:
     sdk, sleeps = _Sdk(script), list[float]()
-    return client.ClaudeClient(sdk, POLICY, sleep=sleeps.append), sdk, sleeps
+    return client.ClaudeClient(sdk, POLICY, MESSAGE_MAX, sleep=sleeps.append), sdk, sleeps
 
 
 RETRYABLE = [
@@ -211,13 +212,23 @@ def test_any_other_client_error_is_rejected_unretried(status: int, kind: str) ->
         claude.create(REQUEST)
 
     assert raised.value.__cause__ is error and len(sdk.messages.calls) == 1 and sleeps == []
+    assert "tools.0: bad schema" in str(raised.value)  # the provider's words say what to fix
+
+
+def test_a_long_provider_message_is_cut_to_the_configured_length() -> None:
+    claude, _, _ = make([status_error(400, "invalid_request_error", "x" * (MESSAGE_MAX * 3))])
+
+    with pytest.raises(ProviderRejected) as raised:
+        claude.create(REQUEST)
+
+    assert str(raised.value).count("x") == MESSAGE_MAX
 
 
 def test_the_backoff_doubles_up_to_its_cap() -> None:
     sdk, sleeps = _Sdk([connection_error()] * 5 + [message()]), list[float]()
     policy = client.RetryPolicy(retries=5, initial_s=0.5, max_s=3.0)
 
-    client.ClaudeClient(sdk, policy, sleep=sleeps.append).create(REQUEST)
+    client.ClaudeClient(sdk, policy, MESSAGE_MAX, sleep=sleeps.append).create(REQUEST)
 
     assert sleeps == [0.5, 1.0, 2.0, 3.0, 3.0]
 
@@ -322,7 +333,7 @@ def test_create_streams_so_the_sdk_never_refuses_the_long_retry() -> None:
         http_client=httpx2.Client(transport=httpx2.MockTransport(answer)),
     )
 
-    reply = client.ClaudeClient(sdk, POLICY).create(
+    reply = client.ClaudeClient(sdk, POLICY, MESSAGE_MAX).create(
         {**REQUEST, "max_tokens": editor.max_tokens_retry}
     )
 
@@ -361,7 +372,7 @@ def test_a_connection_dropped_mid_stream_is_retried_then_unavailable() -> None:
         return httpx2.Response(200, headers=headers, stream=_DropAfterFirstEvent())
 
     sleeps = list[float]()
-    claude = client.ClaudeClient(_streaming_sdk(answer), POLICY, sleep=sleeps.append)
+    claude = client.ClaudeClient(_streaming_sdk(answer), POLICY, MESSAGE_MAX, sleep=sleeps.append)
 
     with pytest.raises(ProviderUnavailable):
         claude.create(REQUEST)
@@ -381,6 +392,8 @@ def test_a_stream_that_ends_before_message_stop_is_retried() -> None:
         return httpx2.Response(200, headers=headers, content=body.encode())
 
     sleeps = list[float]()
-    reply = client.ClaudeClient(_streaming_sdk(answer), POLICY, sleep=sleeps.append).create(REQUEST)
+    reply = client.ClaudeClient(
+        _streaming_sdk(answer), POLICY, MESSAGE_MAX, sleep=sleeps.append
+    ).create(REQUEST)
 
     assert reply["stop_reason"] == "end_turn" and len(calls) == 2 and sleeps == [0.5]

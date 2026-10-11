@@ -101,10 +101,12 @@ class ClaudeClient:
         self,
         sdk: Any,  # Any: anthropic.Anthropic, or a test double with its two messages methods
         policy: RetryPolicy,
+        message_max: int,  # chars of a refused request's message kept
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self.sdk = sdk
         self.policy = policy
+        self.message_max = message_max
         self._sleep = sleep
 
     def _call(
@@ -158,7 +160,9 @@ class ClaudeClient:
         if _transient(error):
             raise ProviderUnavailable(f"{name}: {_outcome(error)} after retries") from error
         kind = status.type if status is not None else None  # bad key, billing, bad request
-        raise ProviderRejected(f"{name}: {_outcome(error)} {kind}") from error
+        said = _error_field(status, "message") if status is not None else error.message
+        words = str(said)[: self.message_max]
+        raise ProviderRejected(f"{name}: {_outcome(error)} {kind}: {words}") from error
 
     def count_tokens(self, request: Mapping[str, Any]) -> int:  # Any: request JSON
         counted = self._call(
@@ -194,4 +198,4 @@ def connect(api_key: SecretStr, cfg: ClientConfig, editor: Editor) -> ClaudeClie
         timeout=anthropic.Timeout(cfg.timeout_s, connect=cfg.connect_timeout_s),
     )
     policy = RetryPolicy(editor.transient_retries, cfg.retry_initial_s, cfg.retry_max_s)
-    return ClaudeClient(sdk, policy)
+    return ClaudeClient(sdk, policy, message_max=cfg.error_message_max_chars)

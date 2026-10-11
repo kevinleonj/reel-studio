@@ -213,6 +213,7 @@ class ClaudeClient(_Strict):
     timeout_s: float
     retry_initial_s: float
     retry_max_s: float
+    error_message_max_chars: int
 
 
 class _ClaudeFile(_Strict):
