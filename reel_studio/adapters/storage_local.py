@@ -187,6 +187,10 @@ class LocalStorage:
         """The session's own bytes so far: never the final file, never shared by two sessions."""
         return self._sessions / f"{session}{PARTIAL}"
 
+    def session_order(self, session: str) -> str:
+        """The order a session belongs to; raises SessionNotFound."""
+        return str(self._load(session)["order_id"])
+
     def put_chunk(self, session: str, content_range: str, body: bytes) -> ChunkAnswer:
         record = self._load(session)
         size, received = int(str(record["size"])), int(str(record["received"]))

@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 
 from reel_studio.adapters.storage_local import SessionNotFound
 from reel_studio.api.deps import deps_of
-from reel_studio.api.errors import Refused, not_found
+from reel_studio.api.errors import Refused, not_found, wrong_status
 from reel_studio.core.constants import BYTES_PER_MIB
 from reel_studio.core.logging import get_logger
 
@@ -22,6 +22,13 @@ async def put_chunk(session: str, request: Request) -> Response:
     deps = deps_of(request)
     if deps.local_storage is None:
         raise not_found()
+    try:
+        owner = deps.orders.get(deps.local_storage.session_order(session))
+    except SessionNotFound:
+        raise not_found() from None
+    if owner is None or owner["status"] != "paid":
+        # After Start the manifest is written; a late chunk would only add bytes nobody uses.
+        raise wrong_status()
     max_body = deps.config.limits.upload.chunk_mib * BYTES_PER_MIB
     declared = request.headers.get("Content-Length")
     if declared is not None and declared.isdigit() and int(declared) > max_body:
