@@ -141,6 +141,8 @@ def brief(
         text_lang=languages[order.text_lang],
         voice=order.voice,
         clips=_clip_rows(shots, media.edl.blur_ratio),
+        read_min_s=f"{media.qa.read_min_s:g}",
+        read_cps=f"{media.qa.read_chars_per_s:g}",
         targets={fmt: f"{lo:g}-{hi:g}" for fmt, (lo, hi) in media.edl.format_target_s.items()},
         total_s=shots.total_raw_seconds,
         sheets=[Path(s).stem for s in shots.sheets],

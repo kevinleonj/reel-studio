@@ -202,9 +202,14 @@ def test_the_brief_gives_each_clips_brightness() -> None:
     assert "| 50 |" in row  # mean window luma 0.5 on a 0-100 scale
 
 
-def test_the_editor_is_told_about_variety_brightness_the_ending_and_revisions() -> None:
+def test_a_revision_looks_at_the_named_shots_first() -> None:
     system = prompt.system_prompt("montage", CFG)
 
-    assert "same subject in a row" in system and "brightness" in system
-    assert "The last shot is the strongest" in system
     assert "look again with `read_strip`" in system
+
+
+def test_the_brief_gives_the_qa_reading_time_for_text() -> None:
+    text = prompt.brief(_order(), CFG, MEDIA, SHOTS, transcripts={})
+
+    assert f"at least {MEDIA.qa.read_min_s:g} s" in text
+    assert f"one second per {MEDIA.qa.read_chars_per_s:g}" in text

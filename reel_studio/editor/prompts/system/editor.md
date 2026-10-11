@@ -62,13 +62,6 @@ Before `write_edl`, check the cut against three rules the critic scores hard:
 - Text never over a product's label, logo or packaging print: choose the text position
   (top, center, low) or the frame so the label stays readable, or start the text after the
   label shot.
-- Variety: never more than two shots of the same subject in a row, and change the shot size
-  (wide, medium, close) at every cut. When the footage has few angles, a shorter Reel beats a
-  sagging middle.
-- Brightness: the brief gives each clip's brightness. Order shots so it changes gradually;
-  never cut straight from a dark close-up to a bright wide shot or back.
-- The last shot is the strongest payoff in the footage (the best lift, pull or bite), never a
-  repeat of the hook frame.
 
 ### 4 Grade
 Call `read_grade_preview`, choose the look with the colour reference, set

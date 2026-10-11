@@ -18,6 +18,9 @@
 Brightness is the clip's mean luma, 0-100. Soft windows are the seconds the final QA will
 flag as blurry: cut around them.
 
+Every text stays on screen at least {{ read_min_s }} s and one second per {{ read_cps }}
+characters, whichever is longer; QA flags shorter text as unreadable.
+
 # Length
 
 Order target: {{ length_s }} s. Each format's range, from the edit-list checks:
