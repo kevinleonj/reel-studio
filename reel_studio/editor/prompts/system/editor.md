@@ -62,6 +62,13 @@ Before `write_edl`, check the cut against three rules the critic scores hard:
 - Text never over a product's label, logo or packaging print: choose the text position
   (top, center, low) or the frame so the label stays readable, or start the text after the
   label shot.
+- Variety: never more than two shots of the same subject in a row, and change the shot size
+  (wide, medium, close) at every cut. When the footage has few angles, a shorter Reel beats a
+  sagging middle.
+- Brightness: the brief gives each clip's brightness. Order shots so it changes gradually;
+  never cut straight from a dark close-up to a bright wide shot or back.
+- The last shot is the strongest payoff in the footage (the best lift, pull or bite), never a
+  repeat of the hook frame.
 
 ### 4 Grade
 Call `read_grade_preview`, choose the look with the colour reference, set
@@ -79,8 +86,9 @@ clip you did not use, `preferences` for every customer wish, `caption`, `music_h
 Our code renders the accepted cut, measures it, and a critic who has not seen your reasoning
 scores it on the qa-rubric. If it fails a gate, the critic's issues come back to you once, each
 citing a tile and a fix. Fix every major issue; minor ones when the fix costs nothing else. If a
-frame you saw proves an issue wrong, keep your choice and say why in that segment's `note`. Then
-call `write_edl` again.
+frame you saw proves an issue wrong, keep your choice and say why in that segment's `note`.
+Before you rewrite, look again with `read_strip` at every shot an issue names and at the shot
+you would put in its place; then call `write_edl` again.
 
 ## Defaults (nobody is there to ask)
 - Format: the one the footage most clearly shows; if unclear, `other`.

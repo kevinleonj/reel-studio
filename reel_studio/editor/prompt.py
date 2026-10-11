@@ -15,6 +15,7 @@ from string import Template
 
 from jinja2 import Environment, PackageLoader, StrictUndefined
 
+from reel_studio.core import constants
 from reel_studio.core.config import Config
 from reel_studio.core.media_config import Media
 from reel_studio.editor.critic import TOTAL_MAX
@@ -120,6 +121,9 @@ def _clip_rows(shots: Shots, blur_ratio: float) -> list[dict[str, object]]:
                 "sharpest": f"{best.start:.2f}-{best.end:.2f}" if best else NO_VALUE,
                 "motion": f"{fmean(w.motion for w in windows):.1f}" if windows else NO_VALUE,
                 "soft": ", ".join(soft) if soft else NO_VALUE,
+                "brightness": f"{fmean(w.luma for w in windows) * constants.BRIGHTNESS_SCALE:.0f}"
+                if windows
+                else NO_VALUE,
             }
         )
     return rows

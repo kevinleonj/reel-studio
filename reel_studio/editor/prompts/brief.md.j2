@@ -9,13 +9,14 @@
 
 {{ clips | length }} files, {{ "%.1f" | format(total_s) }} s in total. Clip ids are what you use in every tool and in the edit list.
 
-| clip | kind | duration s | fps | orientation | sharpest window s | motion | soft windows s |
-|---|---|---|---|---|---|---|---|
+| clip | kind | duration s | fps | orientation | sharpest window s | motion | brightness | soft windows s |
+|---|---|---|---|---|---|---|---|---|
 {% for c in clips %}
-| {{ c.id }} | {{ c.kind }} | {{ "%.2f" | format(c.duration) }} | {{ c.fps }} | {{ c.orientation }} | {{ c.sharpest }} | {{ c.motion }} | {{ c.soft }} |
+| {{ c.id }} | {{ c.kind }} | {{ "%.2f" | format(c.duration) }} | {{ c.fps }} | {{ c.orientation }} | {{ c.sharpest }} | {{ c.motion }} | {{ c.brightness }} | {{ c.soft }} |
 {% endfor %}
 
-Soft windows are the seconds the final QA will flag as blurry: cut around them.
+Brightness is the clip's mean luma, 0-100. Soft windows are the seconds the final QA will
+flag as blurry: cut around them.
 
 # Length
 

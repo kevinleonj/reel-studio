@@ -192,3 +192,19 @@ def test_the_editor_is_told_to_drop_duplicates_and_soft_shots_and_keep_labels_cl
 
     assert "near-duplicate" in system and "soft windows" in system
     assert "never over a product's label" in system
+
+
+def test_the_brief_gives_each_clips_brightness() -> None:
+    """The critic marks hard brightness jumps at cuts; the editor needs the numbers."""
+    text = prompt.brief(_order(), CFG, MEDIA, SHOTS, transcripts={})
+
+    row = next(line for line in text.splitlines() if line.startswith("| c01"))
+    assert "| 50 |" in row  # mean window luma 0.5 on a 0-100 scale
+
+
+def test_the_editor_is_told_about_variety_brightness_the_ending_and_revisions() -> None:
+    system = prompt.system_prompt("montage", CFG)
+
+    assert "same subject in a row" in system and "brightness" in system
+    assert "The last shot is the strongest" in system
+    assert "look again with `read_strip`" in system
