@@ -163,7 +163,9 @@ def make(request: Request, ports_: Ports, steps: Steps, cfg: Config) -> Made:
     warned: list[list[str]] = []
 
     def plan(feedback: str | None) -> Edl:
-        opening = feedback if feedback is not None else prompt.brief(request.order, cfg, shots, {})
+        opening = (
+            feedback if feedback is not None else prompt.brief(request.order, cfg, media, shots, {})
+        )
         outcome = loop.run(session, box, system, opening, history if feedback is not None else None)
         if outcome.edl is None:
             raise ModelRefusal("the loop ended without an edit list")

@@ -53,6 +53,16 @@ target length; never pad to reach it.
 Turn the beat sheet into the edit list: exactly one version. For the hook, the payoff, pours
 and reveals call `read_strip` and choose exact frames: cut inside the action.
 
+Before `write_edl`, check the cut against three rules the critic scores hard:
+- No near-duplicates: two shots with the same subject, angle and action say one thing. Keep
+  the best one; every next shot must add a new step, angle or reaction. Each dropped
+  duplicate goes in `dropped` with the shot it repeats.
+- No blur: the brief's soft windows are the seconds QA will flag. Cut around them, or drop
+  the clip; a soft shot is never the hook, the peak or the payoff.
+- Text never over a product's label, logo or packaging print: choose the text position
+  (top, center, low) or the frame so the label stays readable, or start the text after the
+  label shot.
+
 ### 4 Grade
 Call `read_grade_preview`, choose the look with the colour reference, set
 `"grade": {"look": ..., "strength": ..., "match": 0.6}`, and write the look and its reason as

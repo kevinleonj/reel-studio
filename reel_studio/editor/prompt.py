@@ -10,12 +10,13 @@ kit's `agents/reel-critic.md`.
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from statistics import fmean
+from statistics import fmean, median
 from string import Template
 
 from jinja2 import Environment, PackageLoader, StrictUndefined
 
 from reel_studio.core.config import Config
+from reel_studio.core.media_config import Media
 from reel_studio.editor.critic import TOTAL_MAX
 from reel_studio.editor.media.shots import Shots
 
@@ -100,11 +101,15 @@ def _fenced(text: str) -> str:
     return text
 
 
-def _clip_rows(shots: Shots) -> list[dict[str, object]]:
+def _clip_rows(shots: Shots, blur_ratio: float) -> list[dict[str, object]]:
+    """One row per clip. `soft` lists the windows QA would call blurry: sharpness below
+    blur_ratio x the footage's median window (the kit's QA rule, qa.py:34)."""
     rows: list[dict[str, object]] = []
+    floor = blur_ratio * median(w.sharpness for w in shots.windows) if shots.windows else 0.0
     for clip in shots.clips:
         windows = [w for w in shots.windows if w.clip == clip.id]
         best = max(windows, key=lambda w: w.sharpness) if windows else None
+        soft = [f"{w.start:.2f}-{w.end:.2f}" for w in windows if w.sharpness < floor]
         rows.append(
             {
                 "id": clip.id,
@@ -114,12 +119,15 @@ def _clip_rows(shots: Shots) -> list[dict[str, object]]:
                 "orientation": clip.orientation,
                 "sharpest": f"{best.start:.2f}-{best.end:.2f}" if best else NO_VALUE,
                 "motion": f"{fmean(w.motion for w in windows):.1f}" if windows else NO_VALUE,
+                "soft": ", ".join(soft) if soft else NO_VALUE,
             }
         )
     return rows
 
 
-def brief(order: OrderSettings, cfg: Config, shots: Shots, transcripts: dict[str, str]) -> str:
+def brief(
+    order: OrderSettings, cfg: Config, media: Media, shots: Shots, transcripts: dict[str, str]
+) -> str:
     """The first user message: the order, the inventory, the sheets, and the fenced wishes."""
     languages = {lang.code: lang.label for lang in cfg.styles.text_languages.items}
     return _templates.get_template("brief.md.j2").render(
@@ -128,7 +136,8 @@ def brief(order: OrderSettings, cfg: Config, shots: Shots, transcripts: dict[str
         length_s=order.length_s,
         text_lang=languages[order.text_lang],
         voice=order.voice,
-        clips=_clip_rows(shots),
+        clips=_clip_rows(shots, media.edl.blur_ratio),
+        targets={fmt: f"{lo:g}-{hi:g}" for fmt, (lo, hi) in media.edl.format_target_s.items()},
         total_s=shots.total_raw_seconds,
         sheets=[Path(s).stem for s in shots.sheets],
         transcripts=transcripts,

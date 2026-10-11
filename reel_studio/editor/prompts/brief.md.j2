@@ -9,11 +9,24 @@
 
 {{ clips | length }} files, {{ "%.1f" | format(total_s) }} s in total. Clip ids are what you use in every tool and in the edit list.
 
-| clip | kind | duration s | fps | orientation | sharpest window s | motion |
-|---|---|---|---|---|---|---|
+| clip | kind | duration s | fps | orientation | sharpest window s | motion | soft windows s |
+|---|---|---|---|---|---|---|---|
 {% for c in clips %}
-| {{ c.id }} | {{ c.kind }} | {{ "%.2f" | format(c.duration) }} | {{ c.fps }} | {{ c.orientation }} | {{ c.sharpest }} | {{ c.motion }} |
+| {{ c.id }} | {{ c.kind }} | {{ "%.2f" | format(c.duration) }} | {{ c.fps }} | {{ c.orientation }} | {{ c.sharpest }} | {{ c.motion }} | {{ c.soft }} |
 {% endfor %}
+
+Soft windows are the seconds the final QA will flag as blurry: cut around them.
+
+# Length
+
+Order target: {{ length_s }} s. Each format's range, from the edit-list checks:
+{% for fmt, span in targets.items() %}
+- {{ fmt }}: {{ span }} s
+{% endfor %}
+
+Choose the format first, then land the cut inside its range and as close to the order target as
+the footage allows. Add up the segments before write_edl; a cut outside the range is a warning
+that stays with the Reel.
 
 # Sheets
 
