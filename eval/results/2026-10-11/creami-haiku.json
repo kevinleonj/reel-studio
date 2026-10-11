@@ -1,21 +1,97 @@
 {
  "fixture": "creami",
- "started": "2026-10-11T06:37:49.115189+00:00",
+ "started": "2026-10-11T06:40:59.742079+00:00",
  "model": "haiku",
  "style": "montage",
- "cost_usd": 0.0,
+ "cost_usd": 0.04224845,
  "critic": {
-  "total": 0,
+  "total": 23,
   "passed": false,
-  "weakness": null
+  "weakness": "total 23 < 26"
  },
- "scores": {},
- "renders": 0,
- "error": "BadRequestError",
- "requests": [],
- "critic_requests": [],
+ "scores": {
+  "hook": 4,
+  "retention": 3,
+  "story": 4,
+  "peak": 3,
+  "craft": 3,
+  "share": 3,
+  "colour": 3
+ },
+ "renders": 2,
+ "error": null,
+ "requests": [
+  {
+   "input_tokens": 4,
+   "output_tokens": 124,
+   "cache_read_input_tokens": 0,
+   "cache_creation_input_tokens": 16746
+  },
+  {
+   "input_tokens": 2,
+   "output_tokens": 878,
+   "cache_read_input_tokens": 16746,
+   "cache_creation_input_tokens": 4020
+  },
+  {
+   "input_tokens": 2,
+   "output_tokens": 371,
+   "cache_read_input_tokens": 20766,
+   "cache_creation_input_tokens": 5320
+  },
+  {
+   "input_tokens": 2,
+   "output_tokens": 476,
+   "cache_read_input_tokens": 26086,
+   "cache_creation_input_tokens": 9019
+  },
+  {
+   "input_tokens": 2,
+   "output_tokens": 452,
+   "cache_read_input_tokens": 35105,
+   "cache_creation_input_tokens": 7582
+  },
+  {
+   "input_tokens": 2,
+   "output_tokens": 13096,
+   "cache_read_input_tokens": 42687,
+   "cache_creation_input_tokens": 8832
+  },
+  {
+   "input_tokens": 2,
+   "output_tokens": 5008,
+   "cache_read_input_tokens": 51519,
+   "cache_creation_input_tokens": 17356
+  },
+  {
+   "input_tokens": 2,
+   "output_tokens": 2035,
+   "cache_read_input_tokens": 68875,
+   "cache_creation_input_tokens": 5136
+  },
+  {
+   "input_tokens": 4,
+   "output_tokens": 9046,
+   "cache_read_input_tokens": 74011,
+   "cache_creation_input_tokens": 3293
+  }
+ ],
+ "critic_requests": [
+  {
+   "input_tokens": 4,
+   "output_tokens": 7186,
+   "cache_read_input_tokens": 0,
+   "cache_creation_input_tokens": 14111
+  },
+  {
+   "input_tokens": 4,
+   "output_tokens": 12969,
+   "cache_read_input_tokens": 0,
+   "cache_creation_input_tokens": 13121
+  }
+ ],
  "outputs": {
-  "text": "out/eval/2026-10-11/creami-haiku-063749/text.mp4",
-  "clean": "out/eval/2026-10-11/creami-haiku-063749/clean.mp4"
+  "text": "out/eval/2026-10-11/creami-haiku-064059/text.mp4",
+  "clean": "out/eval/2026-10-11/creami-haiku-064059/clean.mp4"
  }
 }

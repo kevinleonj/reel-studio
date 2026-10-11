@@ -5,10 +5,13 @@ Written by the engine lane only. Newest entry on top.
 ## Status board
 - Done: STEP-03 tasks 1-9 in code, tested with fakes and the real SDK over a mock transport (branch
   `step-03-editor-loop`, rebuilt on origin/main 10 Oct; the old branch is `step-03-editor-loop-parked`)
-- Partly: the two paid runs (`make eval`), the PR and `GATE step03 PASS`
-- Blocked: Needs Kevin 18 (workspace-scoped key), 19 (Terraform 1.16.5 on this Mac for `make ci`)
+- Done: both paid runs, 11 Oct: Haiku $0.0422, Sonnet $0.3444 (branch total $0.3866 of $5); cache
+  reads on every editor request from the 2nd, revise request included
+- Partly: the gate: the Sonnet critic scored 23/35 on both renders (gate 26), so `critic.passed` is
+  false; reason and plan under Needs Kevin 22
+- Blocked: Needs Kevin 22 (a second Sonnet run needs your go)
 - Not started: —
-- Next: Haiku run, then Sonnet run (Kevin's go, 10 Oct), commit both result files, PR, gate
+- Next: Kevin answers 22; MAIN declares httpx2 (21)
 - Ledger: anthropic `messages.stream` and httpx2 `MockTransport` uses added to `eval/doc-ledger.pending.json`
 
 ## Needs Kevin
@@ -58,28 +61,54 @@ to `EditorSettings`; 9. STEP-01 merged (6089989). Open:
     request must include the anthropic-workspace-id header" ($0.00 spent; the run's record is
     `eval/results/2026-10-10/creami-haiku-*.json`). Your choice (10 Oct): a new key created inside
     workspace `reel-studio`, as D59 and ARCHITECTURE §5 say. Same check applies to
-    `CLOUD_ANTHROPIC_API_KEY` before STEP-08's job runs.
+    `CLOUD_ANTHROPIC_API_KEY` before STEP-08's job runs. Done 11 Oct: the new key works.
 19. **`make ci` fails on this Mac in `ci-cloud`:** Terraform 1.16.1 installed, `infra/*/versions.tf`
-    pins `= 1.16.5`. Every engine check passes. You chose to install 1.16.5.
+    pins `= 1.16.5`. Every engine check passes. Done 11 Oct: 1.16.5, tflint, trivy installed.
 20. **Strict `write_edl` and the API's schema-complexity limits (F208).** The structured-outputs page
     allows 24 optional and 16 union-typed parameters across all strict tools per request. Counting
     top-level properties the five editor tools have 13 and 5; counting nested ones (Segment's many
     optional fields) 48 and 30. The page does not say which count applies; the first real request
     decides it (a 400 is not billed). If it is refused, D35 (strict `write_edl`) and D46 (kit schema
     unchanged) conflict, and the cheapest way out is `strict: false` on `write_edl` only (the
-    validator already returns every violation): your call.
+    validator already returns every violation): your call. Answered 11 Oct and applied: the API
+    refused the strict `write_edl` with 400 "The compiled grammar is too large" (not billed), so
+    `write_edl` goes without `strict` (`tools.py` NOT_STRICT); the read tools and `submit_review`
+    stay strict. Before that, a second unbilled 400 found `Audio.music` offered as an untyped `{}`
+    schema; it is no longer offered (the validator still refuses it, D02).
 21. **Declare `httpx2` in pyproject (main lane).** `adapters/claude/client.py` now imports it to catch
     a connection that drops mid-stream (`httpx2.TransportError`), which the SDK does not wrap once the
     body is being read. It is anthropic's own HTTP layer, already in uv.lock at 2.13.1; the rule is that
     a dependency lands in pyproject with its first import. Run `uv add --optional editor
     "httpx2>=2.13.1"`. Alternative that lost: non-streaming `create` with an explicit timeout, which
     keeps the SDK's wrapping but is what the errors page warns against for long replies.
+    11 Oct: MAIN declares it on main; the engine branch does not wait.
+22. **The Sonnet run did not pass the critic gate.** `make eval FIX=creami` (11 Oct, $0.3444):
+    render 1 scored 23/35 (hook 4, retention 3, story 3, peak 3, craft 3, share 3, colour 4), the
+    revision 23 again, so render 1 shipped with "total 23 < 26". The critic's major issues: six
+    near-identical swirl shots in the middle (8.6-15.5 s), two blurry clips (c02), no blending
+    step between raw fruit and the finished jar, title text over the bag label; the edit list ran
+    17.9 s against the dessert target 20-40 s. The plumbing is proven (both runs ship, cache reads
+    on every editor request from the 2nd, cost $0.39 of $5). Reason: a content gap in one revision
+    on a 7-video fixture, not a failure of the loop. Plan, your call: (a) one more Sonnet run
+    (about $0.35, $4.61 left) after a prompt change that makes the brief name the format's length
+    target and tells the editor to drop near-duplicates before `write_edl`; (b) accept the
+    evidence as is and let STEP-04's A/B (D44) judge quality against the kit on several
+    fixtures. The gate's `critic.passed` check stays FAIL until a passing Sonnet run is committed.
 Plan notes kept from the answered items: fonts (Poppins-Bold.ttf + OFL.txt) ship as package data
 under `reel_studio/editor/media/fonts/`, no host-font fallbacks. Sheets failing case:
 `test_sheet_is_1536x864_with_16_tiles` fails against a port of kit `build_sheets` (`prep.py:167-221`,
 1980 px wide); `sheets.py` reuses the kit's scene detection (`prep.py:119-122`) and SSIM (`qa.py:43-51`).
 
 ## Evidence lines (the gates read these)
+- 2026-10-11 `make eval FIX=creami MODEL=haiku`: cost $0.04224845, 11 calls (8 editor, 1 revise, 2
+  critic), editor cache_read 16,746 to 74,011 from request 2 on; 2 renders, critic 23/35 (Haiku),
+  shipped render 1. `eval/results/2026-10-11/creami-haiku.json`.
+- 2026-10-11 `make eval FIX=creami`: cost $0.3443939 (editor $0.2328, critic $0.1121); editor
+  cache_read 16,746, 20,751, 34,012, 46,061, revise 49,964; critic 23/35 twice, not passed;
+  outputs `out/eval/2026-10-11/creami-sonnet-064755/{text,clean}.mp4`.
+  `eval/results/2026-10-11/creami-sonnet.json`.
+- Unbilled refusals on the way ($0 each, records kept): key not workspace-scoped (10 Oct),
+  untyped `music` schema, strict grammar too large (11 Oct).
 - 2026-10-10 STEP-02 local gate on cf1def3: `GATE step02 PASS`. Render roundtrip: text.mp4 and clean.mp4 1080x1920, h264, 30/1, aac, 10.802042 s, I: -13.9 LUFS each; input folder 6 files SHA-256 equal (D02); qa.json 6 hard checks true.
 - 2026-10-10 CI run 38029390044 on #2: `make ci` passed in 5m56s on ubuntu-24.04; 245 passed, 1 skipped (case-variant guard test: Linux is case-sensitive).
 - 2026-10-10 Editor image (CI, linux/amd64): built in 29 s, 1,264,698,610 bytes; `reel render` inside it on the fixtures exits 0 with every hard check true (tests/integration/editor/test_image.py).

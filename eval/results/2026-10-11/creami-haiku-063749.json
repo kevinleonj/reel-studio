@@ -1,0 +1,21 @@
+{
+ "fixture": "creami",
+ "started": "2026-10-11T06:37:49.115189+00:00",
+ "model": "haiku",
+ "style": "montage",
+ "cost_usd": 0.0,
+ "critic": {
+  "total": 0,
+  "passed": false,
+  "weakness": null
+ },
+ "scores": {},
+ "renders": 0,
+ "error": "BadRequestError",
+ "requests": [],
+ "critic_requests": [],
+ "outputs": {
+  "text": "out/eval/2026-10-11/creami-haiku-063749/text.mp4",
+  "clean": "out/eval/2026-10-11/creami-haiku-063749/clean.mp4"
+ }
+}
