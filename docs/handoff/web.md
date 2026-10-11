@@ -2,12 +2,27 @@
 
 Written by the web lane only. Newest entry on top.
 
-## Status board — STEP-07 (branch `step-07-gate`, stacked on `step-06-website`, local only)
+## Status board — STEP-07 (branch `step-07-gate`, on origin/main since 11 Oct 2026)
 - Done: task 2 (checkout with a code, place reserved with the order, released if Stripe fails), task 3 (fulfilment from the webhook, `/fulfil` and the sweep; expiry from the webhook, `/cancel` and the sweep, which asks Stripe first), task 4 (slots and queue: built in STEP-06, now under race tests; `take_slot` writes `queue.run_token`, but nothing passes it to the job yet: that is the real launcher's, with the engine lane's worker command), task 5 (4 race tests, fake and Firestore emulator), task 6 (`reelctl` commands on the ports), task 7 (write count: 19, F312), task 8's make target (`make stripe-listen`, dry-run only); `/api/config` sends the €19 price in Stripe mode.
 - Partly: task 1 — Payments port shapes, `PaymentsUpkeep`, `FakePayments` done; the Stripe adapter `reel_studio/adapters/payments_stripe.py` is not written: the doc gate blocks `import stripe` until the pending `stripe` entry reaches `.claude/doc-ledger.json`. `reelctl` cannot reach Firestore or Stripe until then (`connect()` says so).
 - Blocked: task 9 (Kevin: `stripe login`, `make stripe-listen`, the laptop checkout, the ≤ $3 Reel, the `Stripe e2e order:` line); the composition root (same `WebSettings` fields as STEP-06 task 6, plus `stripe_price_id` and `stripe_coupon_id`).
 - Not started: nothing else in the step.
 - Next: Stripe adapter + its fixture tests once the ledger has `stripe`; then `reelctl connect()`.
+- Also on this branch: REVIEW-FIXES.md WEB items 1-5 (one commit each) and the npm audit triage.
+
+## Decided by standing orders (STEP-07 and REVIEW-FIXES)
+- Upload limits: every `/uploads` batch reserves its declared names and sizes on the order (`uploads`, `OrderUpkeep.reserve_uploads`, one transaction); a name asked for again replaces its size. Start still re-checks the finished files. Undo: revert the item-1 commit.
+- A chunk for an order that is no longer `paid` answers 409 `wrong_status`, status queries too. Undo: revert the item-2 commit.
+- An address a mail header refuses is a 422 `invalid_request` at checkout, like the other address checks (the review said 400; 422 is what this API answers for every bad body). Undo: change `invalid()` there.
+- File names over 255 UTF-8 bytes answer 400 `name_too_long` with the file, and the page says "{name} has a name too long to store. Rename it and choose it again." (new words, not in UX.md §2). Undo: revert the item-4 commit.
+- npm audit (7 high): one chain, `braces` ReDoS via `micromatch`/`fast-glob`, all under the `shadcn` CLI. The site imports only `shadcn/tailwind.css` at build time and ships static files, so nothing of it runs in production or on user input. Accepted; `npm audit fix --force` would change shadcn's major. Revisit when shadcn ships a fixed range.
+
+## For MAIN (STEP-07)
+- Copy the `stripe` entry from `web/doc-ledger.pending.json` into `.claude/doc-ledger.json` (protected); until then the doc gate blocks the Stripe adapter.
+- `reel_studio/settings.py`: `stripe_price_id` and `stripe_coupon_id` for the adapter and `reelctl codes create`.
+
+## For CLOUD (REVIEW-FIXES WEB 2)
+- Late chunks are refused on the laptop only: Cloud Storage resumable sessions go straight to the bucket. The cloud Storage adapter should cancel an order's open sessions at Start, or the editor should read only the files in the manifest.
 
 ## Status board — STEP-06
 - Done: task 1 (Orders, Storage, Mailer, Launcher ports with fakes; contract suites green on the fakes and on the real Firestore emulator and Mailpit), task 2 (every §7 route without payments, tests per route and error code), task 3 (web app), task 4 (fake editor), task 5 backend-free (128 Playwright tests, phone + laptop, axe), `web/` wired into `make ci` (ci-web) and `make prerelease` (Playwright + Lighthouse budget).
@@ -45,6 +60,17 @@ Written by the web lane only. Newest entry on top.
 ## Evidence lines (the gates read these)
 
 ## Log
+
+### 11 Oct 2026 — STEP-07 rebased on main; REVIEW-FIXES WEB items 1-5
+
+Before: STEP-07's five commits sat on the old `step-06-website` (pre-#4); the review of PR #4 listed
+five web defects. After: the five commits replayed on origin/main (conflicts in `core/constants.py`
+and `core/errors.py`, both sides kept). Items, test first, one commit each: 1 upload reservations
+(fake + Firestore emulator); 2 late chunks refused; 3 crafted address refused before the order, and
+the mailer builds the message inside its try; 4 names limited in bytes with their own message; 5 the
+chmod test skips as root. Evidence: `make test-fast` 636 passed; `make test-emulator` 34 passed
+(includes the reservation contract on Firestore); `pytest -m race` 5 passed, 5 skipped.
+F312's count (19) leaves out `/uploads`: each batch is now one more write.
 
 ### 10 Oct 2026 (night) — STEP-07 review round 2: PASS with 1 warning, fixed
 
