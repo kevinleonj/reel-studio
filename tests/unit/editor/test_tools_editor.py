@@ -122,8 +122,10 @@ def test_five_strict_tools_without_unsupported_keywords(box: tools.Toolbox) -> N
         "read_transcript",
         "write_edl",
     ]
+    # write_edl is not strict: its grammar is "too large" for the API (400, 11 Oct 2026;
+    # Kevin's call on Needs Kevin 20); the validator returns every violation instead.
+    assert [d["strict"] for d in defs] == [True, True, True, True, False]
     for d in defs:
-        assert d["strict"] is True
         nodes = _walk(d["input_schema"])
         assert not [n for n in nodes if UNSUPPORTED & set(n)]
         objects = [n for n in nodes if n.get("type") == "object"]

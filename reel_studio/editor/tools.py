@@ -29,6 +29,7 @@ from reel_studio.editor.media.shots import Clip, Shots
 type Block = dict[str, Any]  # Any: an Anthropic content block
 
 STRIPS, JPEG = "strips", "image/jpeg"
+NOT_STRICT = "write_edl"  # the one tool sent without strict: true (see definitions)
 UNSUPPORTED = (
     "minimum",
     "maximum",
@@ -172,7 +173,9 @@ class Toolbox:
             {
                 "name": name,
                 "description": " ".join(desc.split()),
-                "strict": True,
+                # write_edl's grammar is "too large" for strict mode (F208; 400 on 11 Oct 2026,
+                # Kevin's call on Needs Kevin 20): edl.validate returns every violation instead.
+                "strict": name != NOT_STRICT,
                 "input_schema": _offered(model),
             }
             for name, model, desc in specs
