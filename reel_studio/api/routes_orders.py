@@ -74,7 +74,9 @@ def exclusive(order: Authorised, request: Request) -> Iterator[Order]:
         in_flight.leave(order.id)
 
 
-Exclusive = Annotated[Order, Depends(exclusive)]
+# scope="function": the slot is free before the answer is sent, so a client's next write is
+# never refused by its own previous one (FastAPI 0.121+, dependencies with yield).
+Exclusive = Annotated[Order, Depends(exclusive, scope="function")]
 
 
 @router.get("")

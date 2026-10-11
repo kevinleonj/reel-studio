@@ -1,5 +1,6 @@
 """REVIEW-FIXES WEB 1: upload limits count sessions not yet finished."""
 
+import asyncio
 from dataclasses import replace
 from typing import cast
 
@@ -172,3 +173,44 @@ def test_every_order_write_is_refused_at_once_while_another_runs(
     else:
         response = api.client.post(url, json=body, headers=auth)
     assert (response.status_code, response.json()) == (503, {"error": "busy"})
+
+
+def test_the_write_slot_is_free_when_the_answer_is_sent(api: Api) -> None:
+    """Review round 4: released after the response, a client's next write could get a stray
+    503. TestClient waits for the whole app call, so the app is driven by hand here."""
+    order_id, auth = new_order(api)
+    app = cast(FastAPI, api.client.app)
+    in_flight = app.state.limiters.order_writes
+    seen: list[bool] = []
+    statuses: list[int] = []
+    path = f"/api/orders/{order_id}/viewed"
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": path,
+        "raw_path": path.encode(),
+        "query_string": b"",
+        "root_path": "",
+        "headers": [(b"host", b"x"), (b"x-order-token", auth["X-Order-Token"].encode())],
+        "client": ("127.0.0.1", 5000),
+        "server": ("127.0.0.1", 80),
+    }
+
+    async def receive() -> dict[str, object]:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: dict[str, object]) -> None:
+        if message["type"] == "http.response.start":
+            statuses.append(int(str(message["status"])))
+        if message["type"] == "http.response.body" and not message.get("more_body", False):
+            free = in_flight.enter(order_id)
+            if free:
+                in_flight.leave(order_id)
+            seen.append(free)
+
+    asyncio.run(app(scope, receive, send))  # type: ignore[arg-type]
+    assert statuses == [200]  # the route ran: a 404 would never take the slot at all
+    assert seen == [True]
