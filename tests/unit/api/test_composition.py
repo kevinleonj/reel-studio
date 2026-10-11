@@ -96,6 +96,8 @@ def test_stripe_is_refused_until_its_adapter_exists(
         payments="stripe",
         stripe_secret_key="test-stripe-key",
         stripe_webhook_secret="test-webhook-secret",
+        stripe_price_id="price_test",
+        stripe_coupon_id="coupon_test",
     )
     clock = FrozenClock(START)
     with pytest.raises(SystemExit, match="PAYMENTS=stripe"):
