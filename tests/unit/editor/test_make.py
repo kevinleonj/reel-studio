@@ -11,7 +11,7 @@ import pytest
 from reel_studio.core import config
 from reel_studio.core.errors import CostCapReached
 from reel_studio.editor import make, prompt
-from tests.fakes.claude import FakeClaude
+from tests.fakes.claude import FakeClaude, response, text
 from tests.fakes.clock import FrozenClock
 from tests.fakes.media import FakeMedia, critic_turn, edl_turn
 
@@ -74,3 +74,24 @@ def test_the_cost_cap_stops_the_order_before_the_call(tmp_path: Path) -> None:
 
     with pytest.raises(CostCapReached):
         _make(tmp_path, [edl_turn("e1")], capped)
+
+
+def test_every_renders_review_is_kept(tmp_path: Path) -> None:
+    script = [edl_turn("e1"), critic_turn(3), edl_turn("e2"), critic_turn(2)]
+    made, _, _ = _make(tmp_path, script)
+
+    record = json.loads((made.out / "result.json").read_text())
+
+    assert [r["render"] for r in record["reviews"]] == [1, 2]
+    assert [r["scores"]["hook"] for r in record["reviews"]] == [3, 2]
+    assert record["reviews"][1]["total"] == 26 and record["reviews"][1]["passed"] is False
+
+
+def test_a_render_the_critic_could_not_judge_still_ships(tmp_path: Path) -> None:
+    made, _, _ = _make(tmp_path, [edl_turn("e1"), response([text("No.")], "refusal")])
+
+    record = json.loads((made.out / "result.json").read_text())
+
+    assert (made.out / "text.mp4").read_bytes() == b"render 1"
+    assert made.final.review is None and not made.final.passed
+    assert record["critic"]["total"] is None and "model_refusal" in record["critic"]["weakness"]

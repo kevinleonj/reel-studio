@@ -202,3 +202,20 @@ def test_an_earlier_result_without_a_start_time_is_kept_by_its_file_time(tmp_pat
 
     names = sorted(p.name for p in folder.iterdir())
     assert len(names) == 2 and "creami-haiku.json" in names
+
+
+def test_the_result_keeps_every_renders_review(tmp_path: Path) -> None:
+    script = [edl_turn("e1"), critic_turn(3), edl_turn("e2"), critic_turn(2)]
+
+    _, _, folder = _run(tmp_path, script, "sonnet")
+
+    reviews = _result(folder, "creami-sonnet.json")["reviews"]
+    assert [(r["render"], r["total"]) for r in reviews] == [(1, 27), (2, 26)]
+
+
+def test_an_unjudged_render_records_a_zero_total(tmp_path: Path) -> None:
+    _, _, folder = _run(tmp_path, [edl_turn("e1"), response([text("No.")], "refusal")], "sonnet")
+
+    data = _result(folder, "creami-sonnet.json")
+    assert data["critic"]["total"] == 0 and data["critic"]["passed"] is False
+    assert _gate_problems(data, "creami", "sonnet") == []

@@ -84,12 +84,13 @@ def _record(
 ) -> dict[str, Any]:
     editor, critic_calls, cost = _calls(out / make.REQUESTS)
     scores: dict[str, int] = {}
+    reviews: list[dict[str, Any]] = []  # Any: JSON
+    critic: dict[str, Any] = {"total": 0, "passed": False, "weakness": None}  # Any: JSON
     if made is not None:
-        final = made.final
-        critic = {"total": final.review.total, "passed": final.passed, "weakness": final.weakness}
-        scores = final.review.scores()
-    else:
-        critic = {"total": 0, "passed": False, "weakness": None}
+        final, reviews = made.final, made.reviews
+        critic["passed"], critic["weakness"] = final.passed, final.weakness
+        if final.review is not None:  # an unjudged render keeps total 0 (the gate wants a number)
+            critic["total"], scores = final.review.total, final.review.scores()
     relative = out.relative_to(job.root)
     return {
         "fixture": job.fixture,
@@ -99,6 +100,7 @@ def _record(
         "cost_usd": float(cost),  # exact: every call's cost has far fewer than 15 digits
         "critic": critic,
         "scores": scores,
+        "reviews": [{k: r[k] for k in ("render", "total", "passed", "scores")} for r in reviews],
         "renders": made.renders if made is not None else 0,
         "error": error,
         "requests": editor,

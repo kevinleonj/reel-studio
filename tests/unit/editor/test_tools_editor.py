@@ -259,6 +259,9 @@ def _schemas(node: Any) -> Iterator[Any]:  # Any: JSON Schema nodes
             yield from _schemas(value)
 
 
+TYPED = {"type", "$ref", "anyOf", "enum", "const"}
+
+
 def test_no_tool_offers_an_untyped_value(box: tools.Toolbox) -> None:
     """The API refuses `{}` in a strict tool ("Empty schema ... is not supported", 400 on
     11 Oct 2026). Audio.music exists only so the validator can refuse it (D02): never offered."""
@@ -268,6 +271,28 @@ def test_no_tool_offers_an_untyped_value(box: tools.Toolbox) -> None:
             for node in _schemas(definition["input_schema"])
             for p in node.get("properties", {}).values()
         ]
-        assert {} not in properties, definition["name"]
+        untyped = [p for p in properties if not TYPED & set(p)]
+        assert not untyped, (definition["name"], untyped)
     edl = next(d for d in box.definitions() if d["name"] == "write_edl")
     assert "music" not in json.dumps(edl["input_schema"]).replace("music_hint", "")
+
+
+def test_a_caption_with_escaped_line_breaks_gets_real_ones(box: tools.Toolbox) -> None:
+    """Both paid runs shipped captions with a literal backslash-n (the model double-escaped)."""
+    edl = {
+        "versions": [
+            {
+                "name": "A",
+                "segments": [
+                    {"clip": "c01", "in": 0, "out": 2, "role": "hook"},
+                    {"clip": "c02", "in": 0, "out": 2, "role": "payoff"},
+                ],
+            }
+        ],
+        "caption": "Pink swirl.\\n\\nDetails in the comments.",
+    }
+
+    result = box.run("write_edl", edl)
+
+    assert not result.is_error and box.accepted is not None
+    assert box.accepted.caption == "Pink swirl.\n\nDetails in the comments."

@@ -54,7 +54,7 @@ from the brief (`c01`...).
 | `versions` | — | exactly one, named A. Text and clean are both rendered from it |
 | `dropped` | — | every clip you did not use, with a plain reason ("blurred", "same shot as c04") |
 | `preferences` | — | one entry per chip and per sentence of the customer's note: applied or not, and why |
-| `caption` | — | the Instagram caption, at most 2,200 characters (template below) |
+| `caption` | — | the Instagram caption, at most 2,200 characters (template below); line breaks are real newlines in the JSON string, never an escaped backslash-n |
 | `music_hint` | — | mood, tempo and where the strongest beat should land, at most 120 characters |
 | `assumptions` | — | every default you used, and the look with its reason |
 | `check_by_eye` | — | anything you were unsure about, for the person to look at |

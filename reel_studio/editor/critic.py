@@ -25,6 +25,7 @@ from reel_studio.editor.tools import image_block, strict_schema
 log = get_logger(__name__)
 
 STAGE = "critic"
+STOPS = (EditorError, MediaError, ProviderUnavailable)  # what ends a step, not the order
 TOOL = "submit_review"
 NUDGE = f"Call {TOOL} with your scores."
 TURNS = (1, 2)  # a nudge or one invalid review gets one more turn
@@ -79,7 +80,7 @@ class Material:
 @dataclass(frozen=True)
 class Final[R]:
     render: R
-    review: Review
+    review: Review | None  # None: the critic could not judge it (weakness says why)
     passed: bool
     weakness: str | None  # the failed gates of the shipped render
 
@@ -118,28 +119,31 @@ def review_cycle[E, R](
 ) -> Final[R]:
     """Plan, render, judge; revise on a fail until `max_renders`; ship the higher total.
 
-    Once a render exists, a revision that stops (cost cap, refusal, render error, provider down)
-    ships the best render so far with the stop named (EDITOR §8); a spend limit still stops the
-    order (D45).
+    Once a render exists, a step that stops (cost cap, refusal, render error, provider down)
+    ships the best render so far with the stop named (EDITOR §8); a first render the critic could
+    not judge ships unjudged. A spend limit still stops the order (D45).
     """
     tried: list[tuple[R, Review, str]] = []
     note: str | None = None
     for number in range(1, max_renders + 1):
+        rendered: R | None = None
         try:
             rendered = render(plan(note), number)
             review = judge(rendered)
-        except (EditorError, MediaError, ProviderUnavailable) as exc:
-            if not tried:
-                raise
+        except STOPS as exc:
             log.warning(
-                "revision %d stopped: %s",
+                "render %d stopped: %s",
                 number,
                 exc,
-                extra={"stage": STAGE, "event": "revision_stopped", "outcome": exc.code},
+                extra={"stage": STAGE, "event": "render_stopped", "outcome": exc.code},
             )
-            rendered, review, why = tried[-1]
-            tried[-1] = (rendered, review, f"{why}; revision stopped: {exc.code}")
-            break
+            if tried:
+                kept, kept_review, why = tried[-1]
+                tried[-1] = (kept, kept_review, f"{why}; revision stopped: {exc.code}")
+                break
+            if rendered is not None:  # the first render exists; only its review failed
+                return Final(rendered, None, False, f"not judged: {exc.code}")
+            raise
         ok, why = passes(review, gates)
         if ok:
             return Final(rendered, review, True, None)

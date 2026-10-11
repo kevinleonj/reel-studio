@@ -29,6 +29,7 @@ from reel_studio.editor.media.shots import Clip, Shots
 type Block = dict[str, Any]  # Any: an Anthropic content block
 
 STRIPS, JPEG = "strips", "image/jpeg"
+ESCAPED_NEWLINE = "\\n"  # the two characters backslash and n
 NOT_STRICT = "write_edl"  # the one tool sent without strict: true (see definitions)
 UNSUPPORTED = (
     "minimum",
@@ -121,6 +122,14 @@ def _offered(model: type[BaseModel]) -> Block:
     audio = schema.get("$defs", {}).get("AudioBlock", {}).get("properties", {})
     audio.pop("music", None)
     return schema  # type: ignore[no-any-return]
+
+
+def _real_line_breaks(raw: Any) -> Any:  # Any: tool input JSON
+    """The caption is the one multi-line field; models often double-escape its line breaks, so
+    a literal backslash-n would ship (both paid runs, 11 Oct 2026)."""
+    if isinstance(raw, dict) and isinstance(raw.get("caption"), str):
+        return {**raw, "caption": raw["caption"].replace(ESCAPED_NEWLINE, "\n")}
+    return raw
 
 
 def image_block(image: Image.Image, max_side: int, quality: int) -> Block:
@@ -297,6 +306,7 @@ class Toolbox:
         return _text(path.read_text(encoding="utf-8"))
 
     def _write_edl(self, raw: Any) -> Result:  # Any: tool input JSON
+        raw = _real_line_breaks(raw)
         report = edl.validate(raw, self.ctx.shots, self.ctx.media, self.ctx.order_style)
         if report.errors or report.edl is None:
             return _text(

@@ -272,3 +272,28 @@ def test_a_spend_limit_while_revising_stops_the_order() -> None:
 
     with pytest.raises(SpendLimitReached):
         critic.review_cycle(c.plan, c.render, c.judge, GATES, 2)
+
+
+class _UnjudgedFirst(_Cycle):
+    def __init__(self, error: Exception) -> None:
+        super().__init__([])
+        self.error = error
+
+    def judge(self, rendered: str) -> critic.Review:
+        raise self.error
+
+
+def test_a_first_render_the_critic_cannot_judge_ships_unjudged() -> None:
+    c = _UnjudgedFirst(ModelRefusal("critic stopped with refusal"))
+
+    final = critic.review_cycle(c.plan, c.render, c.judge, GATES, 2)
+
+    assert (final.render, final.review, final.passed) == ("render1-edl1", None, False)
+    assert final.weakness == "not judged: model_refusal"
+
+
+def test_a_spend_limit_while_judging_the_first_render_stops_the_order() -> None:
+    c = _UnjudgedFirst(SpendLimitReached("workspace limit"))
+
+    with pytest.raises(SpendLimitReached):
+        critic.review_cycle(c.plan, c.render, c.judge, GATES, 2)

@@ -12,6 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 from reel_studio.core import config, ports
 from reel_studio.core.config import Config
@@ -67,6 +68,7 @@ class Made:
     cost: Decimal
     edl: Edl
     warnings: list[str]  # write_edl's craft warnings for the shipped edit list
+    reviews: list[dict[str, Any]]  # Any: JSON; every render's review, shipped or not
 
 
 def media_steps(folder: Path, ffmpeg: Ffmpeg, media: Media, cfg: Config) -> Steps:
@@ -113,29 +115,29 @@ def _order_line(order: prompt.OrderSettings) -> str:
     return f"style {order.style}, {order.length_s} s, text {order.text_lang}, voice {voice}"
 
 
-def _ship(
-    request: Request, final: critic.Final[Rendered], meter: Meter, edl: Edl, warnings: list[str]
-) -> None:
-    out = request.out
+def _ship(request: Request, made: Made, meter: Meter) -> None:
+    out, final = request.out, made.final
     for name in (render.TEXT, render.CLEAN, qa.QA_JSON):
         shutil.copy2(final.render.folder / name, out / name)
     shutil.copytree(final.render.folder / REVIEW, out / REVIEW, dirs_exist_ok=True)
-    (out / EDL_JSON).write_text(edl.model_dump_json(by_alias=True, indent=1), encoding="utf-8")
+    edl_json = made.edl.model_dump_json(by_alias=True, indent=1)
+    (out / EDL_JSON).write_text(edl_json, encoding="utf-8")
     review = final.review
     record = {
         "style": request.order.style,
         "cost_usd": str(meter.spent),
         "cost_by_model": {k: str(v) for k, v in meter.by_model.items()},
         "critic": {
-            "total": review.total,
+            "total": review.total if review is not None else None,
             "passed": final.passed,
-            "scores": review.scores(),
+            "scores": review.scores() if review is not None else {},
             "weakness": final.weakness,
-            "verdict": review.verdict,
-            "major": [i.model_dump() for i in review.major],
+            "verdict": review.verdict if review is not None else None,
+            "major": [i.model_dump() for i in review.major] if review is not None else [],
         },
+        "reviews": made.reviews,
         "hard_checks_passed": all(final.render.qa.hard_checks.model_dump().values()),
-        "edl_warnings": warnings,
+        "edl_warnings": made.warnings,
     }
     (out / RESULT_JSON).write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
 
@@ -161,6 +163,7 @@ def make(request: Request, ports_: Ports, steps: Steps, cfg: Config) -> Made:
     history: list[loop.Message] = []
     edls: list[Edl] = []
     warned: list[list[str]] = []
+    reviews: list[dict[str, Any]] = []  # Any: JSON
 
     def plan(feedback: str | None) -> Edl:
         opening = (
@@ -185,19 +188,31 @@ def make(request: Request, ports_: Ports, steps: Steps, cfg: Config) -> Made:
             order=_order_line(request.order),
         )
         quality = media.contact_sheet.jpeg_quality
-        return critic.critique(
+        review = critic.critique(
             critic_session, judge_system, material, limits.sheets.max_image_side_px, quality
         )
+        ok, why = critic.passes(review, limits.gates)
+        reviews.append(
+            {
+                "render": int(rendered.folder.name),
+                "total": review.total,
+                "passed": ok,
+                "scores": review.scores(),
+                "weakness": why if not ok else None,
+                "major": [i.model_dump() for i in review.major],
+            }
+        )
+        return review
 
     final = critic.review_cycle(plan, render_one, judge, limits.gates, limits.editor.max_renders)
     number = int(final.render.folder.name) - 1
-    shipped, warnings = edls[number], warned[number]
-    _ship(request, final, meter, shipped, warnings)
+    made = Made(request.out, final, len(edls), meter.spent, edls[number], warned[number], reviews)
+    _ship(request, made, meter)
     log.info(
-        "shipped render %s, critic %d, cost %s",
+        "shipped render %s, critic %s, cost %s",
         final.render.folder.name,
-        final.review.total,
+        final.review.total if final.review is not None else "not judged",
         meter.spent,
         extra={"stage": STAGE, "event": "shipped", "outcome": "passed" if final.passed else "weak"},
     )
-    return Made(request.out, final, len(edls), meter.spent, shipped, warnings)
+    return made
