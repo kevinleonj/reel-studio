@@ -319,6 +319,42 @@ def test_only_limits_the_run_to_the_named_fixtures(tmp_path: Path) -> None:
     assert [r["name"] for r in _json(runs)["fixtures"]] == [AB.fixtures[0]]
 
 
+def test_a_later_day_carries_the_rows_and_does_not_pay_twice(tmp_path: Path) -> None:
+    first = _harness(tmp_path, FakeKit(), FakeJudge()).run()
+    spent = _json(first)["spent_usd"]
+    kit = FakeKit()
+    later = _harness(tmp_path, kit, FakeJudge(), script=[])
+    later.ports = make.Ports(FakeClaude([]), FrozenClock(NOW.replace(day=13)))
+
+    runs = later.run()
+
+    data = _json(runs)
+    assert runs.parent.name == "2026-10-13" and kit.calls == []
+    assert len(data["fixtures"]) == 5 and data["spent_usd"] == spent
+
+
+def test_redo_reruns_a_finished_fixture_and_keeps_the_earlier_attempt(tmp_path: Path) -> None:
+    _harness(tmp_path, FakeKit(), FakeJudge()).run()
+    kit = FakeKit()
+    again = _harness(tmp_path, kit, FakeJudge(), script=[edl_turn("e1"), critic_turn(5)])
+    again.redo = (AB.fixtures[0],)
+
+    runs = again.run()
+
+    row = _json(runs)["fixtures"][0]
+    assert [name for name, *_ in kit.calls] == [f"ab{AB.fixtures[0]}"]
+    assert [a["side"] for a in row["attempts"]] == ["new", "old"]
+    assert row["old"]["cost_usd"] == Decimal("2.00")  # the earlier paid try stays on the ledger
+
+
+def test_an_unknown_fixture_name_is_refused_before_any_spend(tmp_path: Path) -> None:
+    harness = _harness(tmp_path, FakeKit(), FakeJudge(), script=[])
+    harness.only = ("nope",)
+
+    with pytest.raises(ab.PreflightError, match="nope"):
+        harness.run()
+
+
 # ------------------------------------------------------------------ the blind pick and the report
 
 
@@ -363,6 +399,15 @@ def test_a_pick_must_be_x_y_or_tie(tmp_path: Path) -> None:
     _picked(tmp_path, ["maybe", "x", "r"] + ["tie", "r"] * 4, 1, said)
 
     assert any("x, y or tie" in line for line in said)
+
+
+def test_pick_names_fixtures_that_never_ran(tmp_path: Path) -> None:
+    harness = _harness(tmp_path, FakeKit(), FakeJudge(), script=[edl_turn("e1"), critic_turn(5)])
+    harness.only = (AB.fixtures[0],)
+    runs = harness.run()
+
+    with pytest.raises(ab_pick.Incomplete, match=AB.fixtures[4]):
+        ab_pick.pick(runs, tmp_path / "repo", lambda _p: "x", 1, lambda _l: None)
 
 
 def test_pick_refuses_while_an_arm_failed_and_names_the_fixture(tmp_path: Path) -> None:

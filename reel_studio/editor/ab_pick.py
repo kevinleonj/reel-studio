@@ -148,7 +148,9 @@ def pick(
     """Blind picks for every fixture of `runs`; writes ab.json beside it and the report."""
     data: dict[str, Any] = json.loads(runs.read_text(encoding="utf-8"))  # Any: JSON
     rows: list[Row] = data["fixtures"]
-    unfinished = [r["name"] for r in rows if not _complete(r)]
+    by_name = {r["name"]: r for r in rows}
+    wanted = config.load().limits.eval.ab.fixtures  # all of them, not only the rows written
+    unfinished = [n for n in wanted if n not in by_name or not _complete(by_name[n])]
     if unfinished:
         raise Incomplete(
             f"no finished pair for {unfinished}: run make ab ONLY={','.join(unfinished)}"

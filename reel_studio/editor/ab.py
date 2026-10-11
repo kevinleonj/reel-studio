@@ -110,6 +110,7 @@ class Harness:
     kit: ab_kit.Kit
     judge: Callable[[ab_judge.Cut, Path], ab_judge.Judged]
     only: tuple[str, ...] = ()
+    redo: tuple[str, ...] = ()  # fixtures whose finished arms run again (after a tune)
     spent: Decimal = Decimal(0)
     rows: list[Row] = field(default_factory=list)
 
@@ -118,14 +119,25 @@ class Harness:
         return self.root / evaluate.RESULTS / day / RUNS_JSON
 
     def _load(self, day: str) -> None:
-        """Rows of today's file, and every arm's cost in every ab-runs.json on disk."""
-        today = self._target(day)
-        for path in sorted((self.root / evaluate.RESULTS).glob(f"*/{RUNS_JSON}")):
+        """Rows of the newest ab-runs.json, and every arm's cost in every file on disk.
+
+        Rows from an earlier day are carried into today's file marked `carried`; the ledger
+        counts an arm only in the file where it was paid."""
+        paths = sorted((self.root / evaluate.RESULTS).glob(f"*/{RUNS_JSON}"))
+        for path in paths:
             data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))  # Any: JSON
-            if path == today:
-                self.rows = data["fixtures"]
             for row in data["fixtures"]:
-                self.spent += sum(Decimal(str(row[s]["cost_usd"])) for s in SIDES if s in row)
+                arms = [row[s] for s in SIDES if s in row and not row[s].get("carried")]
+                self.spent += sum((Decimal(str(a["cost_usd"])) for a in arms), Decimal(0))
+        if not paths:
+            return
+        newest: dict[str, Any] = json.loads(paths[-1].read_text(encoding="utf-8"))  # Any: JSON
+        self.rows = newest["fixtures"]
+        if paths[-1] != self._target(day):
+            for row in self.rows:
+                for side in SIDES:
+                    if side in row:
+                        row[side]["carried"] = True
 
     def _write(self, day: str, stopped: str | None) -> Path:
         target = self._target(day)
@@ -238,6 +250,9 @@ class Harness:
     def run(self) -> Path:
         ab_cfg = self.cfg.limits.eval.ab
         day = self.ports.clock.now().date().isoformat()
+        unknown = [n for n in (*self.only, *self.redo) if n not in ab_cfg.fixtures]
+        if unknown:
+            raise PreflightError(f"not A/B fixtures: {unknown}; see limits.toml [eval.ab]")
         names = [n for n in ab_cfg.fixtures if not self.only or n in self.only]
         self._preflight(names)
         self._load(day)
@@ -255,12 +270,19 @@ class Harness:
             row["files"] = [f.name for f in files]
             base = self.root / OUT / day / name
             for side in SIDES:
-                if side in row and row[side]["error"] is None:
+                if side in row and row[side]["error"] is None and name not in self.redo:
                     continue  # finished on an earlier run
                 if not self._fits(caps[side]):
                     stopped = f"budget: ${self.spent} spent, a {side} run could take ${caps[side]}"
                     break
-                earlier = Decimal(str(row[side]["cost_usd"])) if side in row else Decimal(0)
+                previous = row.get(side)
+                if previous is not None and previous["error"] is None:
+                    row.setdefault("attempts", []).append({"side": side, **previous})
+                carried = previous is not None and previous.get("carried")
+                # a failed try in this file stays paid in this arm; a carried one was paid elsewhere
+                earlier = (
+                    Decimal(str(previous["cost_usd"])) if previous and not carried else Decimal(0)
+                )
                 attempt = base / f"{side}-{self.ports.clock.now():%H%M%S}"
                 row[side] = _arm(earlier + caps[side], 0.0, "started")  # if killed, counted at cap
                 self._write(day, stopped)
@@ -297,6 +319,7 @@ class _ArmFailed(Exception):
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="make ab", description=__doc__)
     parser.add_argument("--only", default="", help="comma-separated fixture names to (re)run")
+    parser.add_argument("--redo", default="", help="fixtures whose finished arms run again")
     args = parser.parse_args(argv)
     configure()
     cfg, settings, build = config.load(), EditorSettings(), BuildSettings()
@@ -314,6 +337,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
         judge=ab_judge.CriticJudge(ports, cfg, media, ffmpeg, order_for(cfg)),
         only=tuple(n for n in args.only.split(",") if n),
+        redo=tuple(n for n in args.redo.split(",") if n),
     )
     target = harness.run()
     sys.stdout.write(f"A/B runs: {target} (ledger ${harness.spent}); next: make ab-pick\n")
