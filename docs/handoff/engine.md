@@ -11,7 +11,7 @@ Written by the engine lane only. Newest entry on top.
   false; reason and plan under Needs Kevin 22
 - Blocked: Needs Kevin 22 (a second Sonnet run needs your go)
 - Not started: —
-- Next: Kevin answers 22; MAIN declares httpx2 (21)
+- Next: Kevin answers 22; MAIN declares httpx2 (21); follow-ups in 23. PR #5
 - Ledger: anthropic `messages.stream` and httpx2 `MockTransport` uses added to `eval/doc-ledger.pending.json`
 
 ## Needs Kevin
@@ -59,7 +59,7 @@ to `EditorSettings`; 9. STEP-01 merged (6089989). Open:
 18. **The `.env` Anthropic key is not scoped to a workspace.** The first `make eval MODEL=haiku` stopped
     at its first (free) `count_tokens` call: 400 "This API key is not scoped to a workspace, so this
     request must include the anthropic-workspace-id header" ($0.00 spent; the run's record is
-    `eval/results/2026-10-10/creami-haiku-*.json`). Your choice (10 Oct): a new key created inside
+    `eval/results/2026-10-10/creami-haiku.json`). Your choice (10 Oct): a new key created inside
     workspace `reel-studio`, as D59 and ARCHITECTURE §5 say. Same check applies to
     `CLOUD_ANTHROPIC_API_KEY` before STEP-08's job runs. Done 11 Oct: the new key works.
 19. **`make ci` fails on this Mac in `ci-cloud`:** Terraform 1.16.1 installed, `infra/*/versions.tf`
@@ -84,7 +84,7 @@ to `EditorSettings`; 9. STEP-01 merged (6089989). Open:
     11 Oct: MAIN declares it on main; the engine branch does not wait.
 22. **The Sonnet run did not pass the critic gate.** `make eval FIX=creami` (11 Oct, $0.3444):
     render 1 scored 23/35 (hook 4, retention 3, story 3, peak 3, craft 3, share 3, colour 4), the
-    revision 23 again, so render 1 shipped with "total 23 < 26". The critic's major issues: six
+    revision at most 23 (only the shipped review is saved), so render 1 shipped with "total 23 < 26". The critic's major issues: six
     near-identical swirl shots in the middle (8.6-15.5 s), two blurry clips (c02), no blending
     step between raw fruit and the finished jar, title text over the bag label; the edit list ran
     17.9 s against the dessert target 20-40 s. The plumbing is proven (both runs ship, cache reads
@@ -93,7 +93,15 @@ to `EditorSettings`; 9. STEP-01 merged (6089989). Open:
     (about $0.35, $4.61 left) after a prompt change that makes the brief name the format's length
     target and tells the editor to drop near-duplicates before `write_edl`; (b) accept the
     evidence as is and let STEP-04's A/B (D44) judge quality against the kit on several
-    fixtures. The gate's `critic.passed` check stays FAIL until a passing Sonnet run is committed.
+    fixtures. The gate's `critic.passed` check stays FAIL until a passing Sonnet run is committed;
+    (b) needs a gate change, which only you can make (D78). Both models cut about 18 s against
+    the 30 s brief, which supports (a).
+23. **Follow-ups from the final review (not done, code):** captions ship with a literal
+    backslash-n instead of line breaks (2 of 2 runs; the model double-escapes): normalise or refuse
+    it in `Toolbox._write_edl` and say "real line breaks" in edl-schema.md. Persist every
+    render's critic review, not only the shipped one. The untyped-schema test should look for
+    nodes without type/$ref/anyOf/enum/const, not only `{}`. `reel make` prints a raw traceback
+    for non-spend 4xx (bad key, billing). The first critic call failing ships nothing.
 Plan notes kept from the answered items: fonts (Poppins-Bold.ttf + OFL.txt) ship as package data
 under `reel_studio/editor/media/fonts/`, no host-font fallbacks. Sheets failing case:
 `test_sheet_is_1536x864_with_16_tiles` fails against a port of kit `build_sheets` (`prep.py:167-221`,
@@ -103,7 +111,7 @@ under `reel_studio/editor/media/fonts/`, no host-font fallbacks. Sheets failing 
 - 2026-10-11 `make eval FIX=creami MODEL=haiku`: cost $0.04224845, 11 calls (8 editor, 1 revise, 2
   critic), editor cache_read 16,746 to 74,011 from request 2 on; 2 renders, critic 23/35 (Haiku),
   shipped render 1. `eval/results/2026-10-11/creami-haiku.json`.
-- 2026-10-11 `make eval FIX=creami`: cost $0.3443939 (editor $0.2328, critic $0.1121); editor
+- 2026-10-11 `make eval FIX=creami`: cost $0.3443939 (editor $0.2323, critic $0.1121); editor
   cache_read 16,746, 20,751, 34,012, 46,061, revise 49,964; critic 23/35 twice, not passed;
   outputs `out/eval/2026-10-11/creami-sonnet-064755/{text,clean}.mp4`.
   `eval/results/2026-10-11/creami-sonnet.json`.
