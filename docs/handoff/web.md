@@ -5,7 +5,7 @@ Written by the web lane only. Newest entry on top.
 ## Status board
 Everything left in this lane needs Kevin's hands:
 1. **Stripe login (STEP-07 task 8):** `stripe login`, then `make stripe-listen` in this worktree. It writes `STRIPE_WEBHOOK_SECRET` to `.env` without printing it and forwards the two checkout events to `http://localhost:8080/api/stripe/webhook`.
-2. **Stripe dashboard values (test mode):** the €19 price and the 100%-off coupon (`make stripe-setup` is STEP-08's, or create them in the dashboard), then in `.env`: `STRIPE_SECRET_KEY` (sk_test), `STRIPE_PRICE_ID`, `STRIPE_COUPON_ID`, `PAYMENTS=stripe`. Then `uv run reelctl codes create --name <friend> --expires <YYYY-MM-DD>` makes a code.
+2. **Stripe dashboard values (test mode):** the €19 price (`make stripe-setup` is STEP-08's, or the dashboard) and a coupon that is 100% off, duration once, with no `max_redemptions` and no `redeem_by` (a code cannot outlast or out-redeem its coupon, and a coupon's own limit counts across all codes); test mode only, since live-mode keys are refused, then in `.env`: `STRIPE_SECRET_KEY` (sk_test), `STRIPE_PRICE_ID`, `STRIPE_COUPON_ID`, `PAYMENTS=stripe`. Then `uv run reelctl codes create --name <friend> --expires <YYYY-MM-DD>` makes a code.
 3. **Laptop checkout and the one paid Reel (STEP-07 task 9, ≤ $3):** `make up`, order with that code, confirm the €0 checkout, upload, get the Reel; then the handoff line `Stripe e2e order: <order id>, <cost>`.
 4. **iPhone upload (STEP-06 task 8):** from the phone on the same Wi-Fi, `http://<laptop-ip>:8080`, a 300 MB HEVC clip; then the line `iPhone upload: <result>`.
 5. **Analytics value in `.env`:** `GA4_MEASUREMENT_ID` must be empty on the laptop for the step06 gate (it checks analytics is off).
@@ -51,11 +51,10 @@ Everything left in this lane needs Kevin's hands:
 
 ## For CLOUD (the same image on Cloud Run, STEP-08)
 - `docker/api.Dockerfile` needs `--build-arg SITE_URL=<the service URL>` (F61); without it the build stops with "build arg SITE_URL is required". `.github/workflows/deploy.yml` builds it without one today.
-- `WebSettings` now requires `FIRESTORE_PROJECT`, `SMTP_HOST`, `SMTP_PORT`, `DATA_DIR`, `WEB_DIST`, `VOICE_AVAILABLE`; `infra/main/locals.tf` sets none of them. `reel_studio/api/main.py` is the laptop root (LocalStorage, SMTP); the cloud root (GCS, Resend, Stripe) is still to write, and `create()` refuses `PAYMENTS=stripe` until STEP-07's adapter.
+- `WebSettings` now requires `FIRESTORE_PROJECT`, `SMTP_HOST`, `SMTP_PORT`, `DATA_DIR`, `WEB_DIST`, `VOICE_AVAILABLE`; `infra/main/locals.tf` sets none of them. `reel_studio/api/main.py` is the laptop root (LocalStorage, SMTP); the cloud root (GCS, Resend, Stripe) is still to write, and `create()` builds the Stripe adapter with `PAYMENTS=stripe`.
 - Rate limits key on the client address; uvicorn trusts forwarded headers only from 127.0.0.1 unless `FORWARDED_ALLOW_IPS` is set (F316). Set it on the Cloud Run service, or every client shares one bucket.
 
 ## For MAIN
-- `.dockerignore` (REVIEW-FIXES MAIN item 2) is still missing. BuildKit sends only the paths a COPY names, so no secret reaches the daemon today, but host `__pycache__` rides into the image with `reel_studio/`.
 - `.env.example:21` says compose mounts the data at `/data`; it is `/app/data`, and compose sets `DATA_DIR`, `WEB_DIST`, `SMTP_HOST` and `SMTP_PORT` itself.
 
 ## Needs Kevin (decisions, not blocking)
@@ -76,6 +75,22 @@ Everything left in this lane needs Kevin's hands:
 ## Evidence lines (the gates read these)
 
 ## Log
+
+### 11 Oct 2026 (night) — STEP-07 review round 2: FAIL (1 critical), fixed
+
+- Critical: my merge of main duplicated `STRIPE_PRICE_ID`/`STRIPE_COUPON_ID` in `compose.yaml`, so
+  Compose refused the file and `make up` was dead; the compose test now fails on a repeated key
+  (PyYAML keeps the last). Fixed and run: `make up`, order to done, link email in Mailpit.
+- Warnings: one live session per name now holds under concurrency (a lock; threaded test); a second
+  `/uploads` for an order already in flight answers 503 at once (`InFlight`), so contention no
+  longer holds worker threads; the header guard is pinned for every member of `HEADER_ERRORS`
+  whatever the Python's parser; the Stripe client's version, timeout and retries, the code's
+  randomness and `expire_code`'s active filter are pinned; an unknown `amount_total` is refused;
+  re-picking a file in the page replaces its row (Playwright).
+- Suggestions taken: the webhook secret stays out of `StripeSetup`'s repr; live-mode keys are
+  refused (test mode only, D58); `reelctl connect()` names missing settings without values; the
+  Stripe knobs must be positive (tolerance 0 would turn off the replay check). Not taken: a cap on
+  the webhook body before the signature check (inherited, every JSON route is the same).
 
 ### 11 Oct 2026 (night) — STEP-07 review round 1 fixed, Stripe adapter, Stripe composition root
 
