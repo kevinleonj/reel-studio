@@ -32,7 +32,7 @@ Written by the web lane only. Newest entry on top.
 - Rate limits key on the client address; uvicorn trusts forwarded headers only from 127.0.0.1 unless `FORWARDED_ALLOW_IPS` is set (F316). Set it on the Cloud Run service, or every client shares one bucket.
 
 ## For MAIN
-- `.dockerignore` (REVIEW-FIXES MAIN item 2) is still missing: the api image copies named paths only, but the build context still sends the settings file to the Docker daemon.
+- `.dockerignore` (REVIEW-FIXES MAIN item 2) is still missing. BuildKit sends only the paths a COPY names, so no secret reaches the daemon today, but host `__pycache__` rides into the image with `reel_studio/`.
 - `.env.example:21` says compose mounts the data at `/data`; it is `/app/data`, and compose sets `DATA_DIR`, `WEB_DIST`, `SMTP_HOST` and `SMTP_PORT` itself.
 
 ## Needs Kevin
@@ -82,8 +82,8 @@ checkout → chunk 200 → start → queued → running (reading) → done; sign
 site answers 200 and Mailpit does not answer; neither container has the Anthropic, Gemini, Resend
 or Cloudflare names; both run as uid 501; the dispatcher logged "dispatcher started" and, on
 `docker compose stop`, "dispatcher stopped" and exited 0.
-Follow-ups: a dispatcher heartbeat healthcheck; `next_queued` logs one INFO line per 2 s poll. Not run: the step06 gate (needs task 8 and the
-`.env` lines) and `make prerelease` (web/ is unchanged since PR #4, where it passed).
+Review round 2: PASS (2 warnings). Follow-ups: tests for the remaining wiring (SMTP timeout, notifier, sweep interval, a link from one app refused by another); `check` should name model-level errors (PAYMENTS=stripe without keys prints no name) and mirror the Stripe refusal; the compose port test should assert which services have `ports:`; Stripe names only for the api; a dispatcher heartbeat healthcheck; SIGTERM is not honoured while a Firestore call blocks (emulator gone), so `docker stop` ends in SIGKILL; files of orders forgotten by `make down` stay in `./data/` (delete by hand); `next_queued` logs one INFO line per 2 s poll. Not run: the step06 gate (needs task 8 and
+analytics off on the laptop) and `make prerelease` (web/ is unchanged since PR #4, where it passed).
 For MAIN: `.dockerignore` (REVIEW-FIXES MAIN item 2) still missing; the api image copies named paths
 only, but the build context still carries `.env` to the Docker daemon.
 
