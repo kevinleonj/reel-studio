@@ -1,6 +1,7 @@
 """The laptop's chunk endpoint speaks Cloud Storage's resumable protocol (FACTS F307), so the web
 app's upload code works unchanged against both. Same cases as tests/e2e/upload-*.spec.ts."""
 
+import os
 from pathlib import Path
 
 import pytest
@@ -181,6 +182,7 @@ def test_two_orders_with_the_same_file_name_never_cross(
     assert out.read_bytes() == b"BBBB"
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="chmod does not stop root, so the delete succeeds")
 def test_a_delete_that_cannot_remove_a_folder_raises(storage: LocalStorage, tmp_path: Path) -> None:
     session = session_of(storage, 1)
     storage.put_chunk(session, "bytes 0-0/1", b"x")
