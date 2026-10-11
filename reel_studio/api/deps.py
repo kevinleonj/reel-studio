@@ -37,7 +37,7 @@ class ApiDeps:
 class Limiters:
     checkout: SlidingWindow
     order_calls: SlidingWindow
-    uploads_in_flight: InFlight  # one /uploads per order at a time
+    order_writes: InFlight  # one write per order at a time (routes_orders.exclusive)
 
 
 def deps_of(request: Request) -> ApiDeps:

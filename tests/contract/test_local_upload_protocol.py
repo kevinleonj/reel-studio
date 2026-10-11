@@ -2,6 +2,7 @@
 app's upload code works unchanged against both. Same cases as tests/e2e/upload-*.spec.ts."""
 
 import os
+import shutil
 import threading
 from pathlib import Path
 
@@ -12,6 +13,8 @@ from tests.contract.storage_adapters import NOW
 from tests.fakes.clock import FrozenClock
 
 ASKERS = 8
+LOCK_WAIT_S = 0.3  # long enough for an unlocked write to finish
+JOIN_S = 5.0
 
 ORDER = "a" * 32
 SECRET = b"k" * 32
@@ -129,7 +132,8 @@ def test_deleting_the_order_removes_unfinished_bytes(storage: LocalStorage, tmp_
     storage.put_chunk(session, "bytes 0-3/10", b"0123")
     storage.delete_order(ORDER)
     assert not storage.partial_of(session).exists()
-    assert list((tmp_path / "data" / "sessions").iterdir()) == []
+    sessions = tmp_path / "data" / "sessions"
+    assert [p for p in sessions.rglob("*") if p.is_file()] == []  # records, bytes and the index
 
 
 def test_a_broken_session_record_of_another_order_does_not_block_a_delete(
@@ -234,3 +238,209 @@ def test_concurrent_asks_for_one_name_leave_one_live_session(
         thread.join()
     live = list((tmp_path / "data" / "sessions").glob("*.json"))
     assert len(live) == 1
+
+
+def test_a_chunk_in_flight_cannot_revive_a_closed_session(
+    storage: LocalStorage, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review round 3: a re-ask landing between a chunk's load and its record write."""
+    first = session_of(storage, 6)
+    real_load = storage._load
+    asked: list[str] = []
+
+    def load_then_reask(session: str) -> dict[str, object]:
+        record = real_load(session)
+        if session == first and not asked:
+            asked.append(session_of(storage, 6))  # the page asks again for the same name
+        return record
+
+    monkeypatch.setattr(storage, "_load", load_then_reask)
+    with pytest.raises(SessionNotFound):
+        storage.put_chunk(first, "bytes 0-5/6", b"AAAAAA")
+    live = sorted(p.stem for p in (tmp_path / "data" / "sessions").glob("*.json"))
+    assert live == asked
+    assert not storage.partial_of(first).exists()
+    assert not (tmp_path / "data" / "objects" / "in" / ORDER / "a.mp4").exists()
+
+
+def test_asking_for_a_session_does_not_read_every_other_record(
+    storage: LocalStorage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review round 3: a scan of all records under the lock grew with every order ever made."""
+
+    def no_scan(*_: object, **__: object) -> object:
+        raise AssertionError("scanned the session records")
+
+    monkeypatch.setattr(Path, "glob", no_scan)
+    first = session_of(storage, 4)
+    second = session_of(storage, 4)
+    with pytest.raises(SessionNotFound):
+        storage.put_chunk(first, "bytes 0-3/4", b"0123")
+    assert storage.put_chunk(second, "bytes 0-3/4", b"0123") == ChunkAnswer(200, None)
+
+
+def test_a_reask_between_the_bytes_and_the_record_is_refused_and_cleaned(
+    storage: LocalStorage, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review round 4 (a): the guard at commit time, not only the check before the write."""
+    first = session_of(storage, 6)
+    real_commit = storage._commit
+    newer: list[str] = []
+
+    def reask_then_commit(session: str, record: dict[str, object], *rest: object) -> None:
+        if session == first and not newer:
+            newer.append(session_of(storage, 6))
+        real_commit(session, record, *rest)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(storage, "_commit", reask_then_commit)
+    with pytest.raises(SessionNotFound):
+        storage.put_chunk(first, "bytes 0-2/6", b"AAA")
+    live = sorted(p.stem for p in (tmp_path / "data" / "sessions").glob("*.json"))
+    assert live == newer
+    assert not storage.partial_of(first).exists()  # the refused write cleans its own bytes
+
+
+def test_a_reask_after_the_first_check_leaves_no_bytes_behind(
+    storage: LocalStorage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review round 4 (b): the bytes written after the check are removed with the refusal."""
+    first = session_of(storage, 6)
+    real_is_current = storage._is_current
+    calls: list[str] = []
+
+    def reask_after_check(session: str, key: str) -> bool:
+        answer = real_is_current(session, key)
+        if session == first and not calls and not storage._sessions_lock.locked():
+            calls.append(session_of(storage, 6))
+        return answer
+
+    monkeypatch.setattr(storage, "_is_current", reask_after_check)
+    with pytest.raises(SessionNotFound):
+        storage.put_chunk(first, "bytes 0-2/6", b"AAA")
+    assert not storage.partial_of(first).exists()
+
+
+def test_a_session_without_an_index_entry_is_not_live(
+    storage: LocalStorage, tmp_path: Path
+) -> None:
+    """Review round 4 (c): a record from before the index (or one whose index is gone) is
+    refused, so it can never be filled alongside the name's live session."""
+    session = session_of(storage, 4)
+    for index in (tmp_path / "data" / "sessions" / "current").rglob("*"):
+        if index.is_file():
+            index.unlink()
+    with pytest.raises(SessionNotFound):
+        storage.put_chunk(session, "bytes */4", b"")
+
+
+def test_a_chunk_record_waits_for_the_sessions_lock(storage: LocalStorage) -> None:
+    """Review round 4 (d): the record write and the final move happen under the lock."""
+    session = session_of(storage, 4)
+    finished = threading.Event()
+
+    def put() -> None:
+        storage.put_chunk(session, "bytes 0-3/4", b"0123")
+        finished.set()
+
+    with storage._sessions_lock:
+        worker = threading.Thread(target=put)
+        worker.start()
+        assert not finished.wait(LOCK_WAIT_S)
+    worker.join(JOIN_S)
+    assert finished.is_set()
+
+
+@pytest.mark.parametrize("order_id", ["..", "../..", "../sessions", "", "."])
+def test_an_order_id_that_is_not_one_path_part_deletes_nothing(
+    storage: LocalStorage, tmp_path: Path, order_id: str
+) -> None:
+    """Review round 5: the index removal ran before any check of the id."""
+    session = session_of(storage, 4)
+    storage.put_chunk(session, "bytes 0-1/4", b"01")
+    before = sorted(str(p) for p in (tmp_path / "data").rglob("*"))
+    with pytest.raises(ValueError, match="order id"):
+        storage.delete_order(order_id)
+    assert sorted(str(p) for p in (tmp_path / "data").rglob("*")) == before
+
+
+HOSTILE_IDS = ["..", "../..", "../sessions", "a/b", "a/", f"x/../{ORDER}", f"x/../../{ORDER}"]
+
+
+@pytest.mark.parametrize("order_id", HOSTILE_IDS)
+def test_an_upload_session_needs_a_one_part_order_id(
+    storage: LocalStorage, tmp_path: Path, order_id: str
+) -> None:
+    """Review round 6: the argument itself is checked, not a part of the key made from it."""
+    before = sorted(str(p) for p in (tmp_path / "data").rglob("*"))
+    with pytest.raises(ValueError, match="order id"):
+        storage.create_upload_session(order_id, {"name": "a.mp4", "size": 1, "type": "video/mp4"})
+    assert sorted(str(p) for p in (tmp_path / "data").rglob("*")) == before
+
+
+@pytest.mark.parametrize("order_id", HOSTILE_IDS)
+def test_listing_needs_a_one_part_order_id(storage: LocalStorage, order_id: str) -> None:
+    session = session_of(storage, 2)
+    storage.put_chunk(session, "bytes 0-1/2", b"01")  # ORDER now has a file to leak
+    with pytest.raises(ValueError, match="order id"):
+        storage.list_inputs(order_id)
+
+
+def test_a_chunk_landing_during_a_delete_is_refused(
+    storage: LocalStorage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review round 6: the index goes first, so a chunk arriving while the folders are being
+    removed is refused instead of writing into them."""
+    session = session_of(storage, 4)
+    real_path = storage._path
+    landed: list[BaseException] = []
+
+    def path_then_chunk(key: str) -> Path:
+        if key.startswith("in/") and not landed:
+            try:
+                storage.put_chunk(session, "bytes 0-3/4", b"0123")
+            except SessionNotFound as refused:
+                landed.append(refused)
+            else:
+                landed.append(AssertionError("the chunk was accepted mid-delete"))
+        return real_path(key)
+
+    monkeypatch.setattr(storage, "_path", path_then_chunk)
+    storage.delete_order(ORDER)
+    assert len(landed) == 1
+    assert isinstance(landed[0], SessionNotFound)
+
+
+def test_deleting_waits_for_the_sessions_lock(storage: LocalStorage) -> None:
+    """Review round 5 (ii): the index goes under the lock, so no commit sneaks in between."""
+    session_of(storage, 4)
+    done = threading.Event()
+
+    def delete() -> None:
+        storage.delete_order(ORDER)
+        done.set()
+
+    with storage._sessions_lock:
+        worker = threading.Thread(target=delete)
+        worker.start()
+        assert not done.wait(LOCK_WAIT_S)
+    worker.join(JOIN_S)
+    assert done.is_set()
+
+
+def test_a_failure_removing_the_index_is_not_swallowed(
+    storage: LocalStorage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review round 5 (iii): a caller must never report files as deleted that are still there."""
+    session_of(storage, 4)
+    real_rmtree = shutil.rmtree
+
+    def refuse_index(path: Path, *args: object, **kwargs: object) -> None:
+        if "current" in Path(path).parts:
+            if kwargs.get("ignore_errors"):
+                return
+            raise PermissionError(str(path))
+        real_rmtree(path, *args, **kwargs)  # type: ignore[call-overload]
+
+    monkeypatch.setattr(shutil, "rmtree", refuse_index)
+    with pytest.raises(PermissionError):
+        storage.delete_order(ORDER)

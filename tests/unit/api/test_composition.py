@@ -270,3 +270,20 @@ def test_the_stripe_knobs_must_be_positive() -> None:
     stripe_times = load().limits.stripe
     with pytest.raises(ValidationError):
         type(stripe_times)(timeout_s=20, max_network_retries=2, webhook_tolerance_s=0)
+
+
+def test_check_names_a_missing_stripe_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """The rule that needs all four Stripe settings has no field of its own (review round 3)."""
+    for name, value in COMPLETE.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("WEB_DIST", str(tmp_path))
+    monkeypatch.setenv("PAYMENTS", "stripe")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "stand-in-value")
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "stand-in-value")
+    monkeypatch.setenv("STRIPE_PRICE_ID", "price_test")
+    monkeypatch.delenv("STRIPE_COUPON_ID", raising=False)
+    out = io.StringIO()
+    assert main.check(out) == 2
+    assert "STRIPE_COUPON_ID" in out.getvalue()
+    assert "stand-in-value" not in out.getvalue()

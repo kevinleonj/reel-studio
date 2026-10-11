@@ -32,7 +32,7 @@ def create_app(deps: ApiDeps) -> FastAPI:
     app.state.limiters = Limiters(
         checkout=SlidingWindow(quotas.checkout_per_minute_per_address, deps.clock),
         order_calls=SlidingWindow(quotas.order_calls_per_minute_per_address, deps.clock),
-        uploads_in_flight=InFlight(),
+        order_writes=InFlight(),
     )
     app.add_exception_handler(ApiError, on_api_error)
     app.add_exception_handler(Refused, on_refused)
