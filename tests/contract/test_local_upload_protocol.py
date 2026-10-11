@@ -129,7 +129,8 @@ def test_deleting_the_order_removes_unfinished_bytes(storage: LocalStorage, tmp_
     storage.put_chunk(session, "bytes 0-3/10", b"0123")
     storage.delete_order(ORDER)
     assert not storage.partial_of(session).exists()
-    assert list((tmp_path / "data" / "sessions").iterdir()) == []
+    sessions = tmp_path / "data" / "sessions"
+    assert [p for p in sessions.rglob("*") if p.is_file()] == []  # records, bytes and the index
 
 
 def test_a_broken_session_record_of_another_order_does_not_block_a_delete(
@@ -234,3 +235,42 @@ def test_concurrent_asks_for_one_name_leave_one_live_session(
         thread.join()
     live = list((tmp_path / "data" / "sessions").glob("*.json"))
     assert len(live) == 1
+
+
+def test_a_chunk_in_flight_cannot_revive_a_closed_session(
+    storage: LocalStorage, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review round 3: a re-ask landing between a chunk's load and its record write."""
+    first = session_of(storage, 6)
+    real_load = storage._load
+    asked: list[str] = []
+
+    def load_then_reask(session: str) -> dict[str, object]:
+        record = real_load(session)
+        if session == first and not asked:
+            asked.append(session_of(storage, 6))  # the page asks again for the same name
+        return record
+
+    monkeypatch.setattr(storage, "_load", load_then_reask)
+    with pytest.raises(SessionNotFound):
+        storage.put_chunk(first, "bytes 0-5/6", b"AAAAAA")
+    live = sorted(p.stem for p in (tmp_path / "data" / "sessions").glob("*.json"))
+    assert live == asked
+    assert not storage.partial_of(first).exists()
+    assert not (tmp_path / "data" / "objects" / "in" / ORDER / "a.mp4").exists()
+
+
+def test_asking_for_a_session_does_not_read_every_other_record(
+    storage: LocalStorage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review round 3: a scan of all records under the lock grew with every order ever made."""
+
+    def no_scan(*_: object, **__: object) -> object:
+        raise AssertionError("scanned the session records")
+
+    monkeypatch.setattr(Path, "glob", no_scan)
+    first = session_of(storage, 4)
+    second = session_of(storage, 4)
+    with pytest.raises(SessionNotFound):
+        storage.put_chunk(first, "bytes 0-3/4", b"0123")
+    assert storage.put_chunk(second, "bytes 0-3/4", b"0123") == ChunkAnswer(200, None)
