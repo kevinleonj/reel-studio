@@ -40,7 +40,12 @@ OUT = Path("out") / "ab"
 SIDES = ("new", "old")
 MEDIA_EXT = {e.lower() for e in (*constants.VIDEO_EXT, *constants.IMAGE_EXT)}
 VIDEO_EXT = {e.lower() for e in constants.VIDEO_EXT}
-STOPS = (SpendLimitReached, ProviderRejected, KeyboardInterrupt)  # recorded, then raised
+STOPS = (
+    SpendLimitReached,
+    ProviderRejected,
+    ab_kit.KitRefused,
+    KeyboardInterrupt,
+)  # recorded, then raised
 
 type Row = dict[str, Any]  # Any: one fixture of ab-runs.json
 
@@ -197,7 +202,7 @@ class Harness:
             return call()
         except BaseException as exc:  # noqa: BLE001 - recorded with its cost; run() re-raises stops
             paid = exc.__cause__ if isinstance(exc, _ArmFailed) else exc
-            known = exc.cost if isinstance(exc, _ArmFailed) else Decimal(0)
+            known = exc.cost if isinstance(exc, (_ArmFailed, ab_kit.KitRefused)) else Decimal(0)
             cost = known + _cost_on_disk(attempt)  # only this attempt's calls
             code = paid.code if isinstance(paid, ReelError) else type(paid).__name__
             log.error(
@@ -257,6 +262,8 @@ class Harness:
                     break
                 earlier = Decimal(str(row[side]["cost_usd"])) if side in row else Decimal(0)
                 attempt = base / f"{side}-{self.ports.clock.now():%H%M%S}"
+                row[side] = _arm(earlier + caps[side], 0.0, "started")  # if killed, counted at cap
+                self._write(day, stopped)
                 arm_call = (
                     partial(self._new, files, base, attempt)
                     if side == "new"

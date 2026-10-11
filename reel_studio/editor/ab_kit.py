@@ -15,6 +15,7 @@ import subprocess
 import time
 from dataclasses import dataclass
 from decimal import Decimal
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -29,6 +30,20 @@ JOB_LINE = re.compile(r"^\[reel\] Job (?P<job>\S+):", re.M)
 DRY_RUN_OK = "Setup: OK"
 RESULT_TYPE = "ResultMessage"
 SUCCESS = "success"
+REFUSED = {
+    HTTPStatus.BAD_REQUEST,
+    HTTPStatus.UNAUTHORIZED,
+    HTTPStatus.PAYMENT_REQUIRED,
+    HTTPStatus.FORBIDDEN,
+}  # api_error_status of a refused request (bad key, billing)
+
+
+class KitRefused(RuntimeError):
+    """The kit's own API key or billing was refused: a stop, not one failed fixture."""
+
+    def __init__(self, message: str, cost: Decimal) -> None:
+        super().__init__(message)
+        self.cost = cost
 
 
 @dataclass(frozen=True)
@@ -57,18 +72,13 @@ def _result(log_path: Path) -> dict[str, Any] | None:  # Any: one Agent SDK mess
     if not log_path.is_file():
         return None
     for line in reversed(log_path.read_text(encoding="utf-8").splitlines()):
-        record: dict[str, Any] = json.loads(line)  # Any: as above
+        try:
+            record: dict[str, Any] = json.loads(line)  # Any: as above
+        except json.JSONDecodeError:
+            continue  # a line cut off when the run was killed
         if record.get("type") == RESULT_TYPE:
             return record
     return None
-
-
-def kit_cost(log_path: Path) -> Decimal:
-    """total_cost_usd of the run's last ResultMessage (kit runs/<job>.jsonl)."""
-    result = _result(log_path)
-    if result is None or result.get("total_cost_usd") is None:
-        raise ValueError(f"no result message in {log_path}")
-    return Decimal(str(result["total_cost_usd"]))
 
 
 @dataclass(frozen=True)
@@ -106,6 +116,9 @@ class OldKit:
                 os.killpg(proc.pid, signal.SIGKILL)
                 out, _ = proc.communicate()
                 return None, out, time.monotonic() - started
+            except BaseException:  # Ctrl-C or a stop: the kit must not keep spending
+                os.killpg(proc.pid, signal.SIGKILL)
+                raise
         return proc.returncode, out, time.monotonic() - started
 
     def check(self, files: list[Path]) -> str | None:
@@ -135,7 +148,11 @@ class OldKit:
             )
         job = found["job"]
         result = _result(self.root / "runs" / f"{job}.jsonl")
-        cost = cap if result is None else Decimal(str(result.get("total_cost_usd", cap)))
+        paid = result.get("total_cost_usd") if result is not None else None
+        cost = Decimal(str(paid)) if paid is not None else cap  # unknown: count the cap
+        status = result.get("api_error_status") if result is not None else None
+        if status in REFUSED:  # the kit's key or billing: every fixture would fail the same way
+            raise KitRefused(f"kit API error {status}: {str(result)[: self.tail_chars]}", cost)
         out_dir = self.root / "output" / job
         text, clean = out_dir / f"{job}_text.mp4", out_dir / f"{job}_clean.mp4"
         timeline = self.root / "work" / job / "review" / f"{job}.timeline.json"

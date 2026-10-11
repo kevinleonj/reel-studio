@@ -106,6 +106,10 @@ result = {{"type": "ResultMessage", "subtype": "success", "total_cost_usd": 0.95
           "result": "done"}}
 if "{mode}" == "budget":
     result.update(subtype="error_max_budget_usd", result="")
+if "{mode}" == "refused":
+    result.update(is_error=True, api_error_status=400, total_cost_usd=0, result="API Error: 400")
+if "{mode}" == "cut":
+    result.update(total_cost_usd=None)
 lines = [{{"type": "SystemMessage"}}] + ([] if "{mode}" == "killed" else [result])
 (root / "runs" / f"{{job}}.jsonl").write_text("\\n".join(json.dumps(x) for x in lines))
 if "{mode}" == "ok":
@@ -381,9 +385,16 @@ def test_the_report_has_every_fixture_the_verdict_and_the_budget(tmp_path: Path)
     assert "budget" in report.lower()
 
 
-def test_kit_cost_comes_from_the_result_message(tmp_path: Path) -> None:
-    log = tmp_path / "run.jsonl"
-    lines = [{"type": "SystemMessage"}, {"type": "ResultMessage", "total_cost_usd": 0.9523169}]
-    log.write_text("\n".join(json.dumps(x) for x in lines) + "\n", encoding="utf-8")
+def test_a_refused_kit_key_stops_the_run_with_its_cost_recorded(tmp_path: Path) -> None:
+    """The kit's 7 Oct log: a 400 'key not scoped to a workspace' at $0; five fixtures would
+    each pay for a new arm before failing the same way."""
+    run = _stub_kit(tmp_path / "kit", "refused")
 
-    assert ab_kit.kit_cost(log) == Decimal("0.9523169")
+    with pytest.raises(ab_kit.KitRefused, match="400"):
+        _kit(run).run("abx", [tmp_path], Decimal("2.5"), "")
+
+
+def test_a_cut_off_log_counts_the_cap(tmp_path: Path) -> None:
+    run = _kit(_stub_kit(tmp_path / "kit", "cut")).run("abx", [tmp_path], Decimal("2.5"), "")
+
+    assert run.cost_usd == Decimal("2.5") and run.error is not None
