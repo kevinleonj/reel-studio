@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 from reel_studio.core.config import Limits
 from reel_studio.core.errors import MediaError
 from reel_studio.core.media_config import Media
+from reel_studio.editor import speech
 from reel_studio.editor.media import edl, grade, grade_preview, strip
 from reel_studio.editor.media.edl_models import Edl
 from reel_studio.editor.media.sheets import LEGEND
@@ -300,7 +301,7 @@ class Toolbox:
         clip = self._clip(args.clip)
         if isinstance(clip, Result):
             return clip
-        path = self.ctx.work / "transcript" / f"{clip.id}.txt"
+        path = self.ctx.work / speech.FOLDER / f"{clip.id}{speech.TEXT}"
         if not path.exists():
             return _text(f"no transcript for {clip.id}: it has no speech", True)
         return _text(path.read_text(encoding="utf-8"))
@@ -308,10 +309,14 @@ class Toolbox:
     def _write_edl(self, raw: Any) -> Result:  # Any: tool input JSON
         raw = _real_line_breaks(raw)
         report = edl.validate(raw, self.ctx.shots, self.ctx.media, self.ctx.order_style)
-        if report.errors or report.edl is None:
+        errors = list(report.errors)
+        if report.edl is not None and self.ctx.voice:  # D41: cuts between words
+            spoken = speech.load_words(self.ctx.work / speech.FOLDER)
+            errors += speech.cut_problems(report.edl, spoken, self.ctx.limits.speech)
+        if errors or report.edl is None:
             return _text(
                 "edit list rejected; fix every problem and call write_edl again:\n- "
-                + "\n- ".join(report.errors),
+                + "\n- ".join(errors),
                 True,
             )
         self.accepted, self.warnings = report.edl, report.warnings

@@ -23,6 +23,7 @@ from reel_studio.editor.media.edl_models import Edl
 WORD_TYPE = "word_info"
 SECONDS = "s"  # the offset suffix
 GAP = "‖"  # marks a gap inside the packed transcript
+FOLDER = "transcript"  # under the order's work folder
 WORDS_JSON = ".words.json"
 TEXT = ".txt"
 TOKEN = re.compile(r"[\w']+")
