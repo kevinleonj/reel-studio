@@ -1135,6 +1135,7 @@ dev = [
 editor = [
     { name = "anthropic" },
     { name = "google-genai" },
+    { name = "httpx2" },
     { name = "numpy" },
     { name = "opencv-python-headless" },
     { name = "pillow" },
@@ -1152,6 +1153,7 @@ requires-dist = [
     { name = "google-genai", marker = "extra == 'editor'", specifier = ">=2.29.0" },
     { name = "grpcio", marker = "extra == 'dev'", specifier = ">=1.84.0" },
     { name = "httpx", marker = "extra == 'api'", specifier = ">=0.28.1" },
+    { name = "httpx2", marker = "extra == 'editor'", specifier = ">=2.13.1" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=2.4.0" },
     { name = "numpy", marker = "extra == 'editor'", specifier = ">=2.5.3" },
