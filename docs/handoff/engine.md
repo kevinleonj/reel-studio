@@ -3,15 +3,19 @@
 Written by the engine lane only. Newest entry on top.
 
 ## Status board
-- READY TO MERGE: PR #5 (once its CI is green on this push; the step03 gate fails only on the
-  model-judged critic score, standing order 3)
-- Done: STEP-03 tasks 1-9; Needs Kevin 22(a) and 23 done; three Sonnet improvement rounds run
-  (24, 21, 23 of 35; gate 26) and recorded below for STEP-04
-- Partly: `GATE step03`: 12 of 13 checks; `critic.passed` false
-- Blocked: —
-- Next: STEP-04's A/B judges quality against the old kit on several fixtures (D44); the critic
-  record below is its starting point
-- Paid: branch total $1.4731 of $5 (8 result files)
+- Done: STEP-03 merged (PR #5). STEP-04 built and paid ($8.58 of $15) on PR #10 (see that
+  branch's handoff). STEP-05 on `step-05-speech`: words from a transcription, the packed
+  transcript, speech-cut checks in `write_edl` (D41), the QA word diff function, and the five
+  speech prompts (styles story_trim, talking; structures story, talk, tutorial)
+- Needs Kevin's hands:
+  1. PR #10 (STEP-04): run `make ab-pick` (blind picks); the step04 gate reads ab.json.
+  2. STEP-05 task 6: film the speech fixtures (long_take, talking_es1, talking_es2, tutorial).
+  3. For MAIN: add `google-genai` to the doc ledger (entry below); the Gemini adapter cannot be
+     written until then (the doc gate blocks the import, and the ledger is main's file).
+- Not done, engine (after 3): the Gemini transcriber adapter; wiring transcription into `make`
+  (audio per clip, the §8 audio cost guard, transcripts in the brief); the QA speech check on the
+  render; renderer padding and 30 ms fades at speech cuts (F59); `eval/SPEECH-RESULT.md`
+- Paid on STEP-05: $0
 - Ledger: anthropic `messages.stream` and httpx2 `MockTransport` uses added to `eval/doc-ledger.pending.json`
 
 ## Decided by standing orders
