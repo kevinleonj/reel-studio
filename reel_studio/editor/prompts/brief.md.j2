@@ -16,8 +16,9 @@
 {% endfor %}
 
 Brightness is the clip's mean luma, 0-255. QA flags a cut whose brightness changes by
-more than {{ luma_jump }}. Zooming into a bright area raises it further (about +30 measured
-on this kind of footage), so keep zoomed shots away from darker neighbours.
+more than {{ luma_jump }}. Zooming into a bright area raises it further, usually by 10-15 and
+up to about 30, so keep zoomed shots away from darker neighbours.
+{# 20 zoomed segments of the three creami runs, 11 Oct 2026: median +12.8, max +32 #}
 
 Every text stays on screen at least {{ read_min_s }} s and one second per {{ read_cps }}
 characters, whichever is longer; QA flags shorter text as unreadable.

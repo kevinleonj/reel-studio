@@ -194,3 +194,15 @@ def test_the_brief_gives_the_qa_reading_time_for_text() -> None:
 
     assert f"at least {MEDIA.qa.read_min_s:g} s" in text
     assert f"one second per {MEDIA.qa.read_chars_per_s:g}" in text
+
+
+def test_the_blur_rule_covers_the_key_shots_not_every_shot() -> None:
+    words = " ".join(prompt.system_prompt("montage", CFG).split())
+
+    assert "any shot you doubt" in words and "check every shot" not in words
+
+
+def test_the_crop_effect_is_given_as_typical_and_most() -> None:
+    text = prompt.brief(_order(), CFG, MEDIA, SHOTS, transcripts={})
+
+    assert "usually by 10-15 and\nup to about 30" in text

@@ -296,3 +296,10 @@ def test_a_caption_with_escaped_line_breaks_gets_real_ones(box: tools.Toolbox) -
 
     assert not result.is_error and box.accepted is not None
     assert box.accepted.caption == "Pink swirl.\n\nDetails in the comments."
+
+
+def test_the_tool_descriptions_say_the_budget_is_per_order(box: tools.Toolbox) -> None:
+    described = {d["name"]: d["description"] for d in box.definitions()}
+
+    assert "per order" in described["read_strip"] and "per edit" not in described["read_strip"]
+    assert "per order" in described["read_grade_preview"]

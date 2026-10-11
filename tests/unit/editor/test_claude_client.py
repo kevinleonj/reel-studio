@@ -413,3 +413,22 @@ def test_a_refusal_without_an_anthropic_body_keeps_the_sdks_text() -> None:
         claude.create(REQUEST)
 
     assert "http_403 unknown" in str(raised.value) and "blocked by the proxy" in str(raised.value)
+
+
+def test_an_empty_provider_message_falls_back_to_the_sdks_text() -> None:
+    body = {"type": "error", "error": {"type": "invalid_request_error", "message": ""}}
+    response = httpx2.Response(400, json=body, request=httpx2.Request("POST", URL))
+    sdk_text = "Error code: 400 - " + repr(body)  # how the real SDK words it
+    claude, _, _ = make([anthropic.APIStatusError(sdk_text, response=response, body=body)])
+
+    with pytest.raises(ProviderRejected) as raised:
+        claude.create(REQUEST)
+
+    assert str(raised.value).endswith(sdk_text)
+
+
+def test_the_message_length_must_be_positive() -> None:
+    fields = config.load_claude().model_dump()
+
+    with pytest.raises(ValueError, match="greater than 0"):
+        config.ClaudeClient.model_validate({**fields, "error_message_max_chars": 0})
