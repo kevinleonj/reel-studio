@@ -11,7 +11,7 @@ Written by the engine lane only. Newest entry on top.
 - Blocked: —
 - Next: STEP-04's A/B judges quality against the old kit on several fixtures (D44); the critic
   record below is its starting point
-- Paid: branch total $1.4731 of $5 (9 result files)
+- Paid: branch total $1.4731 of $5 (8 result files)
 - Ledger: anthropic `messages.stream` and httpx2 `MockTransport` uses added to `eval/doc-ledger.pending.json`
 
 ## Decided by standing orders
@@ -20,10 +20,20 @@ Written by the engine lane only. Newest entry on top.
   one line. Why: the Tier 0 user saw a traceback. Undo: revert e109405.
 - 11 Oct: round 3 removed the round-2 cut rules (variety, brightness order, last shot) after round 2
   scored 21 against round 1's 24 with a 14 s cut. Undo: revert 369f1a9 (restores them).
+- 11 Oct: the soft-window column is removed (empty on real footage; its floor did not match
+  QA's) and the blur rule tells the editor to check sharpness with read_strip. Undo: revert the
+  review-fix commit that removes it.
+- 11 Oct: a refused request keeps up to `anthropic.toml error_message_max_chars` = 300 characters
+  of the provider's message (enough for the workspace-key error, 207 characters). Undo: lower it.
+- Not done, recorded: a critic call refused by the provider (ProviderRejected) after a good
+  render still aborts the order (review S1); a caption escaped twice (backslash backslash n) keeps
+  one backslash (S2); the untyped-schema test walks property nodes only (S3).
 - 11 Oct: an unjudged first render ships with weakness "not judged: <code>" and `critic.total`
   null in result.json (0 in the eval result, where the gate wants a number). Undo: revert 991fe50.
 
 ## For MAIN
+- `docs/EDITOR.md` §2 lists the brief's inventory: add brightness (mean luma 0-255 with QA's
+  luma_jump), every format's length range with the order target, and the text reading time.
 - `web/src/copy/en.json` `failed.messages`: add `"provider_rejected": "Something broke while
   planning. Kevin has been notified."` (a refused request is our key or billing, not the user's
   footage), and add `ErrorCode.PROVIDER_REJECTED` to `FAILED_CODES` in
@@ -117,15 +127,22 @@ Scores never went above 3 on retention, peak, craft and share; hook was 4 except
 issues every run repeats:
 - Repeated finished-product shots in the middle (same pink pint or scoop, similar angles, 6-8 s).
   The fixture has 7 videos and 7 photos, mostly of the finished tub.
-- Brightness jumps of 23-56 dL at cuts between the macro, overhead and side shots: the footage
-  comes from different light; the grade's `match` does not close the gap.
+- Brightness jumps of 23-56 at cuts (0..255). The review measured the cause on the saved
+  proxies: raw clips differ by at most 28 and the grade moves segments only -5..+8; the big jumps
+  come from the editor's own zoomed crops of stills (zoom 1.3-1.5 into a bright area). A
+  `write_edl` warning computed on the cropped proxy would give the editor the number before a
+  render.
 - No blending step: raw fruit to finished tub in one cut (the fixture has no blending clip).
 - The ending repeats the hook (spoon in tub) instead of a bigger payoff.
 - The hook cuts to the soft bag shot with a hand over the print; text over packaging.
-What helped: the length targets in run 1 (17.9 s to 19.7 s). Run 3 picked format `other`
-(15-50 s) for a 15.2 s cut, which silences the length warning without meeting the 30 s order: a
-gap in the length check worth closing. What did not help: hard rules for variety and brightness
-(run 2). Open questions for the A/B:
+Rounds 2 and 3 sent the editor a brightness column 100 times too large under a "0-100"
+label (review C1, fixed after the runs: L20), and each score comes from one run, so 24, 21 and
+23 cannot be told from the critic's own noise; the review suggests re-judging one saved render
+twice (about $0.06 each) before crediting a rule. The length check only compares with the
+format's range: rounds 2 and 3 chose `other` (15-50 s) for 14.1 s and 15.2 s cuts against a 30 s
+order; the brief no longer says "choose the format first", and a warning on distance from the
+order target is open. The soft-window column was empty on the real footage (its floor was not
+QA's), so it is gone. Open questions for the A/B:
 whether the kit's editor scores higher on the same footage, whether the critic is too strict for
 thin footage (every run is footage-limited by its own account), and whether the brightness gap is
 a grade problem (`grade.match`) rather than an edit problem.

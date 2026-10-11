@@ -260,7 +260,7 @@ class Toolbox:
             )
         if self.strips >= limits.max_strips:
             return _text(
-                f"all {limits.max_strips} strips of this edit are used; decide from what you have",
+                f"all {limits.max_strips} strips of this order are used; decide from what you have",
                 True,
             )
         self.strips += 1
@@ -286,7 +286,7 @@ class Toolbox:
                 frames.append((cid, float(at)))
         if self.previews >= most:
             return _text(
-                f"all {most} grade previews of this edit are used; pick a look from what you saw",
+                f"all {most} grade previews of this order are used; pick a look from what you saw",
                 True,
             )
         self.previews += 1

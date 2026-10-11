@@ -180,7 +180,7 @@ def test_the_13th_strip_is_refused(box: tools.Toolbox) -> None:
 
     result = box.run("read_strip", {"clip": "c01", "start_s": 0, "end_s": 1})
 
-    assert result.is_error and "12" in result.text()
+    assert result.is_error and "12" in result.text() and "of this order" in result.text()
 
 
 def test_the_third_grade_preview_is_refused(box: tools.Toolbox) -> None:
