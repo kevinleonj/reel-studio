@@ -9,7 +9,6 @@ import smtplib
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
-from email.errors import HeaderParseError
 from email.message import EmailMessage
 
 from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescape
@@ -17,6 +16,7 @@ from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescap
 from reel_studio.core.constants import EMAIL_MAX_BYTES, MS_PER_S
 from reel_studio.core.errors import DeliveryFailed
 from reel_studio.core.logging import get_logger
+from reel_studio.core.mail_address import HEADER_ERRORS
 
 log = get_logger(__name__)
 
@@ -53,7 +53,7 @@ def render(template: str, data: Mapping[str, object]) -> Rendered:
 
 
 def build_message(sender: str, to: str, mail: Rendered) -> EmailMessage:
-    """Raises ValueError (or HeaderParseError) for an address no mail header can carry."""
+    """Raises one of HEADER_ERRORS for an address no mail header can carry."""
     message = EmailMessage()
     message["From"] = sender
     message["To"] = to
@@ -80,7 +80,7 @@ class SmtpMailer:
             message = build_message(self._sender, to, mail)
             with smtplib.SMTP(self._host, self._port, timeout=self._timeout_s) as smtp:
                 smtp.send_message(message)
-        except (OSError, smtplib.SMTPException, ValueError, HeaderParseError) as error:
+        except (OSError, smtplib.SMTPException, *HEADER_ERRORS) as error:
             latency = round((time.monotonic() - started) * MS_PER_S)
             log.warning(
                 "email %s not sent: %s",

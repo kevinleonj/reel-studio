@@ -8,7 +8,7 @@ import pytest
 
 import reel_studio.api.notify as notify_module
 from reel_studio.adapters.launcher_local import Dispatcher
-from reel_studio.adapters.storage_local import ChunkAnswer, LocalStorage
+from reel_studio.adapters.storage_local import ChunkAnswer, LocalStorage, SessionNotFound
 from reel_studio.api.notify import Notifier
 from reel_studio.api.ratelimit import SlidingWindow
 from reel_studio.core.errors import DeliveryFailed, ErrorCode
@@ -183,15 +183,17 @@ def test_start_rechecks_the_bytes_that_actually_arrived(api: Api) -> None:
     assert (response.status_code, response.json()) == (413, {"error": "too_large"})
 
 
-def test_an_older_completed_session_replayed_after_a_newer_upload_answers_200(
+def test_an_older_completed_session_replayed_after_a_newer_upload_is_gone(
     tmp_path: Path,
 ) -> None:
+    """The newer session supersedes the older (STEP-07 review round 1); the file is the newer."""
     storage = storage_in(tmp_path)
     first = session_of(storage, 4)
     storage.put_chunk(first, "bytes 0-3/4", b"0123")
     second = session_of(storage, 6)  # the file was edited and chosen again: same name, new size
     storage.put_chunk(second, "bytes 0-5/6", b"abcdef")
-    assert storage.put_chunk(first, "bytes */4", b"") == ChunkAnswer(200, None)
+    with pytest.raises(SessionNotFound):
+        storage.put_chunk(first, "bytes */4", b"")
     assert (tmp_path / "data" / "objects" / "in" / ORDER / "a.mp4").read_bytes() == b"abcdef"
     assert not storage.partial_of(first).exists()
 

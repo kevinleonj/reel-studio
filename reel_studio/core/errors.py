@@ -167,3 +167,8 @@ class BadSignature(Exception):
 
 class CloudUnavailable(CloudError):
     code = ErrorCode.CLOUD_UNAVAILABLE
+
+
+class OrderBusy(Exception):
+    """Too many writers on one order record at once: the transaction ran out of attempts
+    (F51). The caller may try again shortly; the API answers 503 with Retry-After."""

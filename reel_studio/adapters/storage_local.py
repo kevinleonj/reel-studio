@@ -22,6 +22,7 @@ from reel_studio.core.constants import (
     UPLOAD_SESSION_BYTES,
     UPLOAD_SESSION_ID_MAX_CHARS,
 )
+from reel_studio.core.file_names import check_file_name
 from reel_studio.core.logging import get_logger
 from reel_studio.core.ports import Clock, Record, UploadTarget
 
@@ -31,7 +32,6 @@ PREFIXES = ("in", "work", "out")
 PARTIAL = ".part"
 CHUNK = re.compile(r"^bytes (?P<start>\d+)-(?P<end>\d+)/(?P<total>\d+)$")
 QUERY = re.compile(r"^bytes \*/(?P<total>\d+)$")
-SAFE_NAME = re.compile(r"^[^/\\\x00]+$")
 
 
 class SessionNotFound(LookupError):
@@ -45,12 +45,6 @@ class ChunkAnswer:
 
     status: int  # an HTTPStatus value
     range: str | None
-
-
-def check_file_name(name: str) -> str:
-    if not SAFE_NAME.match(name) or name.startswith(".") or name in {"", "..", "."}:
-        raise ValueError(f"unsafe file name: {name!r}")
-    return name
 
 
 class LocalStorage:
@@ -105,9 +99,21 @@ class LocalStorage:
         name = check_file_name(str(file["name"]))
         size = int(str(file["size"]))
         session = secrets.token_urlsafe(UPLOAD_SESSION_BYTES)
-        record = {"order_id": order_id, "key": f"in/{order_id}/{name}", "size": size, "received": 0}
+        key = f"in/{order_id}/{name}"
+        self._close_sessions_for(key)  # one live session per stored name (review round 1)
+        record = {"order_id": order_id, "key": key, "size": size, "received": 0}
         self._write_record(session, record)
         return {"name": name, "upload_url": f"{self._upload_path}/{session}"}
+
+    def _close_sessions_for(self, key: str) -> None:
+        for path in self._sessions.glob("*.json"):
+            try:
+                owner = json.loads(path.read_text()).get("key")
+            except (OSError, ValueError):  # a record being replaced right now: not this name
+                continue
+            if owner == key:
+                self.partial_of(path.stem).unlink(missing_ok=True)
+                path.unlink(missing_ok=True)
 
     def list_inputs(self, order_id: str) -> list[Record]:
         folder = self._path(f"in/{order_id}")

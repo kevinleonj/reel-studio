@@ -139,6 +139,7 @@ class Web(_Strict):
     signed_url_minutes: int
     rating_max: int
     comment_max_chars: int
+    busy_retry_after_s: int
     google_tag_url: str
 
 

@@ -31,6 +31,7 @@ UPLOAD_CODES = {
     ErrorCode.TOO_LARGE,
     ErrorCode.BAD_TYPE,
     ErrorCode.NO_FILES,
+    ErrorCode.NAME_TOO_LONG,
 }
 
 

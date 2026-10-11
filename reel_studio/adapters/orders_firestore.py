@@ -11,11 +11,12 @@ import time
 from collections.abc import Callable, Sequence
 from typing import Any
 
+from google.api_core import exceptions as gexc
 from google.cloud import firestore
 
 from reel_studio.core import order_rules as rules
 from reel_studio.core.constants import MS_PER_S, RUN_TOKEN_BYTES
-from reel_studio.core.errors import ErrorCode, TooLarge, TooManyFiles, WeekFull
+from reel_studio.core.errors import ErrorCode, OrderBusy, TooLarge, TooManyFiles, WeekFull
 from reel_studio.core.logging import get_logger
 from reel_studio.core.ports import Clock, NewOrder, QueueLimits, Record, SweepReport
 
@@ -64,7 +65,7 @@ class FirestoreOrders:
         extra: dict[str, Any] = {"order_id": order_id, "stage": "orders", "event": event}
         try:
             result = call()
-        except (WeekFull, TooManyFiles, TooLarge, rules.WrongState) as refusal:
+        except (WeekFull, TooManyFiles, TooLarge, OrderBusy, rules.WrongState) as refusal:
             # Expected refusals, not failures: one INFO line, no traceback (D74).
             extra.update(
                 latency_ms=round((time.monotonic() - started) * MS_PER_S),
@@ -85,7 +86,13 @@ class FirestoreOrders:
     ) -> T:
         def run() -> T:
             tx = self._db.transaction(max_attempts=self._max_attempts)
-            return firestore.transactional(body)(tx)  # type: ignore[no-any-return]
+            try:
+                return firestore.transactional(body)(tx)  # type: ignore[no-any-return]
+            except ValueError as error:
+                # The client wraps its last Aborted in a ValueError once every attempt is used.
+                if isinstance(error.__cause__, gexc.Aborted):
+                    raise OrderBusy(event) from None
+                raise
 
         return self._logged(event, order_id, run)
 

@@ -167,6 +167,18 @@ def test_check_names_what_is_missing_without_printing_values(
     assert "http://example.test" not in report
 
 
+COMPLETE = {
+    "PAYMENTS": "off",
+    "SITE_URL": "http://example.test",
+    "MAIL_FROM": "reels@example.test",
+    "KEVIN_ALERT_EMAIL": "kevin@example.test",
+    "FIRESTORE_PROJECT": "reel-studio-test",
+    "SMTP_HOST": "mailpit",
+    "SMTP_PORT": "1025",
+    "VOICE_AVAILABLE": "false",
+}
+
+
 def test_check_passes_a_complete_environment(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -194,3 +206,40 @@ def test_the_entry_module_logs_under_the_configured_namespace() -> None:
     that `configure()` wires; run it under another name the same way."""
     namespace = runpy.run_module("reel_studio.api.main", run_name="as_if_dash_m")
     assert namespace["log"].name == "reel_studio.api.main"
+
+
+def test_the_composed_dispatcher_sweeps_missed_checkouts(
+    tmp_path: Path, make_settings: MakeSettings
+) -> None:
+    """On the laptop the dispatcher is the only sweeper (review round 1 of STEP-07)."""
+    settings = laptop(tmp_path, make_settings)
+    clock = FrozenClock(START)
+    orders = FakeOrders(clock, LIMITS)
+    order_id = f"{2:032x}"
+    orders.create_awaiting_payment(
+        NewOrder(order_id, "h", SETTINGS, "", START + timedelta(minutes=31))
+    )
+    clock.advance(timedelta(minutes=31 + LIMITS.expiry_grace_minutes))
+    build_dispatcher(settings, orders=orders, clock=clock, config=quick_config()).tick()
+    doc = orders.get(order_id)
+    assert doc is not None
+    assert doc["status"] == "expired"
+
+
+def test_create_refuses_stripe_before_it_builds_a_firestore_client(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    for name, value in COMPLETE.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("WEB_DIST", str(tmp_path))
+    monkeypatch.setenv("PAYMENTS", "stripe")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "stand-in-value")
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "stand-in-value")
+
+    def no_client(*_: object) -> None:
+        raise AssertionError("built a Firestore client before refusing PAYMENTS=stripe")
+
+    monkeypatch.setattr(main, "firestore_orders", no_client)
+    with pytest.raises(SystemExit, match="PAYMENTS=stripe"):
+        main.create()

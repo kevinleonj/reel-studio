@@ -11,10 +11,10 @@ from fastapi.responses import JSONResponse
 
 from reel_studio.api import payments, routes_local, routes_orders, routes_public, static
 from reel_studio.api.deps import ApiDeps, Limiters, deps_of
-from reel_studio.api.errors import Refused, on_api_error, on_refused, on_validation
+from reel_studio.api.errors import Refused, on_api_error, on_busy, on_refused, on_validation
 from reel_studio.api.ratelimit import SlidingWindow
 from reel_studio.core.constants import MS_PER_S
-from reel_studio.core.errors import ApiError
+from reel_studio.core.errors import ApiError, OrderBusy
 from reel_studio.core.logging import get_logger
 
 __all__ = ["ApiDeps", "create_app"]
@@ -35,6 +35,7 @@ def create_app(deps: ApiDeps) -> FastAPI:
     )
     app.add_exception_handler(ApiError, on_api_error)
     app.add_exception_handler(Refused, on_refused)
+    app.add_exception_handler(OrderBusy, on_busy)
     app.add_exception_handler(RequestValidationError, on_validation)
 
     @app.middleware("http")

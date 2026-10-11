@@ -96,14 +96,17 @@ def test_a_file_chosen_again_after_a_reload_restarts_from_zero(
     ]
 
 
-def test_two_sessions_for_one_name_never_interleave(storage: LocalStorage, tmp_path: Path) -> None:
-    a, b = session_of(storage, 6), session_of(storage, 6)
+def test_a_newer_session_for_a_name_closes_the_older_and_its_bytes(
+    storage: LocalStorage, tmp_path: Path
+) -> None:
+    a = session_of(storage, 6)
     storage.put_chunk(a, "bytes 0-2/6", b"AAA")
-    storage.put_chunk(b, "bytes 0-2/6", b"BBB")
-    storage.put_chunk(a, "bytes 3-5/6", b"AAA")
-    assert read(storage, tmp_path) == b"AAAAAA"
-    storage.put_chunk(b, "bytes 3-5/6", b"BBB")
-    assert read(storage, tmp_path) == b"BBBBBB"  # last completed wins, as in Cloud Storage
+    b = session_of(storage, 6)
+    assert not storage.partial_of(a).exists()  # the older session's bytes are gone with it
+    with pytest.raises(SessionNotFound):
+        storage.put_chunk(a, "bytes 3-5/6", b"AAA")
+    storage.put_chunk(b, "bytes 0-5/6", b"BBBBBB")
+    assert read(storage, tmp_path) == b"BBBBBB"
 
 
 def test_bytes_written_before_a_lost_record_are_not_duplicated(

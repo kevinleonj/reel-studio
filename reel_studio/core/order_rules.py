@@ -286,7 +286,7 @@ def resume(doc: Doc | None) -> Doc | None:
 
 
 def upload_key(name: str) -> str:
-    """One file per name whatever its case or Unicode form (the API refuses such twins)."""
+    """Twins by case or Unicode form, which one batch may not hold (APFS would store one file)."""
     return unicodedata.normalize("NFC", name).casefold()
 
 
@@ -295,13 +295,16 @@ def reserve_uploads(
 ) -> Doc:
     """Every upload session first reserves its declared name and size here, in the order's own
     transaction, so batches opened before any file finishes still meet the limits (review W1).
-    Asking again for a name replaces its size: a resumed or replaced upload counts once."""
+    Keys are the exact stored names, so a case variant counts as the separate file a
+    case-sensitive store keeps; asking again for a name never makes its reservation smaller,
+    or a re-declared 0 would free room the first session can still fill (review round 1)."""
     changed = _moved(doc, "paid")
     if changed is None:
         raise WrongState("uploads need a paid order")
     held = {r["key"]: r["size"] for r in changed.get("uploads") or []}
     for file in files:
-        held[upload_key(str(file["name"]))] = int(str(file["size"]))
+        name, size = str(file["name"]), int(str(file["size"]))
+        held[name] = max(held.get(name, 0), size)
     if len(held) > max_files:
         raise TooManyFiles
     if sum(held.values()) > max_bytes:

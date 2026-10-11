@@ -20,6 +20,7 @@ from reel_studio.core.errors import (
     TooLarge,
     TooManyFiles,
 )
+from reel_studio.core.file_names import check_file_name
 from reel_studio.core.logging import get_logger
 from reel_studio.core.order_rules import WrongState, upload_key
 from reel_studio.core.ports import Record
@@ -121,6 +122,11 @@ def uploads(batch: UploadBatch, order: Authorised) -> dict[str, object]:
     for file in batch.files:
         if len(file.name.encode()) > FILE_NAME_MAX_BYTES:
             raise NameTooLong(file.name)
+    try:
+        for file in batch.files:
+            check_file_name(file.name)
+    except ValueError as error:  # before the reservation, so a refused batch holds nothing
+        raise invalid(str(error)) from error
     rules = order.deps.config.limits.order
     for file in batch.files:
         if file.type not in rules.allowed_types:

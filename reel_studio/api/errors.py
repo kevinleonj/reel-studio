@@ -10,7 +10,8 @@ from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from reel_studio.core.errors import ApiError, BadType, ErrorCode, NameTooLong
+from reel_studio.api.deps import deps_of
+from reel_studio.core.errors import ApiError, BadType, ErrorCode, NameTooLong, OrderBusy
 from reel_studio.core.logging import get_logger
 
 log = get_logger(__name__)
@@ -77,3 +78,15 @@ async def on_validation(_: Request, exc: Exception) -> JSONResponse:
         extra={"event": "invalid_request", "outcome": str([e["loc"] for e in exc.errors()])},
     )
     return JSONResponse({"error": "invalid_request"}, status_code=HTTPStatus.UNPROCESSABLE_ENTITY)
+
+
+async def on_busy(request: Request, exc: Exception) -> JSONResponse:
+    if not isinstance(exc, OrderBusy):  # registered for OrderBusy only
+        raise TypeError(exc)
+    log.warning("order record busy", extra={"event": str(exc), "outcome": "busy"})
+    retry = deps_of(request).config.limits.web.busy_retry_after_s
+    return JSONResponse(
+        {"error": "busy"},
+        status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+        headers={"Retry-After": str(retry)},
+    )

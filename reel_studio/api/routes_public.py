@@ -2,8 +2,6 @@
 
 import re
 from datetime import timedelta
-from email.errors import HeaderParseError
-from email.message import EmailMessage
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -23,6 +21,7 @@ from reel_studio.core.constants import (
 )
 from reel_studio.core.errors import RateLimited
 from reel_studio.core.logging import get_logger
+from reel_studio.core.mail_address import header_accepts
 from reel_studio.core.ports import NewOrder
 
 log = get_logger(__name__)
@@ -41,16 +40,6 @@ class CheckoutBody(BaseModel):
 # and typos; the mail server decides the rest.
 EMAIL_SHAPE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 SETTING_KEYS = {"style", "length_s", "text_lang", "keep_voice", "chips", "note"}
-
-
-def header_accepts(address: str) -> bool:
-    """The checkout asks before any order exists (review W3): EMAIL_SHAPE alone lets an
-    encoded word through that decodes to a line break."""
-    try:
-        EmailMessage()["To"] = address
-    except (ValueError, HeaderParseError):
-        return False
-    return True
 
 
 def check_settings(deps: ApiDeps, raw: dict[str, Any]) -> dict[str, object]:

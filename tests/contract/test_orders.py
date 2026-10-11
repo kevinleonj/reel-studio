@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from reel_studio.core.errors import ErrorCode, TooLarge, TooManyFiles, WeekFull
+from reel_studio.core.order_rules import WrongState
 from reel_studio.core.ports import NewOrder, OrderStore, QueueLimits
 from tests.contract.orders_adapters import ADAPTERS, OrdersFactory
 from tests.fakes.clock import FrozenClock
@@ -372,13 +373,23 @@ def test_upload_reservations_hold_the_limits_across_batches(
     paid(store, f"{1:032x}")
     order_id = f"{1:032x}"
     store.reserve_uploads(order_id, files=[{"name": "a.mp4", "size": 6}], max_files=2, max_bytes=10)
-    store.reserve_uploads(order_id, files=[{"name": "A.mp4", "size": 4}], max_files=2, max_bytes=10)
-    with pytest.raises(TooLarge):
+    store.reserve_uploads(order_id, files=[{"name": "a.mp4", "size": 4}], max_files=2, max_bytes=10)
+    with pytest.raises(TooLarge):  # asking again smaller frees nothing: still 6 held
         store.reserve_uploads(
-            order_id, files=[{"name": "b.mp4", "size": 7}], max_files=2, max_bytes=10
+            order_id, files=[{"name": "b.mp4", "size": 5}], max_files=2, max_bytes=10
         )
-    store.reserve_uploads(order_id, files=[{"name": "b.mp4", "size": 6}], max_files=2, max_bytes=10)
-    with pytest.raises(TooManyFiles):
+    store.reserve_uploads(order_id, files=[{"name": "b.mp4", "size": 4}], max_files=2, max_bytes=10)
+    with pytest.raises(TooManyFiles):  # exact names: a case variant is a third file
         store.reserve_uploads(
-            order_id, files=[{"name": "c.mp4", "size": 0}], max_files=2, max_bytes=10
+            order_id, files=[{"name": "A.mp4", "size": 0}], max_files=2, max_bytes=10
+        )
+
+
+def test_uploads_cannot_be_reserved_once_started(orders: tuple[OrderStore, FrozenClock]) -> None:
+    """The guard that makes a Start racing an /uploads batch safe, inside the transaction."""
+    store, _ = orders
+    queued(store, f"{2:032x}")
+    with pytest.raises(WrongState):
+        store.reserve_uploads(
+            f"{2:032x}", files=[{"name": "a.mp4", "size": 1}], max_files=2, max_bytes=10
         )
