@@ -424,3 +424,14 @@ def test_a_failing_stripe_phase_keeps_the_local_sweep_report(stripe_api: Api) ->
     report = sweep(deps(stripe_api))
     assert report["failed"] == [order_id]
     assert status_of(stripe_api, order_id) == "failed"
+
+
+def test_a_session_that_would_charge_is_expired_and_refused(stripe_api: Api) -> None:
+    """D58: a coupon limited by its restrictions could leave the price due; nobody is charged."""
+    pay(stripe_api).add_code(CODE, percent_off=100)
+    pay(stripe_api).next_amount_total = 1900
+    assert checkout(stripe_api) == (400, {"error": "code_invalid"})
+    (doc,) = stripe_api.orders.orders.values()
+    assert doc["status"] == "expired"
+    assert held(stripe_api) == 0
+    assert pay(stripe_api).expired == ["cs_test_0"]

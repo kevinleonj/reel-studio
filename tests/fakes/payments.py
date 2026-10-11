@@ -18,6 +18,7 @@ class FakePayments:
         self.created: list[dict[str, object]] = []
         self.expired: list[str] = []
         self.fail_next_checkout = False
+        self.next_amount_total = 0  # what Stripe would charge for the next session
 
     def add_code(self, code: str, *, percent_off: float, active: bool = True) -> None:
         self.codes[code.upper()] = {
@@ -54,7 +55,11 @@ class FakePayments:
                 "expires_at": expires_at,
             }
         )
-        return {"session_id": session_id, "url": f"fake://checkout/{session_id}"}
+        return {
+            "session_id": session_id,
+            "url": f"fake://checkout/{session_id}",
+            "amount_total": self.next_amount_total,
+        }
 
     def parse_webhook(self, payload: bytes, signature: str) -> Record:
         if signature != VALID_SIGNATURE:

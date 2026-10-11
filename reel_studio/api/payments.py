@@ -77,12 +77,29 @@ def checkout(deps: ApiDeps, settings: Record, code: str) -> dict[str, str]:
         log.exception("stripe call failed", extra=failure("create_checkout", order_id))
         deps.orders.expire(order_id)
         raise unavailable() from None
+    if session.get("amount_total") not in (0, None):
+        # D58: a code's restrictions can leave the price due even at 100% off; nobody pays.
+        log.error(
+            "checkout session would charge; expired",
+            extra={"order_id": order_id, "stage": "checkout", "event": "checkout"},
+        )
+        _close_unpaid(deps, order_id, str(session["session_id"]))
+        raise CodeInvalid
     deps.orders.set_checkout(order_id, session_id=str(session["session_id"]))
     log.info(
         "checkout opened",
         extra={"order_id": order_id, "stage": "checkout", "event": "checkout", "outcome": "open"},
     )
     return {"checkout_url": str(session["url"])}
+
+
+def _close_unpaid(deps: ApiDeps, order_id: str, session_id: str) -> None:
+    try:
+        gateway(deps).expire_session(session_id)
+    except PaymentsFailed:
+        # The session dies by itself at its expires_at (31 min); the place is freed now anyway.
+        log.exception("stripe call failed", extra=failure("expire_session", order_id))
+    deps.orders.expire(order_id)
 
 
 def _belongs(doc: Record | None, session_id: str) -> bool:
