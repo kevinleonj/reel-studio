@@ -77,6 +77,43 @@ def test_unknown_payments_mode_fails(make_settings: MakeSettings) -> None:
         make_settings(WebSettings, payments="maybe")
 
 
+def test_web_requires_its_laptop_runtime_values() -> None:
+    # docs/handoff/web.md, Needs Kevin: the laptop API and dispatcher (STEP-06 task 6).
+    with pytest.raises(ValidationError) as caught:
+        WebSettings(
+            _env_file=None,
+            payments="off",
+            site_url=TEST_VALUES["site_url"],
+            mail_from=TEST_VALUES["mail_from"],
+            kevin_alert_email=TEST_VALUES["kevin_alert_email"],
+        )
+
+    missing = {e["loc"][0] for e in caught.value.errors() if e["type"] == "missing"}
+    assert missing == {
+        "firestore_project",
+        "smtp_host",
+        "smtp_port",
+        "data_dir",
+        "web_dist",
+        "voice_available",
+    }
+
+
+def test_web_runtime_values_are_typed(make_settings: MakeSettings) -> None:
+    built = make_settings(WebSettings, smtp_port="1025", voice_available="false")
+
+    assert isinstance(built, WebSettings)
+    assert built.smtp_port == 1025
+    assert built.voice_available is False
+    assert isinstance(built.data_dir, Path)
+    assert isinstance(built.web_dist, Path)
+
+
+def test_smtp_port_must_be_a_number(make_settings: MakeSettings) -> None:
+    with pytest.raises(ValidationError, match="smtp_port"):
+        make_settings(WebSettings, smtp_port="mailpit")
+
+
 def test_one_stripe_key_is_not_enough(make_settings: MakeSettings) -> None:
     with pytest.raises(ValidationError, match="STRIPE_WEBHOOK_SECRET"):
         make_settings(WebSettings, payments="stripe", stripe_secret_key="x")
@@ -119,6 +156,11 @@ def test_blank_stripe_keys_do_not_satisfy_payments_stripe(tmp_path: Path) -> Non
         f"SITE_URL={TEST_VALUES['site_url']}",
         f"MAIL_FROM={TEST_VALUES['mail_from']}",
         f"KEVIN_ALERT_EMAIL={TEST_VALUES['kevin_alert_email']}",
+        *(
+            f"{name.upper()}={TEST_VALUES[name]}"
+            for name in ("firestore_project", "smtp_host", "smtp_port", "data_dir", "web_dist")
+        ),
+        f"VOICE_AVAILABLE={str(TEST_VALUES['voice_available']).lower()}",
     ]
     dotenv.write_text("\n".join(lines) + "\n", encoding="utf-8")
 

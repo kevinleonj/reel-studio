@@ -63,6 +63,16 @@ class WebSettings(_Base):
     kevin_alert_email: str
     ga4_measurement_id: str = ""  # default-because: empty = analytics off (D75)
     google_ads_id: str = ""  # default-because: empty = ads off (D75)
+    # Laptop runtime (STEP-06): the Firestore emulator's project id (the client finds the
+    # emulator through FIRESTORE_EMULATOR_HOST itself, F308), Mailpit's SMTP address (F309),
+    # the filesystem Storage root and the Astro build the API serves.
+    firestore_project: str
+    smtp_host: str
+    smtp_port: int
+    data_dir: Path
+    web_dist: Path
+    # D14, D62: this service never holds the Gemini key, so it is told whether voice works.
+    voice_available: bool
 
     @model_validator(mode="after")
     def _stripe_needs_keys(self) -> Self:
