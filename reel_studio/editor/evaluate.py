@@ -65,7 +65,7 @@ def for_eval(cfg: Config, model: str) -> Config:
     return cfg.model_copy(update={"limits": limits})
 
 
-def _calls(requests: Path) -> tuple[list[dict[str, int]], list[dict[str, int]], Decimal]:
+def calls_of(requests: Path) -> tuple[list[dict[str, int]], list[dict[str, int]], Decimal]:
     """Editor calls, critic calls and the total cost, from the run's requests.jsonl."""
     editor: list[dict[str, int]] = []
     critic: list[dict[str, int]] = []
@@ -82,7 +82,7 @@ def _calls(requests: Path) -> tuple[list[dict[str, int]], list[dict[str, int]], 
 def _record(
     job: Job, out: Path, made: make.Made | None, error: str | None, now: datetime
 ) -> dict[str, Any]:
-    editor, critic_calls, cost = _calls(out / make.REQUESTS)
+    editor, critic_calls, cost = calls_of(out / make.REQUESTS)
     scores: dict[str, int] = {}
     reviews: list[dict[str, Any]] = []  # Any: JSON
     critic: dict[str, Any] = {"total": 0, "passed": False, "weakness": None}  # Any: JSON
@@ -176,7 +176,7 @@ def run(job: Job, ports: make.Ports, steps: make.Steps, cfg: Config) -> int:
     return OK if made is not None else FAILED
 
 
-def _ports(settings: EditorSettings, cfg: Config) -> make.Ports:
+def connect_ports(settings: EditorSettings, cfg: Config) -> make.Ports:
     # Imported here so the tests never load the SDK.
     from reel_studio.adapters.claude import client  # noqa: PLC0415
     from reel_studio.adapters.clock import SystemClock  # noqa: PLC0415
@@ -198,7 +198,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     folder = build.reel_fixtures_dir / args.fixture
     steps = make.media_steps(folder, ffmpeg, media, cfg)
     job = Job(args.fixture, args.model, build.reel_fixtures_dir, ROOT, args.style)
-    return run(job, _ports(settings, cfg), steps, cfg)
+    return run(job, connect_ports(settings, cfg), steps, cfg)
 
 
 if __name__ == "__main__":

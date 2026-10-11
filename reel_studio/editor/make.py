@@ -98,7 +98,7 @@ def _keep_sheets(rendered: Rendered) -> list[Path]:
     return out
 
 
-def _timeline_lines(timeline: render.Timeline) -> str:
+def timeline_lines(timeline: render.Timeline) -> str:
     rows = [
         f"seg {s.i} {s.role} {s.start:.2f}-{s.end:.2f}s clip {s.clip} {s.in_:.2f}-{s.out:.2f}"
         f" x{s.speed:g} {s.note}".rstrip()
@@ -110,7 +110,7 @@ def _timeline_lines(timeline: render.Timeline) -> str:
     return "\n".join(rows)
 
 
-def _order_line(order: prompt.OrderSettings) -> str:
+def order_line(order: prompt.OrderSettings) -> str:
     voice = "kept" if order.voice else "off"
     return f"style {order.style}, {order.length_s} s, text {order.text_lang}, voice {voice}"
 
@@ -184,8 +184,8 @@ def make(request: Request, ports_: Ports, steps: Steps, cfg: Config) -> Made:
         material = critic.Material(
             sheets=_keep_sheets(rendered),
             qa_lines=rendered.qa.lines,
-            timeline=_timeline_lines(rendered.timeline),
-            order=_order_line(request.order),
+            timeline=timeline_lines(rendered.timeline),
+            order=order_line(request.order),
         )
         quality = media.contact_sheet.jpeg_quality
         review = critic.critique(
