@@ -9,14 +9,14 @@
 
 {{ clips | length }} files, {{ "%.1f" | format(total_s) }} s in total. Clip ids are what you use in every tool and in the edit list.
 
-| clip | kind | duration s | fps | orientation | sharpest window s | motion | brightness | soft windows s |
-|---|---|---|---|---|---|---|---|---|
+| clip | kind | duration s | fps | orientation | sharpest window s | motion | brightness |
+|---|---|---|---|---|---|---|---|
 {% for c in clips %}
-| {{ c.id }} | {{ c.kind }} | {{ "%.2f" | format(c.duration) }} | {{ c.fps }} | {{ c.orientation }} | {{ c.sharpest }} | {{ c.motion }} | {{ c.brightness }} | {{ c.soft }} |
+| {{ c.id }} | {{ c.kind }} | {{ "%.2f" | format(c.duration) }} | {{ c.fps }} | {{ c.orientation }} | {{ c.sharpest }} | {{ c.motion }} | {{ c.brightness }} |
 {% endfor %}
 
-Brightness is the clip's mean luma, 0-100. Soft windows are the seconds the final QA will
-flag as blurry: cut around them.
+Brightness is the clip's mean luma, 0-255. QA flags a cut whose brightness changes by
+more than {{ luma_jump }}; a zoomed crop changes it too, so check close-ups with read_strip.
 
 Every text stays on screen at least {{ read_min_s }} s and one second per {{ read_cps }}
 characters, whichever is longer; QA flags shorter text as unreadable.
@@ -28,8 +28,8 @@ Order target: {{ length_s }} s. Each format's range, from the edit-list checks:
 - {{ fmt }}: {{ span }} s
 {% endfor %}
 
-Choose the format first, then land the cut inside its range and as close to the order target as
-the footage allows. Add up the segments before write_edl; a cut outside the range is a warning
+Land the cut as close to the order target as the footage allows, inside the range of the
+format the footage shows. Add up the segments before write_edl; a cut outside the range is a warning
 that stays with the Reel.
 
 # Sheets

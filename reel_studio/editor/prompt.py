@@ -10,12 +10,11 @@ kit's `agents/reel-critic.md`.
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from statistics import fmean, median
+from statistics import fmean
 from string import Template
 
 from jinja2 import Environment, PackageLoader, StrictUndefined
 
-from reel_studio.core import constants
 from reel_studio.core.config import Config
 from reel_studio.core.media_config import Media
 from reel_studio.editor.critic import TOTAL_MAX
@@ -102,15 +101,13 @@ def _fenced(text: str) -> str:
     return text
 
 
-def _clip_rows(shots: Shots, blur_ratio: float) -> list[dict[str, object]]:
-    """One row per clip. `soft` lists the windows QA would call blurry: sharpness below
-    blur_ratio x the footage's median window (the kit's QA rule, qa.py:34)."""
+def _clip_rows(shots: Shots) -> list[dict[str, object]]:
+    """One row per clip. Brightness is the mean of measure.py's window luma, a 0..255 grey mean,
+    the scale QA's luma_jump uses."""
     rows: list[dict[str, object]] = []
-    floor = blur_ratio * median(w.sharpness for w in shots.windows) if shots.windows else 0.0
     for clip in shots.clips:
         windows = [w for w in shots.windows if w.clip == clip.id]
         best = max(windows, key=lambda w: w.sharpness) if windows else None
-        soft = [f"{w.start:.2f}-{w.end:.2f}" for w in windows if w.sharpness < floor]
         rows.append(
             {
                 "id": clip.id,
@@ -120,10 +117,7 @@ def _clip_rows(shots: Shots, blur_ratio: float) -> list[dict[str, object]]:
                 "orientation": clip.orientation,
                 "sharpest": f"{best.start:.2f}-{best.end:.2f}" if best else NO_VALUE,
                 "motion": f"{fmean(w.motion for w in windows):.1f}" if windows else NO_VALUE,
-                "soft": ", ".join(soft) if soft else NO_VALUE,
-                "brightness": f"{fmean(w.luma for w in windows) * constants.BRIGHTNESS_SCALE:.0f}"
-                if windows
-                else NO_VALUE,
+                "brightness": f"{fmean(w.luma for w in windows):.0f}" if windows else NO_VALUE,
             }
         )
     return rows
@@ -140,7 +134,8 @@ def brief(
         length_s=order.length_s,
         text_lang=languages[order.text_lang],
         voice=order.voice,
-        clips=_clip_rows(shots, media.edl.blur_ratio),
+        clips=_clip_rows(shots),
+        luma_jump=f"{media.qa.luma_jump:g}",
         read_min_s=f"{media.qa.read_min_s:g}",
         read_cps=f"{media.qa.read_chars_per_s:g}",
         targets={fmt: f"{lo:g}-{hi:g}" for fmt, (lo, hi) in media.edl.format_target_s.items()},

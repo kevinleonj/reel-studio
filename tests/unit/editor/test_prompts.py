@@ -41,7 +41,7 @@ def _window(wid: str, clip: str, start: float, sharp: float) -> Window:
         end=start + 1,
         motion=2.0,
         sharpness=sharp,
-        luma=0.5,
+        luma=110.0,
         colourful=0.3,
         warmth=10.0,
     )
@@ -161,36 +161,13 @@ def test_the_brief_names_every_formats_length_target_and_the_orders() -> None:
     for fmt, (low, high) in MEDIA.edl.format_target_s.items():
         assert f"{fmt}: {low:g}-{high:g} s" in text
     assert "Order target: 30 s" in text
+    assert "Choose the format first" not in text and "close to the order target" in text
 
 
-def test_the_brief_marks_the_windows_qa_will_call_blurry() -> None:
-    """QA flags a cut below blur_ratio x the footage's median sharpness (kit qa.py:34)."""
-    soft = Shots(
-        name="creami",
-        clips=[_clip("c01"), _clip("c02")],
-        windows=[
-            _window("w001", "c01", 0.0, 100.0),
-            _window("w002", "c01", 1.0, 100.0),
-            _window("w003", "c02", 0.0, 100.0),
-            _window("w004", "c02", 2.0, 30.0),
-        ],
-        sheets=[],
-        total_raw_seconds=16.0,
-    )
-
-    rows = {
-        line.split("|")[1].strip(): line
-        for line in prompt.brief(_order(), CFG, MEDIA, soft, transcripts={}).splitlines()
-        if line.startswith("| c0")
-    }
-
-    assert "2.00-3.00" in rows["c02"] and "2.00-3.00" not in rows["c01"]
-
-
-def test_the_editor_is_told_to_drop_duplicates_and_soft_shots_and_keep_labels_clear() -> None:
+def test_the_editor_is_told_to_drop_duplicates_and_blur_and_keep_labels_clear() -> None:
     system = prompt.system_prompt("montage", CFG)
 
-    assert "near-duplicate" in system and "soft windows" in system
+    assert "near-duplicate" in system and "No blur" in system and "soft windows" not in system
     assert "never over a product's label" in system
 
 
@@ -199,7 +176,9 @@ def test_the_brief_gives_each_clips_brightness() -> None:
     text = prompt.brief(_order(), CFG, MEDIA, SHOTS, transcripts={})
 
     row = next(line for line in text.splitlines() if line.startswith("| c01"))
-    assert "| 50 |" in row  # mean window luma 0.5 on a 0-100 scale
+    assert row.endswith("| 110 |")  # measure.py's 0..255 grey mean, as measured
+    assert "0-255" in text and f"more than {MEDIA.qa.luma_jump:g}" in text
+    assert "0-100" not in text and "soft windows" not in text
 
 
 def test_a_revision_looks_at_the_named_shots_first() -> None:

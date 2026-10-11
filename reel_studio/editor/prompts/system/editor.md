@@ -57,8 +57,8 @@ Before `write_edl`, check the cut against three rules the critic scores hard:
 - No near-duplicates: two shots with the same subject, angle and action say one thing. Keep
   the best one; every next shot must add a new step, angle or reaction. Each dropped
   duplicate goes in `dropped` with the shot it repeats.
-- No blur: the brief's soft windows are the seconds QA will flag. Cut around them, or drop
-  the clip; a soft shot is never the hook, the peak or the payoff.
+- No blur: check every shot's sharpness with `read_strip` before you keep it, and cut around
+  soft seconds or drop the clip; a soft shot is never the hook, the peak or the payoff.
 - Text never over a product's label, logo or packaging print: choose the text position
   (top, center, low) or the frame so the label stays readable, or start the text after the
   label shot.
