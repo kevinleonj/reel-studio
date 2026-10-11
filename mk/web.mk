@@ -3,16 +3,18 @@
 #   make ci-web          (part of make ci) web/: npm ci, astro check + build, ESLint, the ESLint policy test
 #   make test-emulator   Orders and Mailer contract suites against the Firestore emulator and Mailpit
 #   make prerelease      Playwright (phone 390x844 and laptop 1280x800, axe) + Lighthouse budget
+#   make stripe-listen   webhook secret into .env (never printed), then forward Stripe test events
 #   make up / make down  the whole site on the laptop through compose.yaml (STEP-06 task 6)
 #
 # The web build needs SITE_URL (canonical links, sitemap, robots.txt). Locally it comes from .env;
 # CI has no .env, so it falls back to the laptop tier's address from .env.example.
 
-.PHONY: ci-web test-emulator prerelease up down
+.PHONY: ci-web test-emulator prerelease stripe-listen up down
 
 NPM := npm --prefix web
 # hardcode-ok on the next line: the laptop tier's address, as in .env.example
 CI_SITE_URL := http://localhost:8080
+STRIPE_EVENTS := checkout.session.completed,checkout.session.expired
 
 ci-web:
 	$(NPM) ci
@@ -45,3 +47,10 @@ up:
 
 down:
 	$(COMPOSE) down
+
+# STEP-07 task 8. `stripe listen --print-secret` prints only the signing secret, which stays the
+# same across restarts; reelctl writes it without echoing it. `--events` keeps the forwarder to the
+# two types the API handles (the default is every type). F313. Needs `stripe login` first (Kevin).
+stripe-listen:
+	set -o pipefail; stripe listen --print-secret | $(UV) reelctl dotenv-set STRIPE_WEBHOOK_SECRET
+	stripe listen --events $(STRIPE_EVENTS) --forward-to $(CI_SITE_URL)/api/stripe/webhook

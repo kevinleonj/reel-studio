@@ -1,6 +1,8 @@
 """The laptop's chunk endpoint speaks Cloud Storage's resumable protocol (FACTS F307), so the web
 app's upload code works unchanged against both. Same cases as tests/e2e/upload-*.spec.ts."""
 
+import os
+import threading
 from pathlib import Path
 
 import pytest
@@ -8,6 +10,8 @@ import pytest
 from reel_studio.adapters.storage_local import ChunkAnswer, LocalStorage, SessionNotFound
 from tests.contract.storage_adapters import NOW
 from tests.fakes.clock import FrozenClock
+
+ASKERS = 8
 
 ORDER = "a" * 32
 SECRET = b"k" * 32
@@ -95,14 +99,17 @@ def test_a_file_chosen_again_after_a_reload_restarts_from_zero(
     ]
 
 
-def test_two_sessions_for_one_name_never_interleave(storage: LocalStorage, tmp_path: Path) -> None:
-    a, b = session_of(storage, 6), session_of(storage, 6)
+def test_a_newer_session_for_a_name_closes_the_older_and_its_bytes(
+    storage: LocalStorage, tmp_path: Path
+) -> None:
+    a = session_of(storage, 6)
     storage.put_chunk(a, "bytes 0-2/6", b"AAA")
-    storage.put_chunk(b, "bytes 0-2/6", b"BBB")
-    storage.put_chunk(a, "bytes 3-5/6", b"AAA")
-    assert read(storage, tmp_path) == b"AAAAAA"
-    storage.put_chunk(b, "bytes 3-5/6", b"BBB")
-    assert read(storage, tmp_path) == b"BBBBBB"  # last completed wins, as in Cloud Storage
+    b = session_of(storage, 6)
+    assert not storage.partial_of(a).exists()  # the older session's bytes are gone with it
+    with pytest.raises(SessionNotFound):
+        storage.put_chunk(a, "bytes 3-5/6", b"AAA")
+    storage.put_chunk(b, "bytes 0-5/6", b"BBBBBB")
+    assert read(storage, tmp_path) == b"BBBBBB"
 
 
 def test_bytes_written_before_a_lost_record_are_not_duplicated(
@@ -181,6 +188,7 @@ def test_two_orders_with_the_same_file_name_never_cross(
     assert out.read_bytes() == b"BBBB"
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="chmod does not stop root, so the delete succeeds")
 def test_a_delete_that_cannot_remove_a_folder_raises(storage: LocalStorage, tmp_path: Path) -> None:
     session = session_of(storage, 1)
     storage.put_chunk(session, "bytes 0-0/1", b"x")
@@ -207,3 +215,22 @@ def test_signed_url_verifies_and_expires(storage: LocalStorage) -> None:
     assert storage.verify_download(path.rsplit("/", 1)[1], params, now_s=int(params["exp"]) - 1)
     assert not storage.verify_download(path.rsplit("/", 1)[1], params, now_s=int(params["exp"]) + 1)
     assert not storage.verify_download(path.rsplit("/", 1)[1], {**params, "sig": "0" * 64}, now_s=0)
+
+
+def test_concurrent_asks_for_one_name_leave_one_live_session(
+    storage: LocalStorage, tmp_path: Path
+) -> None:
+    """STEP-07 review round 2: closing the older session and writing the new one is one step."""
+    barrier = threading.Barrier(ASKERS)
+
+    def ask() -> None:
+        barrier.wait()
+        storage.create_upload_session(ORDER, {"name": "a.mp4", "size": 4, "type": "video/mp4"})
+
+    threads = [threading.Thread(target=ask) for _ in range(ASKERS)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    live = list((tmp_path / "data" / "sessions").glob("*.json"))
+    assert len(live) == 1

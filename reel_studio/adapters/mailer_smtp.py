@@ -16,6 +16,7 @@ from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescap
 from reel_studio.core.constants import EMAIL_MAX_BYTES, MS_PER_S
 from reel_studio.core.errors import DeliveryFailed
 from reel_studio.core.logging import get_logger
+from reel_studio.core.mail_address import HEADER_ERRORS
 
 log = get_logger(__name__)
 
@@ -51,6 +52,18 @@ def render(template: str, data: Mapping[str, object]) -> Rendered:
     return Rendered(subject, text, html)
 
 
+def build_message(sender: str, to: str, mail: Rendered) -> EmailMessage:
+    """Raises one of HEADER_ERRORS for an address no mail header can carry."""
+    message = EmailMessage()
+    message["From"] = sender
+    message["To"] = to
+    message["Subject"] = mail.subject
+    message.set_content(mail.text)
+    if mail.html is not None:
+        message.add_alternative(mail.html, subtype="html")
+    return message
+
+
 class SmtpMailer:
     def __init__(self, host: str, port: int, *, sender: str, timeout_s: float) -> None:
         self._host = host
@@ -60,19 +73,14 @@ class SmtpMailer:
 
     def send(self, template: str, to: str, data: Mapping[str, object]) -> None:
         mail = render(template, data)  # renders before connecting: a bad template sends nothing
-        message = EmailMessage()
-        message["From"] = self._sender
-        message["To"] = to
-        message["Subject"] = mail.subject
-        message.set_content(mail.text)
-        if mail.html is not None:
-            message.add_alternative(mail.html, subtype="html")
         started = time.monotonic()
         extra = {"order_id": data.get("order_id"), "stage": "mail", "event": template}
         try:
+            # Inside the try: an address the header refuses is a failed delivery, not a crash.
+            message = build_message(self._sender, to, mail)
             with smtplib.SMTP(self._host, self._port, timeout=self._timeout_s) as smtp:
                 smtp.send_message(message)
-        except (OSError, smtplib.SMTPException, ValueError) as error:
+        except (OSError, smtplib.SMTPException, *HEADER_ERRORS) as error:
             latency = round((time.monotonic() - started) * MS_PER_S)
             log.warning(
                 "email %s not sent: %s",

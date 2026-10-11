@@ -8,14 +8,14 @@ import pytest
 
 import reel_studio.api.notify as notify_module
 from reel_studio.adapters.launcher_local import Dispatcher
-from reel_studio.adapters.storage_local import ChunkAnswer, LocalStorage
+from reel_studio.adapters.storage_local import ChunkAnswer, LocalStorage, SessionNotFound
 from reel_studio.api.notify import Notifier
 from reel_studio.api.ratelimit import SlidingWindow
 from reel_studio.core.errors import DeliveryFailed, ErrorCode
 from tests.fakes.clock import FrozenClock
 from tests.fakes.mailer import FakeMailer
 from tests.fakes.orders import FakeOrders
-from tests.unit.api.conftest import Api
+from tests.unit.api.conftest import Api, offline_sweep
 from tests.unit.api.test_api_pins import new_order
 from tests.unit.api.test_dispatcher import LIMITS, RecordingLauncher
 from tests.unit.api.test_notify import KEVIN, SITE, running
@@ -101,7 +101,13 @@ def test_one_failed_notice_does_not_skip_the_next_order() -> None:
 
     flaky = Flaky()
     clock.advance(timedelta(minutes=71))
-    Dispatcher(orders, RecordingLauncher(), clock, sweep_every_s=60, notifier=flaky).tick()
+    Dispatcher(
+        orders,
+        RecordingLauncher(),
+        clock,
+        sweep=offline_sweep(orders),
+        notifier=flaky,
+    ).tick()
     assert flaky.seen == ["a" * 32, "b" * 32]
 
 
@@ -177,15 +183,17 @@ def test_start_rechecks_the_bytes_that_actually_arrived(api: Api) -> None:
     assert (response.status_code, response.json()) == (413, {"error": "too_large"})
 
 
-def test_an_older_completed_session_replayed_after_a_newer_upload_answers_200(
+def test_an_older_completed_session_replayed_after_a_newer_upload_is_gone(
     tmp_path: Path,
 ) -> None:
+    """The newer session supersedes the older (STEP-07 review round 1); the file is the newer."""
     storage = storage_in(tmp_path)
     first = session_of(storage, 4)
     storage.put_chunk(first, "bytes 0-3/4", b"0123")
     second = session_of(storage, 6)  # the file was edited and chosen again: same name, new size
     storage.put_chunk(second, "bytes 0-5/6", b"abcdef")
-    assert storage.put_chunk(first, "bytes */4", b"") == ChunkAnswer(200, None)
+    with pytest.raises(SessionNotFound):
+        storage.put_chunk(first, "bytes */4", b"")
     assert (tmp_path / "data" / "objects" / "in" / ORDER / "a.mp4").read_bytes() == b"abcdef"
     assert not storage.partial_of(first).exists()
 
@@ -196,4 +204,5 @@ def test_a_file_name_longer_than_the_disk_allows_is_refused(api: Api) -> None:
     response = api.client.post(
         f"/api/orders/{order_id}/uploads", json={"files": files}, headers=auth
     )
-    assert response.status_code == 422
+    # 400 with the page's own words since REVIEW-FIXES W4 (was a bare 422).
+    assert (response.status_code, response.json()["error"]) == (400, "name_too_long")

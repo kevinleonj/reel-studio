@@ -12,6 +12,7 @@ import json
 import re
 import secrets
 import shutil
+import threading
 from dataclasses import dataclass
 from http import HTTPStatus
 from pathlib import Path
@@ -22,6 +23,7 @@ from reel_studio.core.constants import (
     UPLOAD_SESSION_BYTES,
     UPLOAD_SESSION_ID_MAX_CHARS,
 )
+from reel_studio.core.file_names import check_file_name
 from reel_studio.core.logging import get_logger
 from reel_studio.core.ports import Clock, Record, UploadTarget
 
@@ -31,7 +33,6 @@ PREFIXES = ("in", "work", "out")
 PARTIAL = ".part"
 CHUNK = re.compile(r"^bytes (?P<start>\d+)-(?P<end>\d+)/(?P<total>\d+)$")
 QUERY = re.compile(r"^bytes \*/(?P<total>\d+)$")
-SAFE_NAME = re.compile(r"^[^/\\\x00]+$")
 
 
 class SessionNotFound(LookupError):
@@ -47,12 +48,6 @@ class ChunkAnswer:
     range: str | None
 
 
-def check_file_name(name: str) -> str:
-    if not SAFE_NAME.match(name) or name.startswith(".") or name in {"", "..", "."}:
-        raise ValueError(f"unsafe file name: {name!r}")
-    return name
-
-
 class LocalStorage:
     def __init__(
         self,
@@ -65,6 +60,9 @@ class LocalStorage:
     ) -> None:
         self._objects = root / "objects"
         self._sessions = root / "sessions"
+        # One process serves the laptop's uploads (compose runs a single api), so a thread
+        # lock is enough to make closing the older session and opening the new one one step.
+        self._sessions_lock = threading.Lock()
         self._upload_path = upload_path
         self._download_path = download_path
         self._key = signing_key
@@ -105,9 +103,22 @@ class LocalStorage:
         name = check_file_name(str(file["name"]))
         size = int(str(file["size"]))
         session = secrets.token_urlsafe(UPLOAD_SESSION_BYTES)
-        record = {"order_id": order_id, "key": f"in/{order_id}/{name}", "size": size, "received": 0}
-        self._write_record(session, record)
+        key = f"in/{order_id}/{name}"
+        record = {"order_id": order_id, "key": key, "size": size, "received": 0}
+        with self._sessions_lock:  # one live session per stored name, also under concurrency
+            self._close_sessions_for(key)
+            self._write_record(session, record)
         return {"name": name, "upload_url": f"{self._upload_path}/{session}"}
+
+    def _close_sessions_for(self, key: str) -> None:
+        for path in self._sessions.glob("*.json"):
+            try:
+                owner = json.loads(path.read_text()).get("key")
+            except (OSError, ValueError):  # a record being replaced right now: not this name
+                continue
+            if owner == key:
+                self.partial_of(path.stem).unlink(missing_ok=True)
+                path.unlink(missing_ok=True)
 
     def list_inputs(self, order_id: str) -> list[Record]:
         folder = self._path(f"in/{order_id}")
@@ -186,6 +197,10 @@ class LocalStorage:
     def partial_of(self, session: str) -> Path:
         """The session's own bytes so far: never the final file, never shared by two sessions."""
         return self._sessions / f"{session}{PARTIAL}"
+
+    def session_order(self, session: str) -> str:
+        """The order a session belongs to; raises SessionNotFound."""
+        return str(self._load(session)["order_id"])
 
     def put_chunk(self, session: str, content_range: str, body: bytes) -> ChunkAnswer:
         record = self._load(session)

@@ -44,7 +44,7 @@ export interface OrderSettings {
 }
 
 export type CheckoutError = "code_invalid" | "code_inactive" | "week_full" | "rate_limited"
-export type UploadError = "too_many_files" | "too_large" | "bad_type" | "no_files"
+export type UploadError = "too_many_files" | "too_large" | "bad_type" | "no_files" | "name_too_long"
 
 /** `checkout_url` with PAYMENTS=stripe, `order_url` (`/o/<id>#t=<token>`) with PAYMENTS=off. */
 export interface CheckoutResponse {

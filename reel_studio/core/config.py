@@ -9,7 +9,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, PositiveInt, model_validator
 
 from reel_studio.core.media_config import Media
 
@@ -111,6 +111,15 @@ class Firestore(_Strict):
     max_attempts: int
 
 
+class Reelctl(_Strict):
+    list_limit: int
+
+
+class Payments(_Strict):
+    price_minor: int
+    currency: str
+
+
 class Smtp(_Strict):
     timeout_s: int
 
@@ -119,6 +128,12 @@ class DispatcherTimes(_Strict):
     poll_seconds: int
     sweep_seconds: int
     fake_stage_seconds: int
+
+
+class StripeTimes(_Strict):
+    timeout_s: PositiveInt
+    max_network_retries: NonNegativeInt  # 0 is a valid choice: no retries
+    webhook_tolerance_s: PositiveInt  # 0 would turn Stripe's replay check off
 
 
 class Upload(_Strict):
@@ -134,6 +149,7 @@ class Web(_Strict):
     signed_url_minutes: int
     rating_max: int
     comment_max_chars: int
+    busy_retry_after_s: int
     google_tag_url: str
 
 
@@ -149,6 +165,9 @@ class Limits(_Strict):
     codes: Codes
     upload: Upload
     firestore: Firestore
+    reelctl: Reelctl
+    payments: Payments
+    stripe: StripeTimes
     smtp: Smtp
     dispatcher: DispatcherTimes
     web: Web

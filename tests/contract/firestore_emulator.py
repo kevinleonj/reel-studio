@@ -13,14 +13,15 @@ import pytest
 from google.cloud import firestore
 
 from reel_studio.adapters.orders_firestore import FirestoreOrders
+from reel_studio.core.config import load
 from reel_studio.core.ports import QueueLimits
 from tests.fakes.clock import FrozenClock
 
 EMULATOR_ENV = "FIRESTORE_EMULATOR_HOST"
 REQUIRE_ENV = "REEL_REQUIRE_EMULATOR"  # set by run_emulator.py
 PROJECT = "reel-studio-test"
+CONFIG = load().limits.firestore
 TIMEOUT_S = 10.0
-MAX_ATTEMPTS = 5
 
 
 @contextmanager
@@ -35,6 +36,12 @@ def emulator_orders(clock: FrozenClock, limits: QueueLimits) -> Iterator[Firesto
     httpx.delete(reset, timeout=TIMEOUT_S).raise_for_status()
     client = firestore.Client(project=PROJECT)
     try:
-        yield FirestoreOrders(client, clock, limits, timeout_s=TIMEOUT_S, max_attempts=MAX_ATTEMPTS)
+        yield FirestoreOrders(
+            client,
+            clock,
+            limits,
+            timeout_s=CONFIG.timeout_s,
+            max_attempts=CONFIG.max_attempts,
+        )
     finally:
         client.close()  # type: ignore[no-untyped-call]  # google-cloud-firestore leaves it untyped

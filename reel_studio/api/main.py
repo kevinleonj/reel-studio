@@ -19,16 +19,23 @@ from fastapi import FastAPI
 from pydantic import ValidationError
 
 from reel_studio.adapters.clock import SystemClock
-from reel_studio.adapters.launcher_local import Dispatcher, FakeEditor, FakeEditorLauncher
+from reel_studio.adapters.launcher_local import (
+    Dispatcher,
+    FakeEditor,
+    FakeEditorLauncher,
+    Sweep,
+)
 from reel_studio.adapters.mailer_smtp import SmtpMailer
+from reel_studio.adapters.payments_stripe import StripePayments, StripeSetup, build_client
 from reel_studio.adapters.storage_local import LocalStorage
+from reel_studio.api import payments
 from reel_studio.api.app import create_app
 from reel_studio.api.deps import ApiDeps
 from reel_studio.api.notify import Notifier
 from reel_studio.api.routes_local import DOWNLOAD_PATH, UPLOAD_PATH
 from reel_studio.core import logging as reel_logging
 from reel_studio.core.config import Config, load
-from reel_studio.core.constants import SIGNING_KEY_BYTES
+from reel_studio.core.constants import SIGNING_KEY_BYTES, STRIPE_API_VERSION
 from reel_studio.core.logging import get_logger
 from reel_studio.core.order_rules import limits_from
 from reel_studio.core.ports import Clock, OrderStore
@@ -37,6 +44,7 @@ from reel_studio.settings import WebSettings
 # Named, not __name__: run with `python -m` this module is __main__, outside the `reel_studio`
 # logger tree that configure() wires, and its lines would be dropped.
 log = get_logger("reel_studio.api.main")
+LIVE_KEY_PREFIXES = ("sk_live_", "rk_live_")  # Stripe's live-mode secret and restricted keys
 USAGE_ERROR = 2
 
 
@@ -62,21 +70,43 @@ def _mailer(settings: WebSettings, config: Config) -> SmtpMailer:
     )
 
 
-def _refuse_stripe(settings: WebSettings) -> None:
-    if settings.payments != "off":
-        raise SystemExit("PAYMENTS=stripe needs the Stripe adapter (STEP-07); use PAYMENTS=off")
+def build_payments(settings: WebSettings, config: Config, clock: Clock) -> StripePayments | None:
+    """Stripe in test mode (D58), or nothing with PAYMENTS=off. WebSettings has already
+    refused PAYMENTS=stripe without its keys and ids."""
+    if settings.payments == "off":
+        return None
+    key, secret = settings.stripe_secret_key, settings.stripe_webhook_secret
+    price, coupon = settings.stripe_price_id, settings.stripe_coupon_id
+    if key is None or secret is None or price is None or coupon is None:
+        raise SystemExit("PAYMENTS=stripe needs its four STRIPE_ settings")  # unreachable
+    if key.get_secret_value().startswith(LIVE_KEY_PREFIXES):
+        raise SystemExit("the beta runs in Stripe test mode (D58): use a test-mode key")
+    times = config.limits.stripe
+    client = build_client(
+        key.get_secret_value(),
+        api_version=STRIPE_API_VERSION,
+        timeout_s=times.timeout_s,
+        max_network_retries=times.max_network_retries,
+    )
+    setup = StripeSetup(
+        price_id=price,
+        coupon_id=coupon,
+        webhook_secret=secret.get_secret_value(),
+        tolerance_s=times.webhook_tolerance_s,
+    )
+    return StripePayments(client, clock, setup)
 
 
 def build_deps(
     settings: WebSettings, *, orders: OrderStore, clock: Clock, config: Config
 ) -> ApiDeps:
-    _refuse_stripe(settings)
     storage = _storage(settings, clock)
     return ApiDeps(
         orders=orders,
         storage=storage,
         local_storage=storage,
         mailer=_mailer(settings, config),
+        payments=build_payments(settings, config, clock),
         clock=clock,
         config=config,
         settings=settings,
@@ -88,20 +118,20 @@ def build_deps(
 def build_dispatcher(
     settings: WebSettings, *, orders: OrderStore, clock: Clock, config: Config
 ) -> Dispatcher:
-    """The fake editor until the engine lane's worker command exists (STEP-06 task 4)."""
+    """The fake editor until the engine lane's worker command exists (STEP-06 task 4). The
+    sweep is the API's own (payments.sweep), so with Stripe it asks Stripe about missed
+    checkouts here too."""
     times = config.limits.dispatcher
-    editor = FakeEditor(orders, _storage(settings, clock), stage_seconds=times.fake_stage_seconds)
+    deps = build_deps(settings, orders=orders, clock=clock, config=config)
+    editor = FakeEditor(orders, deps.storage, stage_seconds=times.fake_stage_seconds)
     notifier = Notifier(
-        orders,
-        _mailer(settings, config),
-        site_url=settings.site_url,
-        kevin=settings.kevin_alert_email,
+        orders, deps.mailer, site_url=settings.site_url, kevin=settings.kevin_alert_email
     )
     return Dispatcher(
         orders,
         FakeEditorLauncher(editor, orders),
         clock,
-        sweep_every_s=times.sweep_seconds,
+        sweep=Sweep(lambda: payments.sweep(deps), every_s=times.sweep_seconds),
         notifier=notifier,
     )
 
@@ -122,14 +152,20 @@ def firestore_orders(settings: WebSettings, config: Config, clock: Clock) -> Ord
     )
 
 
+def settings_problem(error: ValidationError) -> str:
+    """Field names only: a pydantic message carries the input, which can be a key."""
+    names = sorted({str(e["loc"][0]).upper() for e in error.errors() if e["loc"]})
+    rule = [str(e["msg"]) for e in error.errors() if not e["loc"]]  # model-level, no input
+    return " ".join(["settings missing or invalid (see .env.example):", *names, *rule])
+
+
 def check(out: TextIO) -> int:
     """Validate the settings by the app's own rules, naming each bad field, never its value
     (a pydantic error message carries the input)."""
     try:
         WebSettings()
     except ValidationError as error:
-        names = sorted({str(e["loc"][0]).upper() for e in error.errors() if e["loc"]})
-        out.write(f"settings missing or invalid (see .env.example): {' '.join(names)}\n")
+        out.write(f"{settings_problem(error)}\n")
         return USAGE_ERROR
     out.write("settings ok\n")
     return 0
@@ -139,7 +175,6 @@ def create() -> FastAPI:
     """uvicorn's factory: settings are read (and validated) at startup, not at import."""
     reel_logging.configure()
     settings, config, clock = WebSettings(), load(), SystemClock()
-    _refuse_stripe(settings)
     orders = firestore_orders(settings, config, clock)
     return create_app(build_deps(settings, orders=orders, clock=clock, config=config))
 
@@ -153,7 +188,6 @@ def dispatch() -> None:
 
     signal.signal(signal.SIGTERM, on_signal)  # `docker compose down` sends SIGTERM
     settings, config, clock = WebSettings(), load(), SystemClock()
-    _refuse_stripe(settings)
     orders = firestore_orders(settings, config, clock)
     dispatcher = build_dispatcher(settings, orders=orders, clock=clock, config=config)
     log.info("dispatcher started", extra={"stage": "dispatcher", "event": "start"})

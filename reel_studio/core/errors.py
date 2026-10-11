@@ -31,6 +31,7 @@ class ErrorCode(StrEnum):
     TOO_LARGE = "too_large"
     BAD_TYPE = "bad_type"
     NO_FILES = "no_files"
+    NAME_TOO_LONG = "name_too_long"
     # cloud adapters (STEP-08): Cloud Storage, Cloud Run, Resend after our retries
     CLOUD_UNAVAILABLE = "cloud_unavailable"
 
@@ -147,8 +148,23 @@ class NoFiles(ApiError):
     code = ErrorCode.NO_FILES
 
 
+class NameTooLong(ApiError):
+    code = ErrorCode.NAME_TOO_LONG
+
+
 class DeliveryFailed(Exception):
     """The Mailer could not hand an email to its server. Not a user-message key: callers log it."""
+
+
+class PaymentsFailed(Exception):
+    """Stripe refused a call or could not be reached after our retries. Not a user-message key:
+    the API answers `payments_unavailable` and logs it. Adapters raise it `from None` with the
+    vendor's error code only: a vendor message may echo the success URL, which holds the link
+    token, and the log prints the whole exception chain."""
+
+
+class BadSignature(Exception):
+    """A webhook whose `Stripe-Signature` does not match the endpoint secret (F23)."""
 
 
 # ---------------------------------------------------------------- cloud adapters
@@ -156,3 +172,8 @@ class DeliveryFailed(Exception):
 
 class CloudUnavailable(CloudError):
     code = ErrorCode.CLOUD_UNAVAILABLE
+
+
+class OrderBusy(Exception):
+    """Too many writers on one order record at once: the transaction ran out of attempts
+    (F51). The caller may try again shortly; the API answers 503 with Retry-After."""

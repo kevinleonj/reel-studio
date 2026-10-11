@@ -109,16 +109,18 @@ def test_start_twice_is_harmless(api: Api) -> None:
 
 def test_start_rechecks_the_limits_against_what_was_uploaded(api: Api) -> None:
     order_id, auth = new_order(api)
-    targets = []
-    for batch in ("a", "b"):  # two batches of 40 before any upload finishes: 80 sessions
-        many = [{**FILE, "name": f"{batch}{i}.mp4"} for i in range(40)]
-        targets += api.client.post(
-            f"/api/orders/{order_id}/uploads", json={"files": many}, headers=auth
-        ).json()["targets"]
-    for i, target in enumerate(targets):
+    many = [{**FILE, "name": f"a{i}.mp4"} for i in range(40)]
+    targets = api.client.post(
+        f"/api/orders/{order_id}/uploads", json={"files": many}, headers=auth
+    ).json()["targets"]
+    second = api.client.post(
+        f"/api/orders/{order_id}/uploads", json={"files": [{**FILE, "name": "b.mp4"}]}, headers=auth
+    )
+    assert second.json() == {"error": "too_many_files"}  # reserved at /uploads (review W1)
+    # Defence in depth: a 41st file that reached storage another way still stops Start.
+    targets.append(api.storage.create_upload_session(order_id, {**FILE, "name": "b.mp4"}))
+    for target in targets:
         api.storage.put_chunk(target["upload_url"].rsplit("/", 1)[1], "bytes 0-3/4", b"0123")
-        if i == 40:
-            break
     response = api.client.post(f"/api/orders/{order_id}/start", headers=auth)
     assert (response.status_code, response.json()) == (413, {"error": "too_many_files"})
 

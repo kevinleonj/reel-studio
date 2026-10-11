@@ -7,7 +7,9 @@ The "ready" email is not sent from here yet: its button needs the order link, an
 token is stored only as a hash (D18), so nothing after checkout can rebuild it (Needs Kevin).
 """
 
+from reel_studio.api.deps import ApiDeps
 from reel_studio.api.messages import failure_message
+from reel_studio.core.constants import BYTES_PER_GB
 from reel_studio.core.errors import DeliveryFailed, ErrorCode
 from reel_studio.core.logging import get_logger
 from reel_studio.core.ports import Mailer, OrderStore
@@ -78,3 +80,31 @@ class Notifier:
             return
         if self._orders.claim_email(order_id, "failed"):
             self._send("failed", email, failed)
+
+
+def send_link(deps: ApiDeps, order_id: str, email: str, path: str) -> None:
+    """The optional link email. The order already exists and the page already has the link, so
+    a mail server that is down is logged, not turned into a failed checkout."""
+    limits = deps.config.limits
+    try:
+        deps.mailer.send(
+            "link",
+            email,
+            {
+                "order_id": order_id,
+                "order_url": f"{deps.settings.site_url.rstrip('/')}{path}",
+                "max_files": limits.order.max_files,
+                "max_total": f"{limits.order.max_total_bytes // BYTES_PER_GB} GB",
+                "out_days": limits.retention.out_days,
+            },
+        )
+    except DeliveryFailed:
+        log.exception(
+            "link email not delivered",
+            extra={
+                "order_id": order_id,
+                "stage": "checkout",
+                "event": "link_email",
+                "outcome": "error",
+            },
+        )

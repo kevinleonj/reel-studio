@@ -110,6 +110,7 @@
         "bad_type": "{name} isn't a video or photo we can use (MP4, MOV, JPEG, PNG).",
         "no_files": "Add at least one clip first.",
         "empty": "{name} is empty. Choose it again from your gallery.",
+        "name_too_long": "{name} has a name too long to store. Rename it and choose it again.",
         "network": "We couldn't reach the server. Check your connection and try again."
       }
     },

@@ -9,12 +9,12 @@ from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from reel_studio.api import routes_local, routes_orders, routes_public, static
+from reel_studio.api import payments, routes_local, routes_orders, routes_public, static
 from reel_studio.api.deps import ApiDeps, Limiters, deps_of
-from reel_studio.api.errors import Refused, on_api_error, on_refused, on_validation
-from reel_studio.api.ratelimit import SlidingWindow
+from reel_studio.api.errors import Refused, on_api_error, on_busy, on_refused, on_validation
+from reel_studio.api.ratelimit import InFlight, SlidingWindow
 from reel_studio.core.constants import MS_PER_S
-from reel_studio.core.errors import ApiError
+from reel_studio.core.errors import ApiError, OrderBusy
 from reel_studio.core.logging import get_logger
 
 __all__ = ["ApiDeps", "create_app"]
@@ -24,15 +24,19 @@ API_NOINDEX = {"X-Robots-Tag": "noindex, nofollow"}
 
 
 def create_app(deps: ApiDeps) -> FastAPI:
+    if deps.settings.payments == "stripe" and deps.payments is None:
+        raise ValueError("PAYMENTS=stripe needs a Payments adapter in ApiDeps")
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     app.state.deps = deps
     quotas = deps.config.limits.limits
     app.state.limiters = Limiters(
         checkout=SlidingWindow(quotas.checkout_per_minute_per_address, deps.clock),
         order_calls=SlidingWindow(quotas.order_calls_per_minute_per_address, deps.clock),
+        uploads_in_flight=InFlight(),
     )
     app.add_exception_handler(ApiError, on_api_error)
     app.add_exception_handler(Refused, on_refused)
+    app.add_exception_handler(OrderBusy, on_busy)
     app.add_exception_handler(RequestValidationError, on_validation)
 
     @app.middleware("http")
@@ -64,9 +68,10 @@ def create_app(deps: ApiDeps) -> FastAPI:
     def sweep(request: Request) -> JSONResponse:
         if not deps_of(request).sweep_auth(request):
             return JSONResponse({"error": "unauthorized"}, status_code=HTTPStatus.UNAUTHORIZED)
-        return JSONResponse(dict(deps_of(request).orders.sweep()))
+        return JSONResponse(dict(payments.sweep(deps_of(request))))
 
     app.include_router(routes_public.router)
+    app.include_router(payments.router)
     app.include_router(routes_orders.router)
     app.include_router(routes_local.router)
     app.include_router(static.router)  # last: it answers every GET nothing else claimed
