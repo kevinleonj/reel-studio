@@ -63,13 +63,40 @@ def test_payments_stripe_without_keys_fails(make_settings: MakeSettings) -> None
         make_settings(WebSettings, payments="stripe")
 
 
-def test_payments_stripe_with_keys_passes(make_settings: MakeSettings) -> None:
-    built = make_settings(
-        WebSettings, payments="stripe", stripe_secret_key="x", stripe_webhook_secret="y"
-    )
+STRIPE_VALUES = {
+    "stripe_secret_key": "x",
+    "stripe_webhook_secret": "y",
+    "stripe_price_id": "price_test",
+    "stripe_coupon_id": "coupon_test",
+}
+
+
+def test_payments_stripe_with_keys_and_ids_passes(make_settings: MakeSettings) -> None:
+    built = make_settings(WebSettings, payments="stripe", **STRIPE_VALUES)
 
     assert isinstance(built, WebSettings)
     assert built.payments == "stripe"
+    assert built.stripe_price_id == "price_test"
+    assert built.stripe_coupon_id == "coupon_test"
+
+
+def test_payments_off_needs_no_stripe_ids(make_settings: MakeSettings) -> None:
+    # web.md, For MAIN (STEP-07): the €19 price and the 100%-off coupon exist only with Stripe.
+    built = make_settings(WebSettings)
+
+    assert isinstance(built, WebSettings)
+    assert built.stripe_price_id is None
+    assert built.stripe_coupon_id is None
+
+
+@pytest.mark.parametrize("missing", sorted(STRIPE_VALUES))
+def test_payments_stripe_needs_every_stripe_value(
+    make_settings: MakeSettings, missing: str
+) -> None:
+    values = {k: v for k, v in STRIPE_VALUES.items() if k != missing}
+
+    with pytest.raises(ValidationError, match=missing.upper()):
+        make_settings(WebSettings, payments="stripe", **values)
 
 
 def test_unknown_payments_mode_fails(make_settings: MakeSettings) -> None:

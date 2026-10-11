@@ -154,6 +154,8 @@ def test_stripe_checkout_is_not_wired_in_this_step(
         payments="stripe",
         stripe_secret_key="sk_test_x",
         stripe_webhook_secret="whsec_x",
+        stripe_price_id="price_test",
+        stripe_coupon_id="coupon_test",
     )
     assert isinstance(settings, WebSettings)
     response = build(tmp_path, settings).client.post(
