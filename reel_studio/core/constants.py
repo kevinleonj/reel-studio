@@ -63,6 +63,7 @@ MS_PER_S = 1000  # milliseconds per second
 BYTES_PER_MB = 1_000_000  # decimal megabytes, as the kit reports file sizes (kit qa.py:109-110)
 SECONDS_DECIMALS = 3  # durations rounded to whole milliseconds (kit prep.py:271)
 COLOUR_CHANNELS = 3  # three-channel images: BGR, RGB and Lab pixels
+SEED_BITS = 32  # random seed size for the A/B's blind order; random.Random takes any int
 TOKENS_PER_PRICE_UNIT = 1_000_000  # Claude prices are quoted per million tokens (F05)
 CRITIC_SCORE_MIN, CRITIC_SCORE_MAX = 1, 5  # the critic rubric scale (kit qa-rubric.md, D36)
 
