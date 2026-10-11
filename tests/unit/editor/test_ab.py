@@ -355,6 +355,27 @@ def test_an_unknown_fixture_name_is_refused_before_any_spend(tmp_path: Path) -> 
         harness.run()
 
 
+def test_the_ledger_counts_a_carried_arm_once_on_every_later_load(tmp_path: Path) -> None:
+    spent = _json(_harness(tmp_path, FakeKit(), FakeJudge()).run())["spent_usd"]
+    for day in (13, 14):
+        later = _harness(tmp_path, FakeKit(), FakeJudge(), script=[])
+        later.ports = make.Ports(FakeClaude([]), FrozenClock(NOW.replace(day=day)))
+        assert _json(later.run())["spent_usd"] == spent
+
+
+def test_a_refused_kit_stops_the_harness_with_its_cost_on_the_ledger(tmp_path: Path) -> None:
+    class Refused(FakeKit):
+        def run(self, name: str, files: list[Path], cap: Decimal, context: str) -> ab_kit.KitRun:
+            raise ab_kit.KitRefused("kit API error 400", Decimal("0.01"))
+
+    with pytest.raises(ab_kit.KitRefused):
+        _harness(tmp_path, Refused(), FakeJudge()).run()
+
+    rows = _json(tmp_path / "repo" / "eval" / "results" / "2026-10-12" / "ab-runs.json")["fixtures"]
+    assert len(rows) == 1 and rows[0]["old"]["error"] == "KitRefused"
+    assert rows[0]["old"]["cost_usd"] == Decimal("0.01")
+
+
 # ------------------------------------------------------------------ the blind pick and the report
 
 

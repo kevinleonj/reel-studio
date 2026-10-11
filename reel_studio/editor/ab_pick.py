@@ -108,7 +108,8 @@ def _tune(checks: list[tuple[bool, str]]) -> list[str]:
     return [
         "",
         "What to tune: read each lost fixture's weakness in ab-runs.json, change the prompts",
-        "for it, and rerun only the failing fixtures (`make ab ONLY=<names>`).",
+        "for it, and rerun only those fixtures (`make ab REDO=<names>`; a plain `make ab`",
+        "resumes a run that stopped).",
     ]
 
 

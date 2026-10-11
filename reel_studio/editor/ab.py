@@ -14,6 +14,7 @@ request or Ctrl-C stops it after the record is written.
 import argparse
 import json
 import shutil
+import signal
 import sys
 import time
 from collections.abc import Callable, Sequence
@@ -316,11 +317,16 @@ class _ArmFailed(Exception):
         self.cost = cost
 
 
+def _interrupt(signum: int, frame: object) -> None:
+    raise KeyboardInterrupt(f"signal {signum}")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="make ab", description=__doc__)
     parser.add_argument("--only", default="", help="comma-separated fixture names to (re)run")
     parser.add_argument("--redo", default="", help="fixtures whose finished arms run again")
     args = parser.parse_args(argv)
+    signal.signal(signal.SIGTERM, _interrupt)  # a task stop kills the kit too, as Ctrl-C does
     configure()
     cfg, settings, build = config.load(), EditorSettings(), BuildSettings()
     media = config.load_media()
