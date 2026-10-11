@@ -96,6 +96,9 @@ SIGNING_KEY_BYTES = 32  # laptop signed-link HMAC-SHA256 key; RFC 2104: at least
 FULL_DISCOUNT_PERCENT = 100
 PRIVATE_FILE_MODE = 0o600  # POSIX chmod(2): owner read and write only, for a file holding keys
 MINOR_UNITS_PER_EURO = 100  # ISO 4217: EUR has two decimal places
+STRIPE_API_VERSION = "2026-09-30.endive"  # F19: the version stripe 16.0.0 is built for
+# A friend's code is NAME-XXXXXX: six hex characters (3 bytes), unguessable and still typeable.
+PROMO_CODE_SUFFIX_BYTES = 3
 
 # ---------------------------------------------------------------- Google Cloud (STEP-08)
 

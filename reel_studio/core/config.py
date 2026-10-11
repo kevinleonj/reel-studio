@@ -130,6 +130,12 @@ class DispatcherTimes(_Strict):
     fake_stage_seconds: int
 
 
+class StripeTimes(_Strict):
+    timeout_s: int
+    max_network_retries: int
+    webhook_tolerance_s: int
+
+
 class Upload(_Strict):
     chunk_mib: int
     parallel_files: int
@@ -161,6 +167,7 @@ class Limits(_Strict):
     firestore: Firestore
     reelctl: Reelctl
     payments: Payments
+    stripe: StripeTimes
     smtp: Smtp
     dispatcher: DispatcherTimes
     web: Web

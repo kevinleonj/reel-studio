@@ -108,6 +108,11 @@ price_minor = 1900                  # €19.00 in cents, for the page and analyt
                                     # its own price object (stripe_price_id), which must match
 currency = "EUR"                    # ISO 4217, as GA4 expects it
 
+[stripe]                             # STEP-07 adapter; added 11 Oct 2026, Kevin to review
+timeout_s = 20                      # one Stripe request; the SDK's own default is 80 s (F311)
+max_network_retries = 2             # the SDK retries connection errors and 409/5xx with backoff
+webhook_tolerance_s = 300           # how old a signed event may be: Stripe's documented default (F23)
+
 [smtp]                               # STEP-06 task 6; added 11 Oct 2026, Kevin to review
 timeout_s = 10                      # connect and send to Mailpit; no outside call without a timeout
 
