@@ -1,0 +1,80 @@
+# Tier 1, the website on the laptop (STEP-06 task 6): `make up`, then http://localhost:8080 (or
+# http://<laptop-ip>:8080 from a phone on the same Wi-Fi). `make down` stops everything.
+# Uploads and results live in ./data/; the orders live in the Firestore emulator's memory.
+#
+# Each container gets only the names it needs, read from .env by compose's own interpolation; no
+# env_file, so the Anthropic, Gemini and cloud keys in .env never reach the website (D62).
+# Images are pinned by digest (docs/FACTS.md F308, F309), the same ones the contract suites use.
+
+x-website-settings: &website  # every WebSettings field (reel_studio/settings.py), tests pin the list
+  PAYMENTS: ${PAYMENTS:-}
+  STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+  STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+  SITE_URL: ${SITE_URL:-}
+  MAIL_FROM: ${MAIL_FROM:-}
+  KEVIN_ALERT_EMAIL: ${KEVIN_ALERT_EMAIL:-}
+  GA4_MEASUREMENT_ID: ${GA4_MEASUREMENT_ID:-}
+  GOOGLE_ADS_ID: ${GOOGLE_ADS_ID:-}
+  FIRESTORE_PROJECT: ${FIRESTORE_PROJECT:-}
+  VOICE_AVAILABLE: ${VOICE_AVAILABLE:-}
+  # The container's view, whatever .env says for running on the host:
+  SMTP_HOST: mailpit
+  SMTP_PORT: "1025"
+  DATA_DIR: /app/data
+  WEB_DIST: /app/web/dist
+  FIRESTORE_EMULATOR_HOST: firestore:8080
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+      args:
+        SITE_URL: ${SITE_URL:-}
+    image: reel-studio-api:local
+    # The host user, so the ./data bind mount is writable on Linux too; 10001 is the image's own.
+    user: "${HOST_UID:-10001}:${HOST_GID:-10001}"
+    environment: *website
+    ports:
+      - "8080:8080"  # every interface, so a phone on the same Wi-Fi can reach it (D17)
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      firestore:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]  # hardcode-ok: compose is this value's home
+      interval: 5s  # hardcode-ok: compose is this value's home
+      timeout: 3s  # hardcode-ok: compose is this value's home
+      retries: 12  # hardcode-ok: compose is this value's home
+
+  dispatcher:
+    image: reel-studio-api:local
+    command: ["python", "-m", "reel_studio.api.main", "dispatch"]
+    user: "${HOST_UID:-10001}:${HOST_GID:-10001}"
+    environment: *website
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  firestore:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli@sha256:be2f0e582a94c9e06e7a384fe2b3b39d590eeb8da65a110eda991598c100fe80
+    command: ["gcloud", "emulators", "firestore", "start", "--host-port=0.0.0.0:8080"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/"]  # hardcode-ok: compose is this value's home
+      interval: 5s  # hardcode-ok: compose is this value's home
+      timeout: 3s  # hardcode-ok: compose is this value's home
+      retries: 24  # hardcode-ok: compose is this value's home
+
+  mailpit:
+    image: axllent/mailpit@sha256:b68349e3a014b90c5610bfb26b2ae36f3892d7b8cf25ee140c6c71c98d2fcf48
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8025:8025"  # this machine only: the inbox holds every order link (D18)

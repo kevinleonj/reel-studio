@@ -84,6 +84,7 @@ UPLOAD_SESSION_ID_MAX_CHARS = (
     128  # bounds the id in a path; ids are 32 chars (UPLOAD_SESSION_BYTES)
 )
 FILE_NAME_MAX_CHARS = 255  # APFS and ext4 name limit: a longer name could not be stored
+SIGNING_KEY_BYTES = 32  # laptop signed-link HMAC-SHA256 key; RFC 2104: at least the hash length
 
 # ---------------------------------------------------------------- Google Cloud (STEP-08)
 
