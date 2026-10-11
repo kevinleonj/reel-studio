@@ -1,7 +1,8 @@
-"""The A/B harness (STEP-04, docs/EDITOR.md §11): same inputs, same judge, a budget guard,
-and a result file the step04 gate can read once Kevin's blind picks are in."""
+"""The A/B harness (STEP-04, docs/EDITOR.md §11): same inputs and order, one judge for both
+engines, a budget ledger that survives a crash, and a blind pick the step04 gate can read."""
 
 import json
+import re
 import sys
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -11,14 +12,17 @@ from typing import Any
 import pytest
 
 from reel_studio.core import config
-from reel_studio.editor import ab, ab_pick, make
+from reel_studio.core.errors import RenderError, SpendLimitReached
+from reel_studio.editor import ab, ab_judge, ab_kit, ab_pick, make
 from tests.fakes.claude import FakeClaude
 from tests.fakes.clock import FrozenClock
 from tests.fakes.media import FakeMedia, critic_turn, edl_turn
 
 CFG = config.load()
+AB = CFG.limits.eval.ab
 NOW = datetime(2026, 10, 12, 1, 0, tzinfo=UTC)
 GATES = Path(__file__).resolve().parents[3] / "scripts" / "gates"
+EMPTY_TIMELINE = {"files": {}, "duration": 4.0, "planned_duration": 4.0, "segments": [], "text": []}
 
 
 def _gate_ab_problems(data: object) -> list[str]:
@@ -27,7 +31,7 @@ def _gate_ab_problems(data: object) -> list[str]:
         gate: Any = __import__("_gate")  # Any: a script module outside the package
     finally:
         sys.path.remove(str(GATES))
-    problems: list[str] = gate.ab_problems(data, len(CFG.limits.eval.ab.fixtures))
+    problems: list[str] = gate.ab_problems(data, len(AB.fixtures))
     return problems
 
 
@@ -37,172 +41,349 @@ def _touch(folder: Path, *names: str) -> None:
         (folder / name).write_bytes(b"x")
 
 
-def test_inputs_are_videos_first_then_photos_up_to_the_kit_limit(tmp_path: Path) -> None:
-    _touch(tmp_path, "b.jpeg", "a.jpeg", "IMG_2.mov", "IMG_1.MOV", ".DS_Store", "clip.mp4")
+def _json(path: Path) -> dict[str, Any]:  # Any: JSON
+    data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"), parse_float=Decimal)
+    return data
+
+
+# ------------------------------------------------------------------ inputs
+
+
+def test_inputs_are_media_only_videos_first_up_to_the_kit_limit(tmp_path: Path) -> None:
+    _touch(
+        tmp_path, "b.jpeg", "a.jpeg", "IMG_2.mov", "IMG_1.MOV", ".DS_Store", "notes.txt", "c.mp4"
+    )
 
     picked = ab.select_inputs(tmp_path, max_files=4)
 
-    assert [p.name for p in picked] == ["IMG_1.MOV", "IMG_2.mov", "clip.mp4", "a.jpeg"]
+    assert [p.name for p in picked] == ["IMG_1.MOV", "IMG_2.mov", "c.mp4", "a.jpeg"]
 
 
-def test_staged_inputs_are_links_and_the_fixture_is_untouched(tmp_path: Path) -> None:
+def test_staged_inputs_are_links_and_a_second_stage_is_harmless(tmp_path: Path) -> None:
     source = tmp_path / "fixture"
     _touch(source, "IMG_1.mov", "IMG_2.mov")
-    before = sorted(p.name for p in source.iterdir())
 
+    ab.stage(sorted(source.iterdir()), tmp_path / "staged")
     staged = ab.stage(sorted(source.iterdir()), tmp_path / "staged")
 
-    assert sorted(p.name for p in staged.iterdir()) == before
     assert all(p.is_symlink() for p in staged.iterdir())
-    assert sorted(p.name for p in source.iterdir()) == before
+    assert sorted(p.name for p in source.iterdir()) == ["IMG_1.mov", "IMG_2.mov"]
+
+
+def test_one_order_for_the_engine_the_kit_and_the_judge() -> None:
+    order = ab.order_for(CFG)
+
+    assert (order.style, order.length_s, order.voice) == (AB.style, 30, False)
+    context = ab_kit.context_for(order, "English")
+    assert "30 s" in context and "English" in context and "voice" in context.lower()
+
+
+# ------------------------------------------------------------------ the old kit's own command
+
+
+def _stub_kit(root: Path, mode: str = "ok") -> Path:
+    """A stand-in for the kit: its python is ours, make_reel.py is a stub that behaves like it."""
+    (root / ".venv" / "bin").mkdir(parents=True)
+    (root / ".venv" / "bin" / "python").symlink_to(sys.executable)
+    script = f'''
+import json, os, sys
+from pathlib import Path
+root = Path(__file__).parent
+args = sys.argv[1:]
+(root / "seen.json").write_text(json.dumps({{
+    "args": args,
+    "cap": os.environ.get("REEL_MAX_BUDGET_USD"),
+    "model": os.environ.get("REEL_MODEL"),
+    "stdin": sys.stdin.read(),
+}}))
+if "--dry-run" in args:
+    print("[reel] Dry run. Setup: OK")
+    sys.exit(0)
+job = args[args.index("--name") + 1] + "-1a2b"
+print(f"[reel] Job {{job}}: model x, budget cap $2.")
+(root / "runs").mkdir(exist_ok=True)
+result = {{"type": "ResultMessage", "subtype": "success", "total_cost_usd": 0.9523169,
+          "result": "done"}}
+if "{mode}" == "budget":
+    result.update(subtype="error_max_budget_usd", result="")
+lines = [{{"type": "SystemMessage"}}] + ([] if "{mode}" == "killed" else [result])
+(root / "runs" / f"{{job}}.jsonl").write_text("\\n".join(json.dumps(x) for x in lines))
+if "{mode}" == "ok":
+    out = root / "output" / job
+    out.mkdir(parents=True)
+    for kind in ("text", "clean"):
+        (out / f"{{job}}_{{kind}}.mp4").write_bytes(b"old")
+    review = root / "work" / job / "review"
+    review.mkdir(parents=True)
+    (review / f"{{job}}.timeline.json").write_text(json.dumps({json.dumps(EMPTY_TIMELINE)}))
+'''
+    (root / "make_reel.py").write_text(script, encoding="utf-8")
+    return root
+
+
+def _kit(root: Path) -> ab_kit.OldKit:
+    return ab_kit.OldKit(root, "claude-sonnet-5-5", AB.kit_timeout_s, AB.log_tail_chars)
+
+
+def test_the_kit_runs_its_own_command_with_the_cap_the_model_and_no_stdin(tmp_path: Path) -> None:
+    kit_root = _stub_kit(tmp_path / "kit")
+    files = [tmp_path / "in dir" / "IMG_1.mov"]
+    _touch(files[0].parent, "IMG_1.mov")
+
+    run = _kit(kit_root).run("abcreami", files, Decimal("2.5"), "Target length 30 s.")
+
+    seen = json.loads((kit_root / "seen.json").read_text())
+    assert seen["args"] == [str(files[0]), "--name", "abcreami", "--context", "Target length 30 s."]
+    assert (seen["cap"], seen["model"], seen["stdin"]) == ("2.5", "claude-sonnet-5-5", "")
+    assert run.error is None and run.cost_usd == Decimal("0.9523169")
+    assert run.text is not None and run.text.is_file() and run.timeline is not None
+
+
+def test_a_kit_run_over_its_budget_is_an_error_with_its_cost_and_reason(tmp_path: Path) -> None:
+    run = _kit(_stub_kit(tmp_path / "kit", "budget")).run("abx", [tmp_path], Decimal("2.5"), "")
+
+    assert run.error is not None and "error_max_budget_usd" in run.error
+    assert run.cost_usd == Decimal("0.9523169")
+
+
+def test_a_killed_kit_run_counts_its_cap_as_spent(tmp_path: Path) -> None:
+    run = _kit(_stub_kit(tmp_path / "kit", "killed")).run("abx", [tmp_path], Decimal("2.5"), "")
+
+    assert run.error is not None and run.cost_usd == Decimal("2.5")
+
+
+def test_the_kit_preflight_is_its_dry_run(tmp_path: Path) -> None:
+    kit_root = _stub_kit(tmp_path / "kit")
+
+    assert _kit(kit_root).check([tmp_path]) is None
+    assert "--dry-run" in json.loads((kit_root / "seen.json").read_text())["args"]
+    assert _kit(tmp_path / "nowhere").check([tmp_path]) is not None
+
+
+# ------------------------------------------------------------------ the harness
 
 
 class FakeKit:
-    """Stands in for the old kit's make_reel.py: records the call, returns a finished run."""
+    def __init__(self, cost: str = "0.95", fail: set[str] | None = None) -> None:
+        self.calls: list[tuple[str, list[Path], Decimal, str]] = []
+        self.cost, self.fail = Decimal(cost), fail if fail is not None else set()
 
-    def __init__(self, cost: str = "0.95") -> None:
-        self.calls: list[tuple[str, list[Path], Decimal]] = []
-        self.cost = Decimal(cost)
+    def check(self, files: list[Path]) -> str | None:
+        return None
 
-    def run(self, name: str, files: list[Path], cap: Decimal) -> ab.KitRun:
-        self.calls.append((name, files, cap))
-        folder = Path(files[0]).parent.parent / f"kit-{name}"
+    def run(self, name: str, files: list[Path], cap: Decimal, context: str) -> ab_kit.KitRun:
+        self.calls.append((name, files, cap, context))
+        folder = files[0].parent.parent / f"kit-{name}"
         folder.mkdir(parents=True, exist_ok=True)
         for out in ("text.mp4", "clean.mp4"):
             (folder / out).write_bytes(b"old")
-        return ab.KitRun(
-            job=f"{name}-1a2b",
-            cost_usd=self.cost,
-            wall_s=300.0,
-            text=folder / "text.mp4",
-            clean=folder / "clean.mp4",
-            timeline=None,
-            error=None,
-        )
+        timeline = folder / "timeline.json"
+        timeline.write_text(json.dumps(EMPTY_TIMELINE))
+        error = "kit exit 1" if name in self.fail else None
+        text, clean = folder / "text.mp4", folder / "clean.mp4"
+        return ab_kit.KitRun(f"{name}-1a2b", self.cost, 300.0, text, clean, timeline, error)
 
 
-def _harness(tmp_path: Path, kit: FakeKit, script: list[Any], cfg: config.Config = CFG) -> Path:
-    fixtures = tmp_path / "fixtures"
-    for name in cfg.limits.eval.ab.fixtures:
-        _touch(fixtures / name, "IMG_1.mov", "IMG_2.mov")
-    fake, media = FakeClaude(script), FakeMedia()
+class FakeJudge:
+    def __init__(self, raise_on: int | None = None, error: Exception | None = None) -> None:
+        self.calls: list[ab_judge.Cut] = []
+        self.raise_on, self.error = raise_on, error
 
-    def judge_old(run: ab.KitRun, folder: Path) -> ab.Judged:
-        return ab.Judged(total=27, passed=True, cost_usd=Decimal("0.05"), weakness=None)
-
-    harness = ab.Harness(
-        cfg=cfg,
-        fixtures=fixtures,
-        root=tmp_path / "repo",
-        ports=make.Ports(fake, FrozenClock(NOW)),
-        steps_for=lambda _folder: make.Steps(media.prepare, media.render),
-        kit=kit,
-        judge_old=judge_old,
-    )
-    return harness.run()
+    def __call__(self, cut: ab_judge.Cut, folder: Path) -> ab_judge.Judged:
+        self.calls.append(cut)
+        if self.raise_on is not None and len(self.calls) == self.raise_on:
+            raise self.error if self.error is not None else RenderError("ffmpeg exited 1")
+        return ab_judge.Judged(total=27, passed=True, cost_usd=Decimal("0.05"), weakness=None)
 
 
 def _five_new_runs() -> list[Any]:
     return [turn for _ in range(5) for turn in (edl_turn("e1"), critic_turn(5))]
 
 
-def test_every_fixture_runs_both_engines_and_the_runs_file_is_written(tmp_path: Path) -> None:
-    kit = FakeKit()
+def _harness(
+    tmp_path: Path,
+    kit: FakeKit,
+    judge: FakeJudge,
+    *,
+    script: list[Any] | None = None,
+) -> ab.Harness:
+    fixtures = tmp_path / "fixtures"
+    for name in AB.fixtures:
+        _touch(fixtures / name, "IMG_1.mov", "IMG_2.mov")
+    media = FakeMedia()
+    claude = FakeClaude(script if script is not None else _five_new_runs())
+    return ab.Harness(
+        cfg=CFG,
+        fixtures=fixtures,
+        root=tmp_path / "repo",
+        ports=make.Ports(claude, FrozenClock(NOW)),
+        steps_for=lambda _folder: make.Steps(media.prepare, media.render),
+        kit=kit,
+        judge=judge,
+    )
 
-    runs = _harness(tmp_path, kit, _five_new_runs())
 
-    data = json.loads(runs.read_text(encoding="utf-8"), parse_float=Decimal)
-    names = [row["name"] for row in data["fixtures"]]
-    assert names == list(CFG.limits.eval.ab.fixtures) and len(kit.calls) == 5
+def test_both_engines_run_on_the_same_files_and_one_judge_scores_both(tmp_path: Path) -> None:
+    kit, judge = FakeKit(), FakeJudge()
+
+    runs = _harness(tmp_path, kit, judge).run()
+
+    data = _json(runs)
+    assert [row["name"] for row in data["fixtures"]] == list(AB.fixtures)
+    assert len(judge.calls) == 10  # the new engine's shipped render too, not its in-loop score
+    for name, files, _cap, context in kit.calls:
+        assert [f.name for f in files] == ["IMG_1.mov", "IMG_2.mov"], name
+        assert "30 s" in context
     row = data["fixtures"][0]
-    assert row["new"]["critic_total"] == 29 and row["new"]["passed"] is True
-    assert row["old"]["critic_total"] == 27 and row["old"]["cost_usd"] == Decimal("1.00")
-    assert "pick" not in row  # Kevin's blind pick comes later (make ab-pick)
+    assert row["new"]["critic_total"] == 27 and row["new"]["loop_critic_total"] == 29
+    assert row["old"]["cost_usd"] == Decimal("1.00")  # kit 0.95 + judge 0.05
+    assert not Path(row["old"]["outputs"]["text"]).is_absolute()
     assert runs.name == "ab-runs.json" and runs.parent.name == "2026-10-12"
 
 
-def test_both_engines_get_the_same_files(tmp_path: Path) -> None:
+def test_a_failing_arm_is_recorded_and_the_rest_still_runs(tmp_path: Path) -> None:
+    runs = _harness(tmp_path, FakeKit(), FakeJudge(raise_on=4)).run()
+
+    rows = _json(runs)["fixtures"]
+    errors = [(r["name"], side) for r in rows for side in ("new", "old") if r[side]["error"]]
+    assert errors == [(AB.fixtures[1], "old")] and len(rows) == 5
+
+
+def test_a_spend_limit_stops_the_run_after_writing_what_was_spent(tmp_path: Path) -> None:
+    judge = FakeJudge(raise_on=2, error=SpendLimitReached("workspace limit"))
+
+    with pytest.raises(SpendLimitReached):
+        _harness(tmp_path, FakeKit(), judge).run()
+
+    runs = tmp_path / "repo" / "eval" / "results" / "2026-10-12" / "ab-runs.json"
+    rows = _json(runs)["fixtures"]
+    assert rows[0]["new"]["error"] is None and rows[0]["old"]["error"] == "spend_limit"
+    assert rows[0]["old"]["cost_usd"] == Decimal("0.95")
+
+
+def test_a_second_run_resumes_and_reruns_only_failed_arms(tmp_path: Path) -> None:
+    _harness(tmp_path, FakeKit(fail={f"ab{AB.fixtures[2]}"}), FakeJudge()).run()
     kit = FakeKit()
 
-    _harness(tmp_path, kit, _five_new_runs())
+    runs = _harness(tmp_path, kit, FakeJudge(), script=[]).run()
 
-    for name, files, _cap in kit.calls:
-        assert [f.name for f in files] == ["IMG_1.mov", "IMG_2.mov"], name
+    assert [name for name, *_ in kit.calls] == [f"ab{AB.fixtures[2]}"]
+    rows = _json(runs)["fixtures"]
+    assert all(r[side]["error"] is None for r in rows for side in ("new", "old"))
 
 
-def test_the_harness_stops_before_a_run_that_could_pass_the_budget(tmp_path: Path) -> None:
-    small = CFG.limits.eval.ab.model_copy(update={"budget_usd": Decimal("3.00")})
+def test_the_budget_counts_earlier_runs_and_stops_before_a_run_that_could_pass_it(
+    tmp_path: Path,
+) -> None:
+    small = AB.model_copy(update={"budget_usd": Decimal("3.20")})
     evals = CFG.limits.eval.model_copy(update={"ab": small})
     cfg = CFG.model_copy(update={"limits": CFG.limits.model_copy(update={"eval": evals})})
-    kit = FakeKit(cost="0.95")
 
-    runs = _harness(tmp_path, kit, _five_new_runs(), cfg)
+    harness = _harness(tmp_path, FakeKit(), FakeJudge())
+    harness.cfg = cfg
+    runs = harness.run()
 
-    data = json.loads(runs.read_text(encoding="utf-8"), parse_float=Decimal)
-    spent = sum(
-        row[side]["cost_usd"]
-        for row in data["fixtures"]
-        for side in ("new", "old")
-        if row.get(side)
-    )
-    assert spent <= Decimal("3.00")
-    assert data["stopped"] is not None and "budget" in data["stopped"]
+    data = _json(runs)
+    spent = sum(r[s]["cost_usd"] for r in data["fixtures"] for s in ("new", "old") if s in r)
+    assert spent <= Decimal("3.20") and "budget" in data["stopped"]
+
+
+def test_a_failed_preflight_spends_nothing(tmp_path: Path) -> None:
+    class Broken(FakeKit):
+        def check(self, files: list[Path]) -> str | None:
+            return "kit python not found"
+
+    fake = FakeClaude([])
+    harness = _harness(tmp_path, Broken(), FakeJudge(), script=[])
+    harness.ports = make.Ports(fake, FrozenClock(NOW))
+
+    with pytest.raises(ab.PreflightError, match="kit python"):
+        harness.run()
+
+    assert fake.requests == [] and fake.counted == []
+
+
+def test_only_limits_the_run_to_the_named_fixtures(tmp_path: Path) -> None:
+    kit = FakeKit()
+    script = [edl_turn("e1"), critic_turn(5)]
+
+    harness = _harness(tmp_path, kit, FakeJudge(), script=script)
+    harness.only = (AB.fixtures[0],)
+    runs = harness.run()
+
+    assert [name for name, *_ in kit.calls] == [f"ab{AB.fixtures[0]}"]
+    assert [r["name"] for r in _json(runs)["fixtures"]] == [AB.fixtures[0]]
+
+
+# ------------------------------------------------------------------ the blind pick and the report
+
+
+def _picked(tmp_path: Path, answers: list[str], seed: int, said: list[str]) -> Path:
+    runs = _harness(tmp_path, FakeKit(), FakeJudge()).run()
+    it = iter(answers)
+    return ab_pick.pick(runs, tmp_path / "repo", lambda _p: next(it), seed, said.append)
 
 
 def test_picks_turn_the_runs_into_the_file_the_gate_reads(tmp_path: Path) -> None:
-    runs = _harness(tmp_path, FakeKit(), _five_new_runs())
-    answers = iter(["x", "Sharper hook", "tie", "Same", "y", "Better ending", "x", "", "y", "ok"])
+    said: list[str] = []
+    result = _picked(tmp_path, ["x", "Sharper hook", "tie", "Same"] + ["y", "r"] * 3, 7, said)
 
-    result = ab_pick.pick(
-        runs, tmp_path / "repo", ask=lambda _prompt: next(answers), seed=7, say=lambda _line: None
-    )
-
-    data = json.loads(result.read_text(encoding="utf-8"), parse_float=Decimal)
+    data = _json(result)
     assert result.name == "ab.json" and _gate_ab_problems(data) == []
-    assert {row["pick"] for row in data["fixtures"]} <= {"new", "old", "tie"}
     assert data["fixtures"][1]["pick"] == "tie" and data["fixtures"][0]["reason"] == "Sharper hook"
 
 
-def test_a_pick_must_be_x_y_or_tie(tmp_path: Path) -> None:
-    runs = _harness(tmp_path, FakeKit(), _five_new_runs())
-    answers = iter(["maybe", "x", "r"] + ["tie", "r"] * 4)
+def test_nothing_before_the_reveal_says_which_engine_is_which(tmp_path: Path) -> None:
     said: list[str] = []
+    _picked(tmp_path, ["x", "r"] * 5, 7, said)
 
-    ab_pick.pick(
-        runs, tmp_path / "repo", ask=lambda _prompt: next(answers), seed=1, say=said.append
-    )
+    reveal = next(i for i, line in enumerate(said) if " was " in line)
+    before = " ".join(said[:reveal]).lower()
+    page = (tmp_path / "repo" / "out" / "ab" / "2026-10-12" / "pick" / "pick.html").read_text()
+    for text in (before, page.lower()):
+        assert not re.search(r"\b(new|old)\b|kit-|/new-|/old-", text)
+
+
+def test_x_maps_to_the_shuffled_first_side_and_the_order_varies(tmp_path: Path) -> None:
+    firsts = {ab_pick.order_of(seed, list(AB.fixtures))[AB.fixtures[0]][0] for seed in range(20)}
+    said: list[str] = []
+    data = _json(_picked(tmp_path, ["x", "r"] * 5, 7, said))
+
+    expected = ab_pick.order_of(7, list(AB.fixtures))
+    assert firsts == {"new", "old"}
+    assert [r["pick"] for r in data["fixtures"]] == [expected[n][0] for n in AB.fixtures]
+
+
+def test_a_pick_must_be_x_y_or_tie(tmp_path: Path) -> None:
+    said: list[str] = []
+    _picked(tmp_path, ["maybe", "x", "r"] + ["tie", "r"] * 4, 1, said)
 
     assert any("x, y or tie" in line for line in said)
 
 
-def test_the_report_has_a_row_per_fixture_and_the_verdict(tmp_path: Path) -> None:
-    runs = _harness(tmp_path, FakeKit(), _five_new_runs())
-    answers = iter(["x", "r", "y", "r", "tie", "r", "x", "r", "y", "r"])
-    ab_pick.pick(
-        runs, tmp_path / "repo", ask=lambda _prompt: next(answers), seed=3, say=lambda _line: None
-    )
+def test_pick_refuses_while_an_arm_failed_and_names_the_fixture(tmp_path: Path) -> None:
+    runs = _harness(tmp_path, FakeKit(fail={f"ab{AB.fixtures[3]}"}), FakeJudge()).run()
+
+    with pytest.raises(ab_pick.Incomplete, match=AB.fixtures[3]):
+        ab_pick.pick(runs, tmp_path / "repo", lambda _p: "x", 1, lambda _l: None)
+
+
+def test_the_report_has_every_fixture_the_verdict_and_the_budget(tmp_path: Path) -> None:
+    said: list[str] = []
+    _picked(tmp_path, ["x", "a | b"] * 5, 3, said)
 
     report = (tmp_path / "repo" / "eval" / "AB-RESULT.md").read_text(encoding="utf-8")
 
-    for name in CFG.limits.eval.ab.fixtures:
+    for name in AB.fixtures:
         assert f"| {name} |" in report
-    assert "Verdict:" in report
+    assert "Verdict: PASS" in report or "Verdict: FAIL" in report
+    assert "a / b" in report  # a reason cannot break the table
+    assert "budget" in report.lower()
 
 
 def test_kit_cost_comes_from_the_result_message(tmp_path: Path) -> None:
     log = tmp_path / "run.jsonl"
-    lines = [
-        {"type": "SystemMessage"},
-        {"type": "ResultMessage", "subtype": "success", "total_cost_usd": 0.9523169},
-    ]
+    lines = [{"type": "SystemMessage"}, {"type": "ResultMessage", "total_cost_usd": 0.9523169}]
     log.write_text("\n".join(json.dumps(x) for x in lines) + "\n", encoding="utf-8")
 
-    assert ab.kit_cost(log) == Decimal("0.9523169")
-
-
-def test_a_kit_log_without_a_result_is_an_error(tmp_path: Path) -> None:
-    log = tmp_path / "run.jsonl"
-    log.write_text(json.dumps({"type": "SystemMessage"}) + "\n", encoding="utf-8")
-
-    with pytest.raises(ValueError, match="no result"):
-        ab.kit_cost(log)
+    assert ab_kit.kit_cost(log) == Decimal("0.9523169")

@@ -80,6 +80,7 @@ class Ab(_Strict):
     kit_run_cap_usd: Decimal
     kit_timeout_s: int
     log_tail_chars: int
+    judge_reserve_usd: Decimal
     min_new_or_tie: int
     critic_margin: int
     max_mean_cost_usd: Decimal

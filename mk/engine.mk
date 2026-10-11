@@ -19,9 +19,11 @@ eval:
 	$(UV) python -m reel_studio.editor.evaluate --fixture $(FIX) --model $(MODEL)
 
 # STEP-04: both engines on the fixtures in limits.toml [eval.ab], judged by our critic, inside the
-# step budget; then Kevin's blind picks turn eval/results/<date>/ab-runs.json into ab.json.
+# step budget (ONLY=a,b reruns those fixtures); then Kevin's blind picks turn
+# eval/results/<date>/ab-runs.json into ab.json.
+ONLY ?=
 ab:
-	$(UV) python -m reel_studio.editor.ab
+	$(UV) python -m reel_studio.editor.ab --only "$(ONLY)"
 
 ab-pick:
 	$(UV) python -m reel_studio.editor.ab_pick

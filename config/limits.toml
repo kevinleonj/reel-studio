@@ -63,6 +63,7 @@ budget_usd = 15.0                   # STEP-04 paid budget, both engines and the 
 kit_run_cap_usd = 2.5               # the kit's REEL_MAX_BUDGET_USD for one run (kit default 6)
 kit_timeout_s = 3600                # one kit run; the creami run of 10 Oct took 343 s
 log_tail_chars = 300                # of the kit's output kept when a run names no job
+judge_reserve_usd = 0.15            # kept free for one judge call (about $0.06 measured)
 min_new_or_tie = 3                  # EDITOR section 11, for the report (the gate recomputes it)
 critic_margin = 1
 max_mean_cost_usd = 1.20

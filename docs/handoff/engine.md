@@ -3,18 +3,24 @@
 Written by the engine lane only. Newest entry on top.
 
 ## Status board
-- READY TO MERGE: PR #5 (once its CI is green on this push; the step03 gate fails only on the
-  model-judged critic score, standing order 3)
-- Done: STEP-03 tasks 1-9; Needs Kevin 22(a) and 23 done; three Sonnet improvement rounds run
-  (24, 21, 23 of 35; gate 26) and recorded below for STEP-04
-- Partly: `GATE step03`: 12 of 13 checks; `critic.passed` false
-- Blocked: —
-- Next: STEP-04's A/B judges quality against the old kit on several fixtures (D44); the critic
-  record below is its starting point
-- Paid: branch total $1.4731 of $5 (8 result files)
+- Done: STEP-03 merged (PR #5, 11 Oct 19:28 UTC; gate 12 of 13, only the model-judged
+  `critic.passed` failed after 3 rounds: 24, 21, 23 of 35, gate 26; $1.4731 of $5). STEP-04 tasks 1,
+  2 and 4 built on `step-04-ab`: `make ab` (both engines, same files, our critic judges both, budget
+  guard) and `make ab-pick` (blind X/Y picks, ab.json, eval/AB-RESULT.md)
+- Partly: STEP-04 paid A/B run (`make ab`)
+- Needs Kevin's hands: STEP-04 task 3, the blind picks (`make ab-pick`); the step04 gate reads
+  ab.json, which only exists after them
+- Next: STEP-04 PR; then STEP-05
 - Ledger: anthropic `messages.stream` and httpx2 `MockTransport` uses added to `eval/doc-ledger.pending.json`
 
 ## Decided by standing orders
+- 11 Oct, STEP-04: the A/B fixtures are cookies, creami, meat, mercadona, pastav2 (STEP-04 says
+  exactly 5; REEL_FIXTURES_DIR holds 8). Left out: orderinginspanish (speech, STEP-05), pasta (same
+  dish as pastav2, half photos), melocotonjuice (one 9 s clip). The kit takes at most 15 files, so
+  both engines get the same first 15 (videos first, by name). Order style montage for all; the kit
+  gets no style. Undo: edit `limits.toml [eval.ab]`.
+- 11 Oct, STEP-04: the harness lives in `reel_studio/editor/ab.py` and `ab_pick.py` (STEP-04 names
+  `eval/ab.py`; the package keeps it under mypy, ruff and the unit tests). Undo: move the files.
 - 11 Oct: non-spend, non-transient API errors (bad key, billing, bad request) raise a new
   `ProviderRejected` (code `provider_rejected`) instead of a raw SDK error, and the CLI logs them as
   one line. Why: the Tier 0 user saw a traceback. Undo: revert e109405.
