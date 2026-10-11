@@ -56,7 +56,7 @@ class ReadSheet(_Input):
 
 class ReadStrip(_Input):
     """Frames of one clip between two times, to pick exact cut points (at most 6 s; at most 12
-    strips per edit)."""
+    strips per order)."""
 
     clip: str
     start_s: float
@@ -64,7 +64,7 @@ class ReadStrip(_Input):
 
 
 class ReadGradePreview(_Input):
-    """The colour looks side by side on a few frames (at most 2 per edit). Frames as "clip:time"
+    """The colour looks side by side on a few frames (at most 2 per order). Frames as "clip:time"
     (e.g. "c03:2.5"); null picks the most colourful sharp frames."""
 
     frames: list[str] | None

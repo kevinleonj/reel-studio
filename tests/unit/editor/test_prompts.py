@@ -167,7 +167,8 @@ def test_the_brief_names_every_formats_length_target_and_the_orders() -> None:
 def test_the_editor_is_told_to_drop_duplicates_and_blur_and_keep_labels_clear() -> None:
     system = prompt.system_prompt("montage", CFG)
 
-    assert "near-duplicate" in system and "No blur" in system and "soft windows" not in system
+    assert "near-duplicate" in system and "one budget per order" in system
+    assert "No blur" in system and "soft windows" not in system
     assert "never over a product's label" in system
 
 
@@ -178,6 +179,7 @@ def test_the_brief_gives_each_clips_brightness() -> None:
     row = next(line for line in text.splitlines() if line.startswith("| c01"))
     assert row.endswith("| 110 |")  # measure.py's 0..255 grey mean, as measured
     assert "0-255" in text and f"more than {MEDIA.qa.luma_jump:g}" in text
+    assert "check close-ups with read_strip" not in text  # strips are uncropped frames
     assert "0-100" not in text and "soft windows" not in text
 
 

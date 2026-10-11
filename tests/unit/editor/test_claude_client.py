@@ -282,6 +282,7 @@ def test_connect_turns_the_sdk_retries_off_and_sets_the_timeouts() -> None:
     assert sdk.max_retries == 0 and editor.transient_retries == 2  # D45, EDITOR §3
     assert sdk.timeout == anthropic.Timeout(cfg.timeout_s, connect=cfg.connect_timeout_s)
     assert claude.policy == client.RetryPolicy(2, cfg.retry_initial_s, cfg.retry_max_s)
+    assert claude.message_max == cfg.error_message_max_chars
 
 
 STREAM_EVENTS: list[dict[str, Any]] = [  # Any: server-sent event JSON
@@ -397,3 +398,18 @@ def test_a_stream_that_ends_before_message_stop_is_retried() -> None:
     ).create(REQUEST)
 
     assert reply["stop_reason"] == "end_turn" and len(calls) == 2 and sleeps == [0.5]
+
+
+def test_a_refusal_without_an_anthropic_body_keeps_the_sdks_text() -> None:
+    """A proxy's HTML 403 has no error.type or message; the SDK's own text still says what broke."""
+
+    def answer(request: httpx2.Request) -> httpx2.Response:
+        headers = {"content-type": "text/html"}
+        return httpx2.Response(403, headers=headers, content=b"<html>blocked by the proxy</html>")
+
+    claude = client.ClaudeClient(_streaming_sdk(answer), POLICY, MESSAGE_MAX)
+
+    with pytest.raises(ProviderRejected) as raised:
+        claude.create(REQUEST)
+
+    assert "http_403 unknown" in str(raised.value) and "blocked by the proxy" in str(raised.value)

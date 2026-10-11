@@ -159,8 +159,10 @@ class ClaudeClient:
             return
         if _transient(error):
             raise ProviderUnavailable(f"{name}: {_outcome(error)} after retries") from error
-        kind = status.type if status is not None else None  # bad key, billing, bad request
-        said = _error_field(status, "message") if status is not None else error.message
+        # bad key, billing, bad request; a proxy's or WAF's body has no Anthropic error shape
+        kind = status.type if status is not None and status.type is not None else "unknown"
+        field = _error_field(status, "message") if status is not None else None
+        said = field if isinstance(field, str) else error.message
         words = str(said)[: self.message_max]
         raise ProviderRejected(f"{name}: {_outcome(error)} {kind}: {words}") from error
 

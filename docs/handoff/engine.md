@@ -21,8 +21,8 @@ Written by the engine lane only. Newest entry on top.
 - 11 Oct: round 3 removed the round-2 cut rules (variety, brightness order, last shot) after round 2
   scored 21 against round 1's 24 with a 14 s cut. Undo: revert 369f1a9 (restores them).
 - 11 Oct: the soft-window column is removed (empty on real footage; its floor did not match
-  QA's) and the blur rule tells the editor to check sharpness with read_strip. Undo: revert the
-  review-fix commit that removes it.
+  QA's) and the blur rule tells the editor to check the hook, peak and payoff with read_strip.
+  Undo: restore the column by hand; reverting ce060a3 would also bring back the 100x brightness.
 - 11 Oct: a refused request keeps up to `anthropic.toml error_message_max_chars` = 300 characters
   of the provider's message (enough for the workspace-key error, 207 characters). Undo: lower it.
 - Not done, recorded: a critic call refused by the provider (ProviderRejected) after a good
@@ -129,7 +129,7 @@ issues every run repeats:
   The fixture has 7 videos and 7 photos, mostly of the finished tub.
 - Brightness jumps of 23-56 at cuts (0..255). The review measured the cause on the saved
   proxies: raw clips differ by at most 28 and the grade moves segments only -5..+8; the big jumps
-  come from the editor's own zoomed crops of stills (zoom 1.3-1.5 into a bright area). A
+  come from the editor's own zoomed crops (zoom 1.3-1.5 into a bright area, stills and video). A
   `write_edl` warning computed on the cropped proxy would give the editor the number before a
   render.
 - No blending step: raw fruit to finished tub in one cut (the fixture has no blending clip).
@@ -142,10 +142,9 @@ twice (about $0.06 each) before crediting a rule. The length check only compares
 format's range: rounds 2 and 3 chose `other` (15-50 s) for 14.1 s and 15.2 s cuts against a 30 s
 order; the brief no longer says "choose the format first", and a warning on distance from the
 order target is open. The soft-window column was empty on the real footage (its floor was not
-QA's), so it is gone. Open questions for the A/B:
+QA's), so it is gone (ce060a3; reverting it would also bring back the 100x brightness). Open questions for the A/B:
 whether the kit's editor scores higher on the same footage, whether the critic is too strict for
-thin footage (every run is footage-limited by its own account), and whether the brightness gap is
-a grade problem (`grade.match`) rather than an edit problem.
+thin footage (every run is footage-limited by its own account).
 Plan notes kept from the answered items: fonts (Poppins-Bold.ttf + OFL.txt) ship as package data
 under `reel_studio/editor/media/fonts/`, no host-font fallbacks. Sheets failing case:
 `test_sheet_is_1536x864_with_16_tiles` fails against a port of kit `build_sheets` (`prep.py:167-221`,
