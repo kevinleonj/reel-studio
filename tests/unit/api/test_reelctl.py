@@ -6,7 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from reel_studio.cli.reelctl import Ports, build_parser, run, set_dotenv
+from reel_studio.adapters.payments_stripe import StripePayments
+from reel_studio.api import main as api_main
+from reel_studio.cli.reelctl import Ports, build_parser, connect, run, set_dotenv
 from reel_studio.core.config import load
 from reel_studio.core.errors import ErrorCode
 from reel_studio.core.ports import NewOrder
@@ -202,3 +204,50 @@ def test_report_skips_a_cost_it_cannot_read() -> None:
     assert status == 0
     assert "cost_usd 0.00 (0 finished)" in out
     assert f"(cost unreadable: {done})" in out
+
+
+STRIPE_ENV = {
+    "PAYMENTS": "stripe",
+    "SITE_URL": "http://example.test",
+    "MAIL_FROM": "reels@example.test",
+    "KEVIN_ALERT_EMAIL": "kevin@example.test",
+    "FIRESTORE_PROJECT": "reel-studio-test",
+    "SMTP_HOST": "mailpit",
+    "SMTP_PORT": "1025",
+    "VOICE_AVAILABLE": "false",
+    "STRIPE_SECRET_KEY": "stand-in-value",
+    "STRIPE_WEBHOOK_SECRET": "stand-in-value",
+    "STRIPE_PRICE_ID": "price_test",
+    "STRIPE_COUPON_ID": "coupon_test",
+}
+
+
+def test_connect_builds_firestore_and_stripe_from_the_settings(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    for name, value in STRIPE_ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("WEB_DIST", str(tmp_path))
+    built: list[str] = []
+
+    def fake_orders(settings: object, _config: object, clock: FrozenClock) -> FakeOrders:
+        built.append(getattr(settings, "firestore_project", ""))
+        return FakeOrders(clock, LIMITS)
+
+    monkeypatch.setattr(api_main, "firestore_orders", fake_orders)
+    ports = connect()
+    assert isinstance(ports.payments, StripePayments)
+    assert isinstance(ports.orders, FakeOrders)
+    assert built == ["reel-studio-test"]
+
+
+def test_connect_needs_stripe(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Codes live in Stripe, so reelctl refuses PAYMENTS=off instead of half-working."""
+    for name, value in STRIPE_ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("PAYMENTS", "off")
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("WEB_DIST", str(tmp_path))
+    with pytest.raises(SystemExit, match="PAYMENTS=stripe"):
+        connect()

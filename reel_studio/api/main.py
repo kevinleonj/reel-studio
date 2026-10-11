@@ -26,6 +26,7 @@ from reel_studio.adapters.launcher_local import (
     Sweep,
 )
 from reel_studio.adapters.mailer_smtp import SmtpMailer
+from reel_studio.adapters.payments_stripe import StripePayments, StripeSetup, build_client
 from reel_studio.adapters.storage_local import LocalStorage
 from reel_studio.api import payments
 from reel_studio.api.app import create_app
@@ -34,7 +35,7 @@ from reel_studio.api.notify import Notifier
 from reel_studio.api.routes_local import DOWNLOAD_PATH, UPLOAD_PATH
 from reel_studio.core import logging as reel_logging
 from reel_studio.core.config import Config, load
-from reel_studio.core.constants import SIGNING_KEY_BYTES
+from reel_studio.core.constants import SIGNING_KEY_BYTES, STRIPE_API_VERSION
 from reel_studio.core.logging import get_logger
 from reel_studio.core.order_rules import limits_from
 from reel_studio.core.ports import Clock, OrderStore
@@ -68,22 +69,41 @@ def _mailer(settings: WebSettings, config: Config) -> SmtpMailer:
     )
 
 
-def _refuse_stripe(settings: WebSettings) -> None:
-    if settings.payments != "off":
-        raise SystemExit("PAYMENTS=stripe needs the Stripe adapter (STEP-07); use PAYMENTS=off")
+def build_payments(settings: WebSettings, config: Config, clock: Clock) -> StripePayments | None:
+    """Stripe in test mode (D58), or nothing with PAYMENTS=off. WebSettings has already
+    refused PAYMENTS=stripe without its keys and ids."""
+    if settings.payments == "off":
+        return None
+    key, secret = settings.stripe_secret_key, settings.stripe_webhook_secret
+    price, coupon = settings.stripe_price_id, settings.stripe_coupon_id
+    if key is None or secret is None or price is None or coupon is None:
+        raise SystemExit("PAYMENTS=stripe needs its four STRIPE_ settings")  # unreachable
+    times = config.limits.stripe
+    client = build_client(
+        key.get_secret_value(),
+        api_version=STRIPE_API_VERSION,
+        timeout_s=times.timeout_s,
+        max_network_retries=times.max_network_retries,
+    )
+    setup = StripeSetup(
+        price_id=price,
+        coupon_id=coupon,
+        webhook_secret=secret.get_secret_value(),
+        tolerance_s=times.webhook_tolerance_s,
+    )
+    return StripePayments(client, clock, setup)
 
 
 def build_deps(
     settings: WebSettings, *, orders: OrderStore, clock: Clock, config: Config
 ) -> ApiDeps:
-    _refuse_stripe(settings)
     storage = _storage(settings, clock)
     return ApiDeps(
         orders=orders,
         storage=storage,
         local_storage=storage,
         mailer=_mailer(settings, config),
-        payments=None,  # PAYMENTS=off until the Stripe adapter exists (_refuse_stripe)
+        payments=build_payments(settings, config, clock),
         clock=clock,
         config=config,
         settings=settings,
@@ -146,7 +166,6 @@ def create() -> FastAPI:
     """uvicorn's factory: settings are read (and validated) at startup, not at import."""
     reel_logging.configure()
     settings, config, clock = WebSettings(), load(), SystemClock()
-    _refuse_stripe(settings)
     orders = firestore_orders(settings, config, clock)
     return create_app(build_deps(settings, orders=orders, clock=clock, config=config))
 
@@ -160,7 +179,6 @@ def dispatch() -> None:
 
     signal.signal(signal.SIGTERM, on_signal)  # `docker compose down` sends SIGTERM
     settings, config, clock = WebSettings(), load(), SystemClock()
-    _refuse_stripe(settings)
     orders = firestore_orders(settings, config, clock)
     dispatcher = build_dispatcher(settings, orders=orders, clock=clock, config=config)
     log.info("dispatcher started", extra={"stage": "dispatcher", "event": "start"})

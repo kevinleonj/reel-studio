@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from reel_studio.adapters.launcher_local import Dispatcher
 from reel_studio.adapters.mailer_smtp import SmtpMailer
+from reel_studio.adapters.payments_stripe import StripePayments, StripeSetup
 from reel_studio.api import main
 from reel_studio.api.app import create_app
 from reel_studio.api.main import build_deps, build_dispatcher
@@ -87,7 +88,7 @@ def test_the_api_is_wired_from_settings(tmp_path: Path, make_settings: MakeSetti
     assert (settings.data_dir).is_dir()
 
 
-def test_stripe_is_refused_until_its_adapter_exists(
+def test_stripe_settings_wire_the_stripe_adapter(
     tmp_path: Path, make_settings: MakeSettings
 ) -> None:
     settings = laptop(
@@ -100,8 +101,22 @@ def test_stripe_is_refused_until_its_adapter_exists(
         stripe_coupon_id="coupon_test",
     )
     clock = FrozenClock(START)
-    with pytest.raises(SystemExit, match="PAYMENTS=stripe"):
-        build_deps(settings, orders=FakeOrders(clock, LIMITS), clock=clock, config=load())
+    deps = build_deps(settings, orders=FakeOrders(clock, LIMITS), clock=clock, config=load())
+    assert isinstance(deps.payments, StripePayments)
+    assert deps.payments.setup == StripeSetup(
+        price_id="price_test",
+        coupon_id="coupon_test",
+        webhook_secret="test-webhook-secret",
+        tolerance_s=load().limits.stripe.webhook_tolerance_s,
+    )
+    assert TestClient(create_app(deps)).get("/api/config").json()["payments"] == "stripe"
+
+
+def test_payments_off_wires_no_payments(tmp_path: Path, make_settings: MakeSettings) -> None:
+    clock = FrozenClock(START)
+    settings = laptop(tmp_path, make_settings)
+    deps = build_deps(settings, orders=FakeOrders(clock, LIMITS), clock=clock, config=load())
+    assert deps.payments is None
 
 
 def test_the_dispatcher_launches_a_queued_order(
@@ -228,7 +243,7 @@ def test_the_composed_dispatcher_sweeps_missed_checkouts(
     assert doc["status"] == "expired"
 
 
-def test_create_refuses_stripe_before_it_builds_a_firestore_client(
+def test_create_builds_the_stripe_app_from_the_environment(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     for name, value in COMPLETE.items():
@@ -241,9 +256,9 @@ def test_create_refuses_stripe_before_it_builds_a_firestore_client(
     monkeypatch.setenv("STRIPE_PRICE_ID", "price_test")
     monkeypatch.setenv("STRIPE_COUPON_ID", "coupon_test")
 
-    def no_client(*_: object) -> None:
-        raise AssertionError("built a Firestore client before refusing PAYMENTS=stripe")
+    def fake_orders(_settings: object, _config: object, clock: FrozenClock) -> FakeOrders:
+        return FakeOrders(clock, LIMITS)
 
-    monkeypatch.setattr(main, "firestore_orders", no_client)
-    with pytest.raises(SystemExit, match="PAYMENTS=stripe"):
-        main.create()
+    monkeypatch.setattr(main, "firestore_orders", fake_orders)
+    client = TestClient(main.create())
+    assert client.get("/api/config").json()["payments"] == "stripe"
