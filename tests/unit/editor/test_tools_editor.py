@@ -3,6 +3,7 @@
 import base64
 import io
 import json
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -244,3 +245,27 @@ def test_bad_input_shape_and_unknown_tools_do_not_raise(box: tools.Toolbox) -> N
 
     assert shape.is_error and "end_s" in shape.text()
     assert unknown.is_error and "read_sheet" in unknown.text()
+
+
+def _schemas(node: Any) -> Iterator[Any]:  # Any: JSON Schema nodes
+    if isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from _schemas(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _schemas(value)
+
+
+def test_no_tool_offers_an_untyped_value(box: tools.Toolbox) -> None:
+    """The API refuses `{}` in a strict tool ("Empty schema ... is not supported", 400 on
+    11 Oct 2026). Audio.music exists only so the validator can refuse it (D02): never offered."""
+    for definition in box.definitions():
+        properties = [
+            p
+            for node in _schemas(definition["input_schema"])
+            for p in node.get("properties", {}).values()
+        ]
+        assert {} not in properties, definition["name"]
+    edl = next(d for d in box.definitions() if d["name"] == "write_edl")
+    assert "music" not in json.dumps(edl["input_schema"]).replace("music_hint", "")

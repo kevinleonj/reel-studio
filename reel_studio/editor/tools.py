@@ -112,6 +112,16 @@ def strict_schema(schema: Any) -> Any:  # Any: JSON Schema
     return schema
 
 
+def _offered(model: type[BaseModel]) -> Block:
+    """The strict input schema the model sees. Audio.music exists only so the validator can refuse
+    it (D02, D42); its untyped `{}` schema is refused by the API in a strict tool, so it is never
+    offered (400 "Empty schema ... is not supported", 11 Oct 2026)."""
+    schema = strict_schema(model.model_json_schema(by_alias=True))
+    audio = schema.get("$defs", {}).get("AudioBlock", {}).get("properties", {})
+    audio.pop("music", None)
+    return schema  # type: ignore[no-any-return]
+
+
 def image_block(image: Image.Image, max_side: int, quality: int) -> Block:
     """A JPEG content block no larger than the F08 limit on its longest side."""
     picture = image.convert("RGB")
@@ -163,7 +173,7 @@ class Toolbox:
                 "name": name,
                 "description": " ".join(desc.split()),
                 "strict": True,
-                "input_schema": strict_schema(model.model_json_schema(by_alias=True)),
+                "input_schema": _offered(model),
             }
             for name, model, desc in specs
         ]
