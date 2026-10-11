@@ -202,4 +202,5 @@ def test_a_file_name_longer_than_the_disk_allows_is_refused(api: Api) -> None:
     response = api.client.post(
         f"/api/orders/{order_id}/uploads", json={"files": files}, headers=auth
     )
-    assert response.status_code == 422
+    # 400 with the page's own words since REVIEW-FIXES W4 (was a bare 422).
+    assert (response.status_code, response.json()["error"]) == (400, "name_too_long")

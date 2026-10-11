@@ -30,6 +30,7 @@ class ErrorCode(StrEnum):
     TOO_LARGE = "too_large"
     BAD_TYPE = "bad_type"
     NO_FILES = "no_files"
+    NAME_TOO_LONG = "name_too_long"
     # cloud adapters (STEP-08): Cloud Storage, Cloud Run, Resend after our retries
     CLOUD_UNAVAILABLE = "cloud_unavailable"
 
@@ -140,6 +141,10 @@ class BadType(ApiError):
 
 class NoFiles(ApiError):
     code = ErrorCode.NO_FILES
+
+
+class NameTooLong(ApiError):
+    code = ErrorCode.NAME_TOO_LONG
 
 
 class DeliveryFailed(Exception):

@@ -10,7 +10,7 @@ from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from reel_studio.core.errors import ApiError, BadType, ErrorCode
+from reel_studio.core.errors import ApiError, BadType, ErrorCode, NameTooLong
 from reel_studio.core.logging import get_logger
 
 log = get_logger(__name__)
@@ -24,6 +24,7 @@ STATUS: dict[ErrorCode, HTTPStatus] = {
     ErrorCode.TOO_LARGE: HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
     ErrorCode.BAD_TYPE: HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
     ErrorCode.NO_FILES: HTTPStatus.CONFLICT,
+    ErrorCode.NAME_TOO_LONG: HTTPStatus.BAD_REQUEST,
 }
 
 
@@ -56,7 +57,7 @@ async def on_api_error(_: Request, exc: Exception) -> JSONResponse:
     if not isinstance(exc, ApiError):  # registered for ApiError only
         raise TypeError(exc)
     body: dict[str, str] = {"error": str(exc.code)}
-    if isinstance(exc, BadType) and exc.args:
+    if isinstance(exc, (BadType, NameTooLong)) and exc.args:  # the page names the file
         body["file"] = str(exc.args[0])
     return JSONResponse(body, status_code=STATUS[exc.code])
 

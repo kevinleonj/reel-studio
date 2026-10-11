@@ -83,7 +83,10 @@ INVITE_CODE_MAX_CHARS = 64  # Stripe promotion codes are shorter; this only boun
 UPLOAD_SESSION_ID_MAX_CHARS = (
     128  # bounds the id in a path; ids are 32 chars (UPLOAD_SESSION_BYTES)
 )
-FILE_NAME_MAX_CHARS = 255  # APFS and ext4 name limit: a longer name could not be stored
+# ext4 NAME_MAX is 255 bytes (APFS: 255 UTF-8 characters), so the stricter byte limit holds on
+# both disks; a longer name fails on the last chunk with OSError 36 (review W4).
+FILE_NAME_MAX_BYTES = 255
+UTF8_MAX_BYTES_PER_CHAR = 4  # RFC 3629: a request bound only, every longer name is too long
 
 # D58: during the beta a promotion code must take the whole price off, so nobody can be charged.
 FULL_DISCOUNT_PERCENT = 100

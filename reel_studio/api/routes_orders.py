@@ -10,9 +10,10 @@ from reel_studio.api.deps import ApiDeps, client_address, deps_of, limiters_of
 from reel_studio.api.errors import invalid, not_found, wrong_status
 from reel_studio.api.tokens import ORDER_ID, token_matches
 from reel_studio.api.views import order_view
-from reel_studio.core.constants import FILE_NAME_MAX_CHARS
+from reel_studio.core.constants import FILE_NAME_MAX_BYTES, UTF8_MAX_BYTES_PER_CHAR
 from reel_studio.core.errors import (
     BadType,
+    NameTooLong,
     NoFiles,
     PaymentsFailed,
     RateLimited,
@@ -98,7 +99,7 @@ def cancel(order: Authorised) -> dict[str, object]:
 
 class FileIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    name: str = Field(min_length=1, max_length=FILE_NAME_MAX_CHARS)
+    name: str = Field(min_length=1, max_length=FILE_NAME_MAX_BYTES * UTF8_MAX_BYTES_PER_CHAR)
     size: int = Field(ge=0)
     type: str
 
@@ -117,6 +118,9 @@ def uploads(batch: UploadBatch, order: Authorised) -> dict[str, object]:
         raise NoFiles
     if len({upload_key(f.name) for f in batch.files}) != len(batch.files):
         raise invalid("the same file name twice in one batch")
+    for file in batch.files:
+        if len(file.name.encode()) > FILE_NAME_MAX_BYTES:
+            raise NameTooLong(file.name)
     rules = order.deps.config.limits.order
     for file in batch.files:
         if file.type not in rules.allowed_types:
