@@ -116,6 +116,16 @@ class Payments(_Strict):
     currency: str
 
 
+class Smtp(_Strict):
+    timeout_s: int
+
+
+class DispatcherTimes(_Strict):
+    poll_seconds: int
+    sweep_seconds: int
+    fake_stage_seconds: int
+
+
 class Upload(_Strict):
     chunk_mib: int
     parallel_files: int
@@ -145,6 +155,8 @@ class Limits(_Strict):
     firestore: Firestore
     reelctl: Reelctl
     payments: Payments
+    smtp: Smtp
+    dispatcher: DispatcherTimes
     web: Web
 
 

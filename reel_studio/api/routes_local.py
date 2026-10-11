@@ -15,9 +15,12 @@ from reel_studio.core.logging import get_logger
 
 log = get_logger(__name__)
 router = APIRouter()
+# The laptop's stand-ins for the bucket's upload and signed-download URLs (storage_local.py).
+UPLOAD_PATH = "/api/local-upload"
+DOWNLOAD_PATH = "/api/local-files"
 
 
-@router.put("/api/local-upload/{session}")
+@router.put(f"{UPLOAD_PATH}/{{session}}")
 async def put_chunk(session: str, request: Request) -> Response:
     deps = deps_of(request)
     if deps.local_storage is None:
@@ -60,7 +63,7 @@ async def put_chunk(session: str, request: Request) -> Response:
     return Response(status_code=answer.status, headers=headers)
 
 
-@router.get("/api/local-files/{key:path}")
+@router.get(f"{DOWNLOAD_PATH}/{{key:path}}")
 def download(key: str, request: Request) -> FileResponse:
     deps = deps_of(request)
     storage = deps.local_storage

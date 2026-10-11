@@ -24,12 +24,38 @@ Written by the web lane only. Newest entry on top.
 ## For CLOUD (REVIEW-FIXES WEB 2)
 - Late chunks are refused on the laptop only: Cloud Storage resumable sessions go straight to the bucket. The cloud Storage adapter should cancel an order's open sessions at Start, or the editor should read only the files in the manifest.
 
+## Status board — STEP-06 task 6 (PR #8, merged 11 Oct 2026)
+- Done: task 6. `make up` builds `docker/api.Dockerfile` (web build stage + api), starts api (serves the site), dispatcher (fake editor), Firestore emulator and Mailpit from `compose.yaml`, and waits until the api is healthy; `make down` stops everything; uploads and results in `./data/`. Composition root `reel_studio/api/main.py` (`create` for uvicorn, `dispatch` for the dispatcher), tested with fakes.
+- Partly: the step06 gate — it also needs `iPhone upload:` (task 8, Kevin) and analytics off on the laptop (below).
+- Blocked: nothing else.
+- Next: STEP-07 (above).
+
+## Decided by standing orders (STEP-06 task 6)
+- The laptop's signed-link key is random per process (`SIGNING_KEY_BYTES`): links are re-signed on every status poll, so a restart only breaks links that were about to be replaced, and there is no key to store. Undo: add a `LOCAL_SIGNING_KEY` setting and pass it in `main._storage`.
+- Orders live in the Firestore emulator's memory; `make down` forgets them while `./data/` keeps the files. Undo: add an export/import volume to the `firestore` service.
+- The dispatcher runs the fake editor (STEP-06 task 4) until the engine lane's worker command exists. Undo: swap `FakeEditorLauncher` in `main.build_dispatcher`.
+- `[firestore] max_attempts = 12`, not 5: STEP-07's emulator race test lost 8 of 10 checkouts with 5 (an aborted transaction retries at once with its old id, so N writers need N attempts). Undo: edit the value.
+- `make up` runs `python -m reel_studio.api.main check` in the built image first: WebSettings' own rules, bad names printed, values never. Undo: delete that line in `mk/web.mk`.
+- Compose passes each WebSettings name on purpose (the `x-website-settings` block), no `env_file`, so the Anthropic, Gemini and cloud keys never reach the website (D62). The dispatcher gets the same block; when the real editor lands it needs the Anthropic key added to its own `environment` only. Undo: not advised.
+- api and dispatcher run as the host user (`HOST_UID`/`HOST_GID` from `make up`, default the image's 10001), so `./data` is writable on Linux as well as macOS. Undo: drop the two `user:` lines.
+- Mailpit's inbox is published on 127.0.0.1 only: it holds every order link. Only the site (8080) is on every interface (D17).
+- Stopping the dispatcher does not wait for an order the fake editor is running; it stays `running` until the lease sweep fails it (70 min). The real editor runs as its own job in the cloud, so this is a laptop-only cost. Undo: join the run threads in `dispatch()`.
+
 ## Status board — STEP-06
 - Done: task 1 (Orders, Storage, Mailer, Launcher ports with fakes; contract suites green on the fakes and on the real Firestore emulator and Mailpit), task 2 (every §7 route without payments, tests per route and error code), task 3 (web app), task 4 (fake editor), task 5 backend-free (128 Playwright tests, phone + laptop, axe), `web/` wired into `make ci` (ci-web) and `make prerelease` (Playwright + Lighthouse budget).
 - Partly: task 5's real-stack happy path (needs `make up`).
 - Blocked: task 6 (`compose.yaml`, `docker/api.Dockerfile`, `make up`/`make down`) and the API's composition root wait on the `WebSettings` fields below (`reel_studio/settings.py` is outside this lane).
 - Not started: task 8 (Kevin does it, TONIGHT.md).
 - Next: Kevin adds the settings fields → composition root `reel_studio/api/main.py` + dispatcher entry point, compose, Dockerfile, `make up`, live gate checks.
+
+## For CLOUD (the same image on Cloud Run, STEP-08)
+- `docker/api.Dockerfile` needs `--build-arg SITE_URL=<the service URL>` (F61); without it the build stops with "build arg SITE_URL is required". `.github/workflows/deploy.yml` builds it without one today.
+- `WebSettings` now requires `FIRESTORE_PROJECT`, `SMTP_HOST`, `SMTP_PORT`, `DATA_DIR`, `WEB_DIST`, `VOICE_AVAILABLE`; `infra/main/locals.tf` sets none of them. `reel_studio/api/main.py` is the laptop root (LocalStorage, SMTP); the cloud root (GCS, Resend, Stripe) is still to write, and `create()` refuses `PAYMENTS=stripe` until STEP-07's adapter.
+- Rate limits key on the client address; uvicorn trusts forwarded headers only from 127.0.0.1 unless `FORWARDED_ALLOW_IPS` is set (F316). Set it on the Cloud Run service, or every client shares one bucket.
+
+## For MAIN
+- `.dockerignore` (REVIEW-FIXES MAIN item 2) is still missing. BuildKit sends only the paths a COPY names, so no secret reaches the daemon today, but host `__pycache__` rides into the image with `reel_studio/`.
+- `.env.example:21` says compose mounts the data at `/data`; it is `/app/data`, and compose sets `DATA_DIR`, `WEB_DIST`, `SMTP_HOST` and `SMTP_PORT` itself.
 
 ## Needs Kevin
 - **STEP-07 task 9 is yours:** `stripe login`, `make stripe-listen` (writes `STRIPE_WEBHOOK_SECRET` through `reelctl dotenv-set`, never printed), `PAYMENTS=stripe`, the laptop checkout with a test code, the real Reel (≤ $3), then the handoff line `Stripe e2e order: <order id>, <cost>`. The step07 gate fails on that line until then; I did not write it.
@@ -38,7 +64,10 @@ Written by the web lane only. Newest entry on top.
 - **Decision on D18's edge (link email after Stripe):** the webhook does not know the link token, which is stored only as a hash. The success URL Stripe keeps (`/o/<id>?t=<token>`, as STEP-07 specifies) does carry it, so fulfilment reads it back from the retrieved session, checks it against the stored hash, and sends `/o/<id>#t=<token>`. No new copy of the token is stored. Confirm, or pick another way (this also answers the "ready" email question below if the editor may call Stripe).
 - **More STEP-07 tunables in `config/limits.toml` to review:** `[firestore] timeout_s = 10`, `max_attempts = 12` (an aborted transaction retries at once keeping its place in line, so N simultaneous writers on the week document need up to N attempts; with 5, 8 of the 10 racing checkouts failed on the emulator), `[reelctl] list_limit = 200`, `[payments] price_minor = 1900`, `currency = "EUR"`.
 - **Port changes:** `PaymentsUpkeep` (`expire_session`, `create_code`, `expire_code`) and `PaymentGateway` beside the pinned `Payments`; `OrderUpkeep` gained `set_checkout`, `checkouts_to_check`, `resume_paused`, `list_orders`, `places_held`, and `sweep(*, expire_checkouts)` (with Stripe the API checks missed checkouts at Stripe before they expire, so a paid checkout whose webhook was lost is not dropped). New `reelctl dotenv-set NAME` (value from stdin) for `make stripe-listen`.
-- **`WebSettings` fields (blocks task 6).** The laptop API and dispatcher need these deployment values; `reel_studio/settings.py` is the main lane's file, so I did not touch it. Proposed, all without defaults unless marked:
+
+- **Analytics on the laptop:** this worktree's `.env` sets `GA4_MEASUREMENT_ID`, so `/api/config` says analytics is on; the step06 gate needs it off on the laptop. Empty it there (or keep it and accept that gate line failing).
+- **Task 8:** the iPhone upload and the `iPhone upload:` line.
+- **Done (PR #6): `WebSettings` fields.** The laptop API and dispatcher need these deployment values; `reel_studio/settings.py` is the main lane's file, so I did not touch it. Proposed, all without defaults unless marked:
   - `firestore_project: str` (the emulator's project id, e.g. `reel-studio-local`; `FIRESTORE_EMULATOR_HOST` itself is read by the Google client, F308)
   - `smtp_host: str`, `smtp_port: int` (Mailpit in compose: `mailpit`, `1025`; F309)
   - `data_dir: Path` (the filesystem Storage root, `./data/` mounted at `/data`)
@@ -49,7 +78,6 @@ Written by the web lane only. Newest entry on top.
 - **New tunables in `config/limits.toml` to review (added 10 Oct 2026):** `[upload] backoff_ms = 1000`; `[web] request_timeout_ms = 15000`, `chunk_timeout_ms = 90000` (one 8 MiB chunk at 1 Mbit/s ≈ 67 s), `signed_url_minutes = 60`, `rating_max = 5`, `comment_max_chars = 1000` (both ARCHITECTURE §7), `google_tag_url` (F70). `core/config.py` models them.
 - **New ports beyond ARCHITECTURE §3's list:** `OrderUpkeep` in `core/ports.py` (`mark_viewed`, `set_feedback`, `mark_deleted`, `sweep`, `queue_position`) — kept separate so STEP-01's binding-method test for `Orders` stays as pinned. Please confirm or move them into §3.
 - `.claude/doc-ledger.json`: the global doc gate (`~/.claude/hooks/gate-docs.sh`) reads `<session cwd>/.claude/doc-ledger.json`, which is outside every lane and hook-protected. Kevin installed it by hand on 9 Oct 2026. Pending entries for phase B are in `web/doc-ledger.pending.json` (git-ignored). The gate misreads multi-line `import type {` as a library named `type`, and `node:fs`/`node:path` as non-stdlib.
-- `npm audit`: 7 high, one root (`braces` ReDoS via `micromatch`/`fast-glob` in the `shadcn` CLI tree, build-time only). Not triaged.
 - `scripts/check_literals.py` `WEB_HOMES` still exempts `web/src/lib/analytics.ts`, which no longer holds a URL (the tag URL arrives from `/api/config`); the scanner is protected.
 - `public/og.png` is a 1200×630 screenshot of the landing page; replace it with real artwork when there is some.
 - **The "ready" email cannot carry the order link.** Its button needs `/o/<id>#t=<token>`, but the token is stored only as its SHA-256 (D18), so the editor or the dispatcher cannot rebuild the link after checkout. Options: the ready email says "open the link from your first email"; or keep the token encrypted with a server key; or a short re-access flow. A decision on D18's edge; until then the fake editor sends no ready email (failure emails and Kevin's alert need no token and are sent).
@@ -151,6 +179,32 @@ Plan, test first, fakes and Stripe fixtures only (no Stripe call tonight; `strip
 6. Write count for one order on the emulator (A5) into FACTS.
 Blocked the same way as STEP-06 task 6: the composition root needs the `WebSettings` fields, plus a
 Stripe price id setting (`stripe_price_id`, from `make stripe-setup`, STEP-08).
+
+### 11 Oct 2026 — STEP-06 task 6: make up
+
+Before: no way to run the site except the test fixtures; task 6 waited on the WebSettings fields (PR #6).
+After: `reel_studio/api/main.py` builds the API and the dispatcher from WebSettings + config
+(`[firestore]`, `[smtp]`, `[dispatcher]` added to `config/limits.toml`); `docker/api.Dockerfile`
+(node 24.21.0 stage builds `web/dist`, F314; uvicorn `--factory`, `--no-access-log`, F316);
+`compose.yaml` (F315); `make up`/`make down`. `routes_local` exports its two paths so the storage
+adapter and the routes cannot disagree.
+Review round 1 FAILED (2 critical: Mailpit's inbox on every interface, `env_file` handing every
+key to the website against D62; 8 warnings) and was fixed: explicit settings names, loopback
+Mailpit, restart policy on all four services, host uid, `check` inside the image instead of a
+names-only preflight, a named logger (under `python -m` the module is `__main__`), a stop handler that
+only sets the event, Stripe refused before the Firestore client, tests that run every fake stage, a
+chunk and a signed download through the composed app, and `compose.yaml`'s safety properties.
+Evidence, on the committed compose (`make up` exit 0, `check` printed `settings ok`): `/` and
+`/privacy` 200, `/new` and `/o/gate-check` 200 with `noindex, nofollow`; a PAYMENTS=off order went
+checkout → chunk 200 → start → queued → running (reading) → done; signed download 200; Mailpit got
+"Your Reel Studio link". Order `385afc5981872f15509e2f44b23b2af4`. From the laptop's LAN address the
+site answers 200 and Mailpit does not answer; neither container has the Anthropic, Gemini, Resend
+or Cloudflare names; both run as uid 501; the dispatcher logged "dispatcher started" and, on
+`docker compose stop`, "dispatcher stopped" and exited 0.
+Review round 2: PASS (2 warnings). Follow-ups: tests for the remaining wiring (SMTP timeout, notifier, sweep interval, a link from one app refused by another); `check` should name model-level errors (PAYMENTS=stripe without keys prints no name) and mirror the Stripe refusal; the compose port test should assert which services have `ports:`; Stripe names only for the api; a dispatcher heartbeat healthcheck; SIGTERM is not honoured while a Firestore call blocks (emulator gone), so `docker stop` ends in SIGKILL; files of orders forgotten by `make down` stay in `./data/` (delete by hand); `next_queued` logs one INFO line per 2 s poll. Not run: the step06 gate (needs task 8 and
+analytics off on the laptop) and `make prerelease` (web/ is unchanged since PR #4, where it passed).
+For MAIN: `.dockerignore` (REVIEW-FIXES MAIN item 2) still missing; the api image copies named paths
+only, but the build context still carries `.env` to the Docker daemon.
 
 ### 10 Oct 2026 (night) — phase B review round 3: PASS with 4 warnings, fixed
 

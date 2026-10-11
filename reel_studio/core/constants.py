@@ -88,6 +88,8 @@ UPLOAD_SESSION_ID_MAX_CHARS = (
 FILE_NAME_MAX_BYTES = 255
 UTF8_MAX_BYTES_PER_CHAR = 4  # RFC 3629: a request bound only, every longer name is too long
 
+SIGNING_KEY_BYTES = 32  # laptop signed-link HMAC-SHA256 key; RFC 2104: at least the hash length
+
 # D58: during the beta a promotion code must take the whole price off, so nobody can be charged.
 FULL_DISCOUNT_PERCENT = 100
 PRIVATE_FILE_MODE = 0o600  # POSIX chmod(2): owner read and write only, for a file holding keys
