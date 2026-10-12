@@ -14,8 +14,10 @@ Written by the cloud lane only. Newest entry on top.
   tested against fakes in `tests/unit/infra/` until then.
 - Blocked: every task that needs the real project (2, 3 apply, 5 run, 6 environment, 7, 8, 9).
 - Not started: nothing else in the step that can run without the project.
-- Next: Kevin's items below, then `make gcp-project` → `make bootstrap-plan` (Kevin applies) →
-  `make secrets-push` → `make stripe-setup MODE=test` → `make dns` → deploy.yml → `make smoke`.
+- Next: Kevin's items below, then the first-deploy order: `make gcp-project` →
+  `make bootstrap-plan` (Kevin applies) → `make spend-cap` (Cloud Run hard stop, F414) →
+  `make secrets-push` → `make stripe-setup MODE=test` → `make dns` → `make github-env` (already run
+  once on 12 Oct; re-run is harmless) → deploy.yml → `make smoke`.
 
 ## Needs Kevin
 - **Deployer limits (REVIEW-FIXES CLOUD 1, done in code, not applied):** projectIamAdmin now carries
@@ -23,10 +25,10 @@ Written by the cloud lane only. Newest entry on top.
   `beta` environment may act as the deployer (F411). Consequence: you approve twice per deploy, once
   for the plan job and once for the apply job. Takes effect when you first apply the bootstrap root
   (never applied yet). Limits of this fix:
-  - "Approved jobs only" is exactly as strong as the GitHub `beta` environment. GitHub creates a
-    missing environment unprotected on first use, and nothing in CI checks it: create it with you
-    as required reviewer before deploy.yml reaches main, and verify with
-    `gh api repos/kevinleonj/reel-studio/environments/beta --jq .protection_rules`.
+  - "Approved jobs only" is exactly as strong as the GitHub `beta` environment. `make github-env`
+    sets it (owner as only reviewer, self-review allowed, no wait, deploys from main only) and fails
+    unless GitHub reads it back that way; it ran once on 12 Oct 2026 (F417). Re-run it if anyone
+    edits the environment by hand.
   - The condition limits which roles the deployer grants, not to whom: it could bind
     roles/datastore.user to anyone.
   - The deployer still holds strong roles: `roles/iam.serviceAccountAdmin` (setIamPolicy on any
@@ -79,8 +81,25 @@ Written by the cloud lane only. Newest entry on top.
   accounts are created in main (INFRA §2), so the grant is in `infra/main/iam.tf` with the same
   scope. Alternative: create the accounts in bootstrap. Your call.
 - **First deploy may need a second dispatch** (IAM propagation after the actAs grant, 2-7 min).
-- **Create the `beta` environment before deploy.yml reaches main** (task 6): you as required
-  reviewer, branches limited to main; a missing environment is auto-created without protection.
+- **First-deploy order with the cost cap:** run `make spend-cap` right after your bootstrap apply
+  (needs the project, the Budget API and Billing Account Administrator on your login, F414). It
+  pauses Cloud Run in this project at 30 units a month of gross cost; `make spend-cap-lift` lifts
+  it until next month after you type the project id. To cap the Gemini API too:
+  `make spend-cap PROJECT=<project that owns the Gemini key> SERVICE=services/AEFD-7695-64FA`.
+
+## For MAIN
+- `docs/INFRA.md` §1, replace the "Order of the first deploy" sentence with: "Order of the first
+  deploy: bootstrap (Kevin applies) → `make spend-cap` (Cloud Run spend cap, F414) →
+  `make secrets-push` → `make stripe-setup` and `make dns` (they write their own secrets) →
+  `make github-env` (the `beta` approval gate, F417) → `deploy.yml`. Images can be pushed only after
+  bootstrap."
+- `docs/INFRA.md` §5 "Hard stops", append to the first sentence: "; Cloud Run spend cap 30 units a
+  month in the billing account's currency, gross cost, pauses new Cloud Run usage until next month
+  or a lift (`make spend-cap`, F414)".
+- `docs/INFRA.md` §2: add the row "`google_logging_project_exclusion` `requests` | reel-api request
+  logs, any status, `sample(insertId, 0.99)` (keeps 1 %) | Cloud Logging cannot be spend capped (F415)"
+  and to the Artifact Registry row "`vulnerability_scanning_config { enablement_config = DISABLED }`"
+  (F416).
 - **Root `.gitignore`** could also carry `*.tfvars`, `tfplan.json`, `crash.log` (`infra/.gitignore`
   covers `infra/`).
 - **Hooks:** the `chore(auto)` hook skips files other hooks flag, leaving half-committed trees (I
@@ -155,6 +174,21 @@ Written by the cloud lane only. Newest entry on top.
 ## Evidence lines (the gates read these)
 
 ## Log
+
+### 12 Oct 2026 — CLOUD-COST-CAP.md (branch cloud-cost-cap)
+Before: no limit on the Cloud Run bill, every request log stored in full, the `beta` gate set by a
+manual API call, image scanning left to the project default. After, each with a failing test first:
+- `make spend-cap` / `make spend-cap-lift` (scripts/cloud/spend_cap.py, config `[spend_cap]`): a
+  spend-cap budget, this project and Cloud Run, 30 units a month gross; idempotent; refusal prints
+  Google's reason and the console path (11 tests, F414). Not run: the project does not exist.
+- infra/main/logging.tf: exclusion `reel-api-requests-sampled`, any status, keeps 1 % (F415);
+  `terraform test` main 5/5.
+- infra/bootstrap/registry.tf: `vulnerability_scanning_config` DISABLED, required by check_policy
+  (F416); `terraform test` bootstrap 4/4.
+- `make github-env` (scripts/cloud/github_env.py, config `[github_env]`): ran on 12 Oct; GitHub reads
+  back required_reviewers [kevinleonj], prevent_self_review false, custom policy, one branch `main`;
+  a second run added nothing (F417).
+- docs/INFRA.md is main's file: the exact edits are under "For MAIN".
 
 ### 10 Oct 2026 — REVIEW-FIXES.md, CLOUD items 1-5
 Before: the deployer held projectIamAdmin without a condition and any main-branch job could use it;
