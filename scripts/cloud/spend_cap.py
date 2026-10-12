@@ -143,7 +143,7 @@ def cap_body(target: Target, display_name: str) -> Body:
 def find_cap(budgets: list[Body], target: Target) -> Body | None:
     """The spend-cap budget for this project (by id or number) and service, if any.
 
-    Responses carry `spendCap.outputState` only (inputState is write-only, F414), so any budget
+    Google's response samples carry `spendCap.outputState` only (F414), so any budget
     with a non-empty `spendCap` is a cap; one without is alerts-only and cannot be converted.
     """
     projects = {f"projects/{target.project}", f"projects/{target.project_number}"}
@@ -212,7 +212,7 @@ def lift_command(api: BudgetApi, target: Target, confirm: Callable[[str], str]) 
     """Lift an ENFORCED cap for the rest of the month after the project id is typed back.
 
     AWAITING_NEXT_PERIOD is only valid to lift an enforced cap (F414); on a CONFIGURED cap it
-    would disarm the cap for the month, so that is refused.
+    may disarm the cap for the month (UNCONFIRMED, F414), so that is refused.
     """
     try:
         found = find_cap(api.list_budgets(), target)

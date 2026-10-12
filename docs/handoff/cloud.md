@@ -3,7 +3,7 @@
 Written by the cloud lane only. Newest entry on top.
 
 ## Status board
-READY TO MERGE: PR #15 (cloud cost cap; queued with `gh pr merge 15 --auto --squash`)
+Nothing to merge (PR #15, cloud cost cap, merged 12 Oct 2026)
 - Done: STEP-08 phase A (Terraform roots, policy data, deploy.yml, offline `terraform test`) and,
   after STEP-01 merged, the no-cloud part of the step: task 1 (`scripts/check_policy.py` test
   first with mutated-infra bad fixtures, `mk/cloud.mk` `ci-cloud`, `scripts/ci-install.d/cloud.sh`,
@@ -176,6 +176,15 @@ READY TO MERGE: PR #15 (cloud cost cap; queued with `gh pr merge 15 --auto --squ
 
 ## Log
 
+### 13 Oct 2026 — cost-cap follow-ups (branch cloud-cost-cap-followups)
+- The final review's warnings on PR #15: `spend_cap.main()` tests now cover `--project` and
+  `--service` with two caps in one project, a gcloud failure and the client timeout (26 tests;
+  mutants ignoring either flag fail). F414's status cell, the code comments, L402 and this file
+  now say the missing `inputState` is inferred from Google's samples (UNCONFIRMED).
+- Still open by design: the `docs/INFRA.md` edits (CLOUD-COST-CAP task 5). `guard_paths.py` blocks
+  that file in this lane ("belongs to lane 'main'"); the exact text is under "For MAIN" (standing
+  order 4).
+
 ### 12 Oct 2026 — CLOUD-COST-CAP.md (branch cloud-cost-cap)
 Before: no limit on the Cloud Run bill, every request log stored in full, the `beta` gate set by a
 manual API call, image scanning left to the project default. After, each with a failing test first:
@@ -183,7 +192,7 @@ manual API call, image scanning left to the project default. After, each with a 
   spend-cap budget, this project and Cloud Run, 30 units a month gross; idempotent; refusal prints
   Google's reason and the console path (23 tests, F414). Not run: the project does not exist.
   Review round 1 (FAIL, fixed in a621675): the first version recognised a cap by
-  `spendCap.inputState`, which Google's responses never carry (they hold `outputState` only), so
+  `spendCap.inputState`, which none of Google's response samples carry (they hold `outputState`), so
   a re-run would have created a second cap and `spend-cap-lift` could not find one. The fake now
   copies Google's sample responses; a lift is refused unless ENFORCED; the token is checked before
   use and transport errors print only their type. Round 2: PASS.
