@@ -62,7 +62,7 @@ def api(fake: FakeBudgets) -> spend_cap.BudgetApi:
 
 
 def existing_cap(units: str, state: str = "CONFIGURED") -> dict[str, object]:
-    # Copied from the response samples on the Budget API spend-cap page (F414): responses carry
+    # Copied from the response samples on the Budget API spend-cap page (F414): the samples carry
     # spendCap.outputState only and name the project by number.
     return {
         "name": f"billingAccounts/{ACCOUNT}/budgets/cap-1",
@@ -409,3 +409,21 @@ def test_main_client_has_the_configured_timeout(monkeypatch: pytest.MonkeyPatch)
     spend_cap.main([])
 
     assert seen["timeout"] == config.load_cloud().spend_cap.http_timeout_s
+
+
+def test_a_cap_on_another_project_with_the_same_service_is_not_ours() -> None:
+    elsewhere = existing_cap(target().units, state="ENFORCED")
+    elsewhere["name"] = f"billingAccounts/{ACCOUNT}/budgets/cap-elsewhere"
+    elsewhere["budgetFilter"] = {
+        "projects": ["projects/999999999999"],
+        "services": [target().service],
+    }
+    fake = FakeBudgets(pages=[[elsewhere]])
+
+    assert spend_cap.ensure_cap(api(fake), target()) == "created"
+    assert (
+        spend_cap.lift_command(
+            api(FakeBudgets(pages=[[elsewhere]])), target(), confirm=lambda prompt: PROJECT
+        )
+        != 0
+    )
