@@ -3,6 +3,7 @@
 Written by the cloud lane only. Newest entry on top.
 
 ## Status board
+READY TO MERGE: PR #15 (cloud cost cap; queued with `gh pr merge 15 --auto --squash`)
 - Done: STEP-08 phase A (Terraform roots, policy data, deploy.yml, offline `terraform test`) and,
   after STEP-01 merged, the no-cloud part of the step: task 1 (`scripts/check_policy.py` test
   first with mutated-infra bad fixtures, `mk/cloud.mk` `ci-cloud`, `scripts/ci-install.d/cloud.sh`,
@@ -180,7 +181,12 @@ Before: no limit on the Cloud Run bill, every request log stored in full, the `b
 manual API call, image scanning left to the project default. After, each with a failing test first:
 - `make spend-cap` / `make spend-cap-lift` (scripts/cloud/spend_cap.py, config `[spend_cap]`): a
   spend-cap budget, this project and Cloud Run, 30 units a month gross; idempotent; refusal prints
-  Google's reason and the console path (11 tests, F414). Not run: the project does not exist.
+  Google's reason and the console path (20 tests, F414). Not run: the project does not exist.
+  Review round 1 (FAIL, fixed in a621675): the first version recognised a cap by
+  `spendCap.inputState`, which Google's responses never carry (they hold `outputState` only), so
+  a re-run would have created a second cap and `spend-cap-lift` could not find one. The fake now
+  copies Google's sample responses; a lift is refused unless ENFORCED; the token is checked before
+  use and transport errors print only their type. Round 2: PASS.
 - infra/main/logging.tf: exclusion `reel-api-requests-sampled`, any status, keeps 1 % (F415);
   `terraform test` main 5/5.
 - infra/bootstrap/registry.tf: `vulnerability_scanning_config` DISABLED, required by check_policy
@@ -189,6 +195,11 @@ manual API call, image scanning left to the project default. After, each with a 
   back required_reviewers [kevinleonj], prevent_self_review false, custom policy, one branch `main`;
   a second run added nothing (F417).
 - docs/INFRA.md is main's file: the exact edits are under "For MAIN".
+- Follow-ups from review round 2 (no behaviour defect): test `spend_cap.main()` (lift routing,
+  account/project order); pin the lift path's type-only transport error; put the service back in
+  the lift prompt; F414's "inputState is write-only" rests on the samples omitting it (the code
+  works either way); after the first real create, check that `find_cap` sees Google's actual list
+  answer, since no live response has been observed yet.
 
 ### 10 Oct 2026 — REVIEW-FIXES.md, CLOUD items 1-5
 Before: the deployer held projectIamAdmin without a condition and any main-branch job could use it;
