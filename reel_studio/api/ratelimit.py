@@ -35,3 +35,23 @@ class SlidingWindow:
                 return False
             calls.append(now)
             return True
+
+
+class InFlight:
+    """Keys with a request under way. `enter` never waits: a second request for the same key
+    is refused at once instead of holding a worker thread on a contended record (review)."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._keys: set[str] = set()
+
+    def enter(self, key: str) -> bool:
+        with self._lock:
+            if key in self._keys:
+                return False
+            self._keys.add(key)
+            return True
+
+    def leave(self, key: str) -> None:
+        with self._lock:
+            self._keys.discard(key)

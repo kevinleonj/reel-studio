@@ -86,10 +86,21 @@ class OrderUpkeep(Protocol):
     def mark_viewed(self, order_id: str) -> None: ...
     def set_feedback(self, order_id: str, *, rating: int, comment: str) -> None: ...
     def mark_deleted(self, order_id: str) -> None: ...
-    def sweep(self) -> SweepReport: ...
+    # With PAYMENTS=stripe the API checks missed checkouts with Stripe first and passes False.
+    def sweep(self, *, expire_checkouts: bool) -> SweepReport: ...
     def queue_position(self, order_id: str) -> int | None: ...  # orders ahead; None unless queued
     # One email per outcome (§4): True once per (order, kind), set in the deciding transaction.
     def claim_email(self, order_id: str, kind: str) -> bool: ...
+    # STEP-07: the Stripe session on the order, the sweep's Stripe check, reelctl.
+    def set_checkout(self, order_id: str, *, session_id: str) -> None: ...
+    def checkouts_to_check(self) -> list[Record]: ...  # awaiting payment past the expiry + grace
+    def resume_paused(self) -> list[str]: ...  # D26 `reelctl orders resume --all-paused`
+    def list_orders(self, *, status: str | None, limit: int) -> list[Record]: ...  # newest first
+    def places_held(self, week: str) -> int: ...  # the week counter, e.g. week 2026-W42
+    # Raises TooManyFiles or TooLarge over the limits, WrongState unless paid.
+    def reserve_uploads(
+        self, order_id: str, *, files: Sequence[Record], max_files: int, max_bytes: int
+    ) -> None: ...
 
 
 class OrderStore(Orders, OrderUpkeep, Protocol):
@@ -113,6 +124,24 @@ class Payments(Protocol):
     ) -> Record: ...
     def parse_webhook(self, payload: bytes, signature: str) -> Record: ...
     def get_session(self, session_id: str) -> Record: ...
+
+
+class PaymentsUpkeep(Protocol):
+    """Payments calls beyond ARCHITECTURE.md §3's binding list (STEP-07): `/cancel` and the sweep
+    expire a session; `reelctl codes` creates and expires promotion codes (D63)."""
+
+    def expire_session(self, session_id: str) -> None: ...  # an open session only
+    def create_code(self, *, name: str, expires_at: datetime, max_redemptions: int) -> Record: ...
+    def expire_code(self, code: str) -> bool: ...  # False when no such active code
+
+
+class PaymentGateway(Payments, PaymentsUpkeep, Protocol):
+    """What the API and reelctl need from one Payments adapter.
+
+    Shapes (STEP-07): `find_code` -> {promo_id, code, percent_off (None for an amount-off
+    coupon), active}; `create_checkout` -> {session_id, url}; `parse_webhook` -> {type,
+    session_id, order_id}; `get_session` -> {session_id, status, payment_status, order_id,
+    email, success_url}. Failures raise PaymentsFailed, a bad signature BadSignature."""
 
 
 class Claude(Protocol):

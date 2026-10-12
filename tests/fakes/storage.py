@@ -2,7 +2,8 @@
 
 from pathlib import Path
 
-from reel_studio.adapters.storage_local import check_file_name
+from reel_studio.adapters.storage_local import SessionNotFound
+from reel_studio.core.file_names import check_file_name
 from reel_studio.core.ports import Record, UploadTarget
 
 PREFIXES = ("in", "work", "out")
@@ -13,15 +14,22 @@ class FakeStorage:
         self.objects: dict[str, bytes] = {}
         self.sessions: dict[str, str] = {}  # upload_url -> key
         self.signed: list[tuple[str, str, int]] = []
+        self._made = 0
 
     def create_upload_session(self, order_id: str, file: Record) -> UploadTarget:
         name = check_file_name(str(file["name"]))
-        url = f"fake://upload/{len(self.sessions)}"
-        self.sessions[url] = f"in/{order_id}/{name}"
+        url = f"fake://upload/{self._made}"
+        self._made += 1
+        key = f"in/{order_id}/{name}"
+        self.sessions = {u: k for u, k in self.sessions.items() if k != key}  # one per name
+        self.sessions[url] = key
         return {"name": name, "upload_url": url}
 
     def complete(self, target: UploadTarget, data: bytes) -> None:
-        self.objects[self.sessions[str(target["upload_url"])]] = data
+        url = str(target["upload_url"])
+        if url not in self.sessions:
+            raise SessionNotFound(url)
+        self.objects[self.sessions[url]] = data
 
     def list_inputs(self, order_id: str) -> list[Record]:
         prefix = f"in/{order_id}/"

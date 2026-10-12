@@ -1,19 +1,30 @@
 """The order routes behind the `X-Order-Token` header (docs/ARCHITECTURE.md §7)."""
 
-import unicodedata
+from collections.abc import Iterator
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Request
 from pydantic import BaseModel, ConfigDict, Field
 
+from reel_studio.api import payments
 from reel_studio.api.deps import ApiDeps, client_address, deps_of, limiters_of
 from reel_studio.api.errors import invalid, not_found, wrong_status
 from reel_studio.api.tokens import ORDER_ID, token_matches
 from reel_studio.api.views import order_view
-from reel_studio.core.constants import FILE_NAME_MAX_CHARS
-from reel_studio.core.errors import BadType, NoFiles, RateLimited, TooLarge, TooManyFiles
+from reel_studio.core.constants import FILE_NAME_MAX_BYTES, UTF8_MAX_BYTES_PER_CHAR
+from reel_studio.core.errors import (
+    BadType,
+    NameTooLong,
+    NoFiles,
+    OrderBusy,
+    PaymentsFailed,
+    RateLimited,
+    TooLarge,
+    TooManyFiles,
+)
+from reel_studio.core.file_names import check_file_name
 from reel_studio.core.logging import get_logger
-from reel_studio.core.order_rules import WrongState
+from reel_studio.core.order_rules import WrongState, upload_key
 from reel_studio.core.ports import Record
 
 log = get_logger(__name__)
@@ -50,6 +61,24 @@ def authorised(
 Authorised = Annotated[Order, Depends(authorised)]
 
 
+def exclusive(order: Authorised, request: Request) -> Iterator[Order]:
+    """One write per order at a time. A second one is refused at once with 503 and Retry-After
+    instead of holding a worker thread on the contended order record (review rounds 2 and 3);
+    the page reports it as a network failure and the person tries again."""
+    in_flight = limiters_of(request).order_writes
+    if not in_flight.enter(order.id):
+        raise OrderBusy("order write")
+    try:
+        yield order
+    finally:
+        in_flight.leave(order.id)
+
+
+# scope="function": the slot is free before the answer is sent, so a client's next write is
+# never refused by its own previous one (FastAPI 0.121+, dependencies with yield).
+Exclusive = Annotated[Order, Depends(exclusive, scope="function")]
+
+
 @router.get("")
 def status(order: Authorised) -> dict[str, object]:
     deps = order.deps
@@ -64,21 +93,34 @@ def status(order: Authorised) -> dict[str, object]:
 
 
 @router.post("/fulfil")
-def fulfil(order: Authorised) -> None:
-    """With PAYMENTS=off the order is already paid; Stripe's check arrives in STEP-07."""
-    del order
+def fulfil(order: Exclusive) -> None:
+    """Stripe's success page: the same fulfilment as the webhook (§7). With PAYMENTS=off the
+    order is already paid, and an order without a session has nothing to check."""
+    stripe = order.doc["stripe"]
+    session_id = stripe.get("session_id") if isinstance(stripe, dict) else None
+    if order.deps.settings.payments == "off" or session_id is None:
+        return
+    try:
+        payments.fulfil(order.deps, str(session_id))
+    except PaymentsFailed:
+        log.exception("stripe call failed", extra=payments.failure("fulfil", order.id))
+        raise payments.unavailable() from None
 
 
 @router.post("/cancel")
-def cancel(order: Authorised) -> dict[str, object]:
-    """Stripe's Cancel: release an unpaid checkout's place (no-op once paid), refill the form."""
-    order.deps.orders.expire(order.id)
+def cancel(order: Exclusive) -> dict[str, object]:
+    """Stripe's Cancel: release an unpaid checkout's place, refill the form. With PAYMENTS=off
+    it changes nothing once paid."""
+    if order.deps.settings.payments == "off":
+        order.deps.orders.expire(order.id)
+    else:
+        payments.cancel(order.deps, order.id, order.doc)
     return {"settings": order.doc["settings"]}
 
 
 class FileIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    name: str = Field(min_length=1, max_length=FILE_NAME_MAX_CHARS)
+    name: str = Field(min_length=1, max_length=FILE_NAME_MAX_BYTES * UTF8_MAX_BYTES_PER_CHAR)
     size: int = Field(ge=0)
     type: str
 
@@ -89,26 +131,35 @@ class UploadBatch(BaseModel):
 
 
 @router.post("/uploads")
-def uploads(batch: UploadBatch, order: Authorised) -> dict[str, object]:
-    """Limits are checked on the whole batch plus what is already uploaded (docs/UX.md §2)."""
+def uploads(batch: UploadBatch, order: Exclusive) -> dict[str, object]:
+    """Limits are checked on the whole batch plus what is already reserved (docs/UX.md §2)."""
     if order.status != "paid":
         raise wrong_status()
     if not batch.files:
         raise NoFiles
-    if len({unicodedata.normalize("NFC", f.name).casefold() for f in batch.files}) != len(
-        batch.files
-    ):
+    if len({upload_key(f.name) for f in batch.files}) != len(batch.files):
         raise invalid("the same file name twice in one batch")
+    for file in batch.files:
+        if len(file.name.encode()) > FILE_NAME_MAX_BYTES:
+            raise NameTooLong(file.name)
+    try:
+        for file in batch.files:
+            check_file_name(file.name)
+    except ValueError as error:  # before the reservation, so a refused batch holds nothing
+        raise invalid(str(error)) from error
     rules = order.deps.config.limits.order
-    already = list(order.deps.storage.list_inputs(order.id))
-    if len(already) + len(batch.files) > rules.max_files:
-        raise TooManyFiles
-    total = sum(int(str(f["size"])) for f in already) + sum(f.size for f in batch.files)
-    if total > rules.max_total_bytes:
-        raise TooLarge
     for file in batch.files:
         if file.type not in rules.allowed_types:
             raise BadType(file.name)
+    try:
+        order.deps.orders.reserve_uploads(
+            order.id,
+            files=[{"name": f.name, "size": f.size} for f in batch.files],
+            max_files=rules.max_files,
+            max_bytes=rules.max_total_bytes,
+        )
+    except WrongState:  # Start won the race
+        raise wrong_status() from None
     try:
         targets = [
             order.deps.storage.create_upload_session(order.id, f.model_dump()) for f in batch.files
@@ -128,7 +179,7 @@ STARTED = {"queued", "running", "done"}
 
 
 @router.post("/start")
-def start(order: Authorised) -> None:
+def start(order: Exclusive) -> None:
     """Write the manifest and queue; the dispatcher (or the cloud launcher) takes the slot.
     Safe to call twice: a second Start (a double tap, a retried request) answers 200."""
     if order.status in STARTED:
@@ -164,7 +215,7 @@ def start(order: Authorised) -> None:
 
 
 @router.post("/viewed")
-def viewed(order: Authorised) -> None:
+def viewed(order: Exclusive) -> None:
     order.deps.orders.mark_viewed(order.id)
 
 
@@ -175,7 +226,7 @@ class FeedbackBody(BaseModel):
 
 
 @router.post("/feedback")
-def feedback(body: FeedbackBody, order: Authorised) -> None:
+def feedback(body: FeedbackBody, order: Exclusive) -> None:
     web = order.deps.config.limits.web
     if not 1 <= body.rating <= web.rating_max or len(body.comment) > web.comment_max_chars:
         raise invalid("rating or comment out of range")
@@ -185,7 +236,7 @@ def feedback(body: FeedbackBody, order: Authorised) -> None:
 
 
 @router.delete("/files")
-def delete_files(order: Authorised) -> None:
+def delete_files(order: Exclusive) -> None:
     """ "Delete my files now" (D19): in/, work/, out/ go, then the status says so."""
     if order.status in {"running", "queued", "awaiting_payment"}:
         raise wrong_status()

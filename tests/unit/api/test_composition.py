@@ -5,13 +5,17 @@ import io
 import runpy
 import time
 from datetime import timedelta
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from reel_studio.adapters.launcher_local import Dispatcher
+from reel_studio.adapters.launcher_real import MadeReel
 from reel_studio.adapters.mailer_smtp import SmtpMailer
+from reel_studio.adapters.payments_stripe import StripePayments, StripeSetup
 from reel_studio.api import main
 from reel_studio.api.app import create_app
 from reel_studio.api.main import build_deps, build_dispatcher
@@ -87,7 +91,7 @@ def test_the_api_is_wired_from_settings(tmp_path: Path, make_settings: MakeSetti
     assert (settings.data_dir).is_dir()
 
 
-def test_stripe_is_refused_until_its_adapter_exists(
+def test_stripe_settings_wire_the_stripe_adapter(
     tmp_path: Path, make_settings: MakeSettings
 ) -> None:
     settings = laptop(
@@ -100,8 +104,22 @@ def test_stripe_is_refused_until_its_adapter_exists(
         stripe_coupon_id="coupon_test",
     )
     clock = FrozenClock(START)
-    with pytest.raises(SystemExit, match="PAYMENTS=stripe"):
-        build_deps(settings, orders=FakeOrders(clock, LIMITS), clock=clock, config=load())
+    deps = build_deps(settings, orders=FakeOrders(clock, LIMITS), clock=clock, config=load())
+    assert isinstance(deps.payments, StripePayments)
+    assert deps.payments.setup == StripeSetup(
+        price_id="price_test",
+        coupon_id="coupon_test",
+        webhook_secret="test-webhook-secret",
+        tolerance_s=load().limits.stripe.webhook_tolerance_s,
+    )
+    assert TestClient(create_app(deps)).get("/api/config").json()["payments"] == "stripe"
+
+
+def test_payments_off_wires_no_payments(tmp_path: Path, make_settings: MakeSettings) -> None:
+    clock = FrozenClock(START)
+    settings = laptop(tmp_path, make_settings)
+    deps = build_deps(settings, orders=FakeOrders(clock, LIMITS), clock=clock, config=load())
+    assert deps.payments is None
 
 
 def test_the_dispatcher_launches_a_queued_order(
@@ -169,6 +187,18 @@ def test_check_names_what_is_missing_without_printing_values(
     assert "http://example.test" not in report
 
 
+COMPLETE = {
+    "PAYMENTS": "off",
+    "SITE_URL": "http://example.test",
+    "MAIL_FROM": "reels@example.test",
+    "KEVIN_ALERT_EMAIL": "kevin@example.test",
+    "FIRESTORE_PROJECT": "reel-studio-test",
+    "SMTP_HOST": "mailpit",
+    "SMTP_PORT": "1025",
+    "VOICE_AVAILABLE": "false",
+}
+
+
 def test_check_passes_a_complete_environment(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -196,3 +226,125 @@ def test_the_entry_module_logs_under_the_configured_namespace() -> None:
     that `configure()` wires; run it under another name the same way."""
     namespace = runpy.run_module("reel_studio.api.main", run_name="as_if_dash_m")
     assert namespace["log"].name == "reel_studio.api.main"
+
+
+def test_the_composed_dispatcher_sweeps_missed_checkouts(
+    tmp_path: Path, make_settings: MakeSettings
+) -> None:
+    """On the laptop the dispatcher is the only sweeper (review round 1 of STEP-07)."""
+    settings = laptop(tmp_path, make_settings)
+    clock = FrozenClock(START)
+    orders = FakeOrders(clock, LIMITS)
+    order_id = f"{2:032x}"
+    orders.create_awaiting_payment(
+        NewOrder(order_id, "h", SETTINGS, "", START + timedelta(minutes=31))
+    )
+    clock.advance(timedelta(minutes=31 + LIMITS.expiry_grace_minutes))
+    build_dispatcher(settings, orders=orders, clock=clock, config=quick_config()).tick()
+    doc = orders.get(order_id)
+    assert doc is not None
+    assert doc["status"] == "expired"
+
+
+def test_create_builds_the_stripe_app_from_the_environment(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    for name, value in COMPLETE.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("WEB_DIST", str(tmp_path))
+    monkeypatch.setenv("PAYMENTS", "stripe")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "stand-in-value")
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "stand-in-value")
+    monkeypatch.setenv("STRIPE_PRICE_ID", "price_test")
+    monkeypatch.setenv("STRIPE_COUPON_ID", "coupon_test")
+
+    def fake_orders(_settings: object, _config: object, clock: FrozenClock) -> FakeOrders:
+        return FakeOrders(clock, LIMITS)
+
+    monkeypatch.setattr(main, "firestore_orders", fake_orders)
+    client = TestClient(main.create())
+    assert client.get("/api/config").json()["payments"] == "stripe"
+
+
+def test_the_stripe_knobs_must_be_positive() -> None:
+    """A webhook tolerance of 0 turns Stripe's replay check off (review round 2)."""
+    stripe_times = load().limits.stripe
+    with pytest.raises(ValidationError):
+        type(stripe_times)(
+            timeout_s=20,
+            max_network_retries=2,
+            webhook_tolerance_s=0,
+            coupon_id="c",
+            coupon_name="n",
+            cli_image="i",
+            listen_forward_to="f",
+        )
+
+
+def test_check_names_a_missing_stripe_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """The rule that needs all four Stripe settings has no field of its own (review round 3)."""
+    for name, value in COMPLETE.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("WEB_DIST", str(tmp_path))
+    monkeypatch.setenv("PAYMENTS", "stripe")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "stand-in-value")
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "stand-in-value")
+    monkeypatch.setenv("STRIPE_PRICE_ID", "price_test")
+    monkeypatch.delenv("STRIPE_COUPON_ID", raising=False)
+    out = io.StringIO()
+    assert main.check(out) == 2
+    assert "STRIPE_COUPON_ID" in out.getvalue()
+    assert "stand-in-value" not in out.getvalue()
+
+
+def test_the_dispatcher_runs_the_real_editor_when_given_one(
+    tmp_path: Path, make_settings: MakeSettings
+) -> None:
+    settings = laptop(tmp_path, make_settings)
+    clock = FrozenClock(START)
+    orders = FakeOrders(clock, LIMITS)
+    order_id = f"{5:032x}"
+    orders.create_awaiting_payment(
+        NewOrder(order_id, "h", SETTINGS, "", START + timedelta(minutes=31))
+    )
+    orders.mark_paid(order_id, {})
+    orders.set_manifest(order_id, files=[], bytes_declared=0)
+    orders.queue(order_id)
+    made: list[str] = []
+
+    def make_reel(inputs: Path, out: Path, order: dict[str, object]) -> MadeReel:
+        made.append(str(order["style"]))
+        out.mkdir(parents=True, exist_ok=True)
+        for name in ("text.mp4", "clean.mp4"):
+            (out / name).write_bytes(b"reel")
+        return MadeReel(out / "text.mp4", out / "clean.mp4", Decimal("0.5"), 30, "", [], None)
+
+    dispatcher = build_dispatcher(
+        settings, orders=orders, clock=clock, config=quick_config(), make_reel=make_reel
+    )
+    dispatcher.tick()
+    deadline = time.monotonic() + WAIT_S
+    while time.monotonic() < deadline and (orders.get(order_id) or {})["status"] != "done":
+        time.sleep(POLL_S)
+    assert made == ["recipe"]
+    doc = orders.get(order_id)
+    assert doc is not None
+    assert doc["cost"] == {"usd_total": "0.5"}
+
+
+def test_the_real_editor_names_a_missing_setting_without_any_value(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # pydantic's own message carries the input dict, so a missing Anthropic key printed the
+    # first characters of the Gemini key (STEP-07 review W8).
+    planted = "AIza" + "planted-value-" + "x" * 20
+    monkeypatch.chdir(tmp_path)  # no dotenv file here
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", planted)
+    with pytest.raises(SystemExit) as stopped:
+        main.engine_make_reel(load())
+    message = str(stopped.value)
+    assert "ANTHROPIC_API_KEY" in message
+    assert planted[:5] not in message

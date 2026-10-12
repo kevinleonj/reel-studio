@@ -114,6 +114,16 @@ test("Delete my files: inline confirm, status becomes deleted, players disappear
   expect(deletes.map((hit) => hit.method)).toEqual(["DELETE"])
 })
 
+test("a music hint without a tempo shows alone, without the separator", async ({ page }) => {
+  // The real editor has one hint line (docs/EDITOR.md music_hint), so its tempo is empty.
+  await mockConfig(page)
+  const hint = "warm lo-fi, mid tempo"
+  await mockOrder(page, order({ status: "done", result: { ...RESULT, music: { mood: hint, tempo: "" } } }))
+  await mockOrderAction(page, "viewed")
+  await page.goto(orderPath())
+  await expect(page.getByText(hint, { exact: true })).toBeVisible()
+})
+
 const STATES = [
   { view: order({ status: "awaiting_payment" }), words: ["Confirming your code…"] },
   { view: order({ status: "queued", queue_position: 1 }), words: ["Waiting for a free editor.", "1 Reel ahead of you.", "You can close this page. We'll email k•••@gmail.com when it's ready."] },

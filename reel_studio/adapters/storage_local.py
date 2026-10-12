@@ -12,6 +12,7 @@ import json
 import re
 import secrets
 import shutil
+import threading
 from dataclasses import dataclass
 from http import HTTPStatus
 from pathlib import Path
@@ -22,6 +23,7 @@ from reel_studio.core.constants import (
     UPLOAD_SESSION_BYTES,
     UPLOAD_SESSION_ID_MAX_CHARS,
 )
+from reel_studio.core.file_names import check_file_name
 from reel_studio.core.logging import get_logger
 from reel_studio.core.ports import Clock, Record, UploadTarget
 
@@ -31,7 +33,6 @@ PREFIXES = ("in", "work", "out")
 PARTIAL = ".part"
 CHUNK = re.compile(r"^bytes (?P<start>\d+)-(?P<end>\d+)/(?P<total>\d+)$")
 QUERY = re.compile(r"^bytes \*/(?P<total>\d+)$")
-SAFE_NAME = re.compile(r"^[^/\\\x00]+$")
 
 
 class SessionNotFound(LookupError):
@@ -47,10 +48,12 @@ class ChunkAnswer:
     range: str | None
 
 
-def check_file_name(name: str) -> str:
-    if not SAFE_NAME.match(name) or name.startswith(".") or name in {"", "..", "."}:
-        raise ValueError(f"unsafe file name: {name!r}")
-    return name
+def one_part(order_id: str) -> str:
+    """An order id is one path component: `..` or `a/b` would reach other orders' folders
+    (STEP-07 review round 5). The API only ever passes its own 32-hex ids."""
+    if order_id in {"", ".", ".."} or Path(order_id).name != order_id:
+        raise ValueError(f"unsafe order id: {order_id!r}")
+    return order_id
 
 
 class LocalStorage:
@@ -65,6 +68,11 @@ class LocalStorage:
     ) -> None:
         self._objects = root / "objects"
         self._sessions = root / "sessions"
+        # One live session per stored name: `current/<order>/<sha256(name)>` holds its id. One
+        # process serves the laptop's uploads (compose runs a single api), so a thread lock makes
+        # each swap, record write and final move one step (STEP-07 review round 3).
+        self._current = self._sessions / "current"
+        self._sessions_lock = threading.Lock()
         self._upload_path = upload_path
         self._download_path = download_path
         self._key = signing_key
@@ -92,6 +100,29 @@ class LocalStorage:
             raise SessionNotFound(session) from None
         return loaded
 
+    def _current_file(self, key: str) -> Path:
+        _, order_id, name = key.split("/", 2)
+        return self._current / one_part(order_id) / hashlib.sha256(name.encode()).hexdigest()
+
+    def _is_current(self, session: str, key: str) -> bool:
+        try:
+            return self._current_file(key).read_text() == session
+        except OSError:  # no index: the name has no live session
+            return False
+
+    def _commit(
+        self, session: str, record: dict[str, object], finish: tuple[Path, Path, int] | None = None
+    ) -> None:
+        """Write the record (and move the finished bytes) only while this session is still the
+        name's live one; otherwise a chunk in flight would revive a session that was closed."""
+        with self._sessions_lock:
+            if not self._is_current(session, str(record["key"])):
+                self.partial_of(session).unlink(missing_ok=True)
+                raise SessionNotFound(session)
+            if finish is not None:
+                self._finalise(*finish)
+            self._write_record(session, record)
+
     def _write_record(self, session: str, record: dict[str, object]) -> None:
         # Write then rename: a crash leaves the old record or the new one, never a torn file.
         path = self._session_file(session)
@@ -102,15 +133,30 @@ class LocalStorage:
     # ------------------------------------------------------------ port
 
     def create_upload_session(self, order_id: str, file: Record) -> UploadTarget:
+        order_id = one_part(order_id)  # the argument itself, before any key is made from it
         name = check_file_name(str(file["name"]))
         size = int(str(file["size"]))
         session = secrets.token_urlsafe(UPLOAD_SESSION_BYTES)
-        record = {"order_id": order_id, "key": f"in/{order_id}/{name}", "size": size, "received": 0}
-        self._write_record(session, record)
+        key = f"in/{order_id}/{name}"
+        record = {"order_id": order_id, "key": key, "size": size, "received": 0}
+        index = self._current_file(key)
+        with self._sessions_lock:  # close the name's older session and open this one in one step
+            try:
+                older: str | None = index.read_text()
+            except OSError:
+                older = None
+            if older is not None:
+                self.partial_of(older).unlink(missing_ok=True)
+                self._session_file(older).unlink(missing_ok=True)
+            self._write_record(session, record)
+            index.parent.mkdir(parents=True, exist_ok=True)
+            temporary = index.with_suffix(".tmp")
+            temporary.write_text(session)
+            temporary.replace(index)
         return {"name": name, "upload_url": f"{self._upload_path}/{session}"}
 
     def list_inputs(self, order_id: str) -> list[Record]:
-        folder = self._path(f"in/{order_id}")
+        folder = self._path(f"in/{one_part(order_id)}")
         if not folder.is_dir():
             return []
         files = sorted(p for p in folder.iterdir() if p.is_file())  # partials live with sessions
@@ -142,6 +188,12 @@ class LocalStorage:
     def delete_order(self, order_id: str) -> None:
         """Removes in/, work/ and out/ of the order; any other failure propagates, so a caller
         never reports files as deleted that are still there."""
+        with self._sessions_lock:
+            # The index first: a chunk still in flight for this order then refuses at its commit
+            # and removes its own bytes instead of writing into folders being deleted.
+            index = self._current / one_part(order_id)
+            if index.exists():
+                shutil.rmtree(index)
         for prefix in PREFIXES:
             folder = self._path(f"{prefix}/{order_id}")
             if folder.exists():
@@ -187,8 +239,14 @@ class LocalStorage:
         """The session's own bytes so far: never the final file, never shared by two sessions."""
         return self._sessions / f"{session}{PARTIAL}"
 
+    def session_order(self, session: str) -> str:
+        """The order a session belongs to; raises SessionNotFound."""
+        return str(self._load(session)["order_id"])
+
     def put_chunk(self, session: str, content_range: str, body: bytes) -> ChunkAnswer:
         record = self._load(session)
+        if not self._is_current(session, str(record["key"])):
+            raise SessionNotFound(session)  # superseded by a newer session for the same name
         size, received = int(str(record["size"])), int(str(record["received"]))
         partial = self.partial_of(session)
         query, chunk = QUERY.match(content_range), CHUNK.match(content_range)
@@ -200,7 +258,7 @@ class LocalStorage:
             # finishing a file with a zero-filled hole.
             received = partial.stat().st_size
             record = {**record, "received": received}
-            self._write_record(session, record)
+            self._commit(session, record)
             return self._answer(received, size)
         if query is not None:
             if int(query["total"]) != size:
@@ -224,19 +282,17 @@ class LocalStorage:
                     handle.write(body[received - start :])
                 received = end + 1
                 record = {**record, "received": received}
-                self._write_record(session, record)
+                self._commit(session, record)
         final = self._path(str(record["key"]))
         moved = not partial.exists() and final.is_file() and final.stat().st_size == size
-        if received == size and not record.get("complete") and not moved:
-            self._finalise(partial, final, size)
         if received == size and not record.get("complete"):  # also after a crash past the move
-            self._write_record(session, {**record, "complete": True})
+            finish = None if moved else (partial, final, size)
+            self._commit(session, {**record, "complete": True}, finish)
         return self._answer(received, size)
 
     @staticmethod
     def _finalise(partial: Path, final: Path, size: int) -> None:
-        """Move the finished bytes into place; a later finished upload of the same name replaces
-        an earlier one (last wins, as in Cloud Storage)."""
+        """Move the finished bytes into place, replacing an earlier upload of the same name."""
         partial.touch()  # an empty file has no chunk to create it
         if partial.stat().st_size != size:
             raise ValueError(f"partial upload has {partial.stat().st_size} bytes, expected {size}")

@@ -8,12 +8,13 @@ Documents: `orders/{order_id}`, `limits/week-YYYY-Www` {count, cap}, `limits/cap
 {slots: {order_id: lease_until}, paused}.
 """
 
+import unicodedata
 from copy import deepcopy
 from datetime import datetime, timedelta
 from typing import Any
 
 from reel_studio.core.config import Config
-from reel_studio.core.errors import ErrorCode, WeekFull
+from reel_studio.core.errors import ErrorCode, TooLarge, TooManyFiles, WeekFull
 from reel_studio.core.ports import NewOrder, QueueLimits
 
 
@@ -70,6 +71,7 @@ def new_order(order: NewOrder, now: datetime, order_days: int) -> Doc:
         "stripe": {},
         "files": [],
         "bytes_declared": 0,
+        "uploads": [],
         "queue": {},
         "stage": None,
         "stages_done": [],
@@ -98,6 +100,8 @@ def mark_paid(doc: Doc | None, stripe: dict[str, object], now: datetime) -> Doc 
     changed = _moved(doc, "awaiting_payment")
     if changed is not None:
         changed.update(status="paid", paid_at=now, stripe={**changed["stripe"], **stripe})
+        if not changed["email"] and stripe.get("email"):  # Stripe collected it (ARCHITECTURE.md §2)
+            changed["email"] = stripe["email"]
     return changed
 
 
@@ -264,3 +268,46 @@ def limits_from(config: Config) -> QueueLimits:
         expiry_grace_minutes=quotas.missed_expiry_check_minutes - quotas.checkout_expiry_minutes,
         order_days=config.limits.retention.order_days,
     )
+
+
+def set_checkout(doc: Doc | None, session_id: str) -> Doc | None:
+    changed = _moved(doc, "awaiting_payment")
+    if changed is not None:
+        changed["stripe"] = {**changed["stripe"], "session_id": session_id}
+    return changed
+
+
+def resume(doc: Doc | None) -> Doc | None:
+    """paused -> queued, keeping `queue.queued_at`, so it is back at the front of the line (D26)."""
+    changed = _moved(doc, "paused")
+    if changed is not None:
+        changed.update(status="queued", error=None)
+    return changed
+
+
+def upload_key(name: str) -> str:
+    """Twins by case or Unicode form, which one batch may not hold (APFS would store one file)."""
+    return unicodedata.normalize("NFC", name).casefold()
+
+
+def reserve_uploads(
+    doc: Doc | None, files: list[dict[str, object]], max_files: int, max_bytes: int
+) -> Doc:
+    """Every upload session first reserves its declared name and size here, in the order's own
+    transaction, so batches opened before any file finishes still meet the limits (review W1).
+    Keys are the exact stored names, so a case variant counts as the separate file a
+    case-sensitive store keeps; asking again for a name never makes its reservation smaller,
+    or a re-declared 0 would free room the first session can still fill (review round 1)."""
+    changed = _moved(doc, "paid")
+    if changed is None:
+        raise WrongState("uploads need a paid order")
+    held = {r["key"]: r["size"] for r in changed.get("uploads") or []}
+    for file in files:
+        name, size = str(file["name"]), int(str(file["size"]))
+        held[name] = max(held.get(name, 0), size)
+    if len(held) > max_files:
+        raise TooManyFiles
+    if sum(held.values()) > max_bytes:
+        raise TooLarge
+    changed["uploads"] = [{"key": key, "size": size} for key, size in sorted(held.items())]
+    return changed

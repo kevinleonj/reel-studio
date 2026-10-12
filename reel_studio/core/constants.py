@@ -86,8 +86,21 @@ INVITE_CODE_MAX_CHARS = 64  # Stripe promotion codes are shorter; this only boun
 UPLOAD_SESSION_ID_MAX_CHARS = (
     128  # bounds the id in a path; ids are 32 chars (UPLOAD_SESSION_BYTES)
 )
-FILE_NAME_MAX_CHARS = 255  # APFS and ext4 name limit: a longer name could not be stored
+# ext4 NAME_MAX is 255 bytes (APFS: 255 UTF-8 characters), so the stricter byte limit holds on
+# both disks; a longer name fails on the last chunk with OSError 36 (review W4).
+FILE_NAME_MAX_BYTES = 255
+UTF8_MAX_BYTES_PER_CHAR = 4  # RFC 3629: a request bound only, every longer name is too long
+
 SIGNING_KEY_BYTES = 32  # laptop signed-link HMAC-SHA256 key; RFC 2104: at least the hash length
+
+# D58: during the beta a promotion code must take the whole price off, so nobody can be charged.
+FULL_DISCOUNT_PERCENT = 100
+PRIVATE_FILE_MODE = 0o600  # POSIX chmod(2): owner read and write only, for a file holding keys
+MINOR_UNITS_PER_EURO = 100  # ISO 4217: EUR has two decimal places
+STRIPE_API_VERSION = "2026-09-30.endive"  # F19: the version stripe 16.0.0 is built for
+STRIPE_SECRET_TIMEOUT_S = 120  # `stripe listen --print-secret`, image pull included
+# A friend's code is NAME-XXXXXX: six hex characters (3 bytes), unguessable and still typeable.
+PROMO_CODE_SUFFIX_BYTES = 3
 
 # ---------------------------------------------------------------- Google Cloud (STEP-08)
 

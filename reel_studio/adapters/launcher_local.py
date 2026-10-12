@@ -10,13 +10,14 @@ import tempfile
 import threading
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Protocol
 
 from reel_studio.core.errors import ErrorCode
 from reel_studio.core.logging import get_logger
-from reel_studio.core.ports import Clock, Launcher, OrderStore, Storage
+from reel_studio.core.ports import Clock, Launcher, OrderStore, Storage, SweepReport
 
 log = get_logger(__name__)
 
@@ -29,6 +30,15 @@ class FailureNotifier(Protocol):
     def order_failed(self, order_id: str, code: ErrorCode, stage: str) -> None: ...
 
 
+@dataclass(frozen=True)
+class Sweep:
+    """What the dispatcher calls between launches: the API's sweep, which with PAYMENTS=stripe
+    asks Stripe about missed checkouts first (reel_studio.api.payments.sweep)."""
+
+    run: Callable[[], SweepReport]
+    every_s: int
+
+
 class Dispatcher:
     def __init__(
         self,
@@ -36,13 +46,14 @@ class Dispatcher:
         launcher: Launcher,
         clock: Clock,
         *,
-        sweep_every_s: int,
+        sweep: Sweep,
         notifier: FailureNotifier | None = None,
     ) -> None:
         self._orders = orders
         self._launcher = launcher
         self._clock = clock
-        self._sweep_every = timedelta(seconds=sweep_every_s)
+        self._sweep = sweep.run
+        self._sweep_every = timedelta(seconds=sweep.every_s)
         self._last_sweep: datetime | None = None
         self._notifier = notifier
 
@@ -67,7 +78,7 @@ class Dispatcher:
         """One pass: sweep when due, then start queued orders while slots are free."""
         now = self._clock.now()
         if self._last_sweep is None or now - self._last_sweep >= self._sweep_every:
-            report = self._orders.sweep()
+            report = self._sweep()
             self._last_sweep = now
             log.info(
                 "sweep", extra={"event": "sweep", "stage": "dispatcher", "outcome": str(report)}
@@ -181,10 +192,15 @@ class FakeEditor:
         }
 
 
-class FakeEditorLauncher:
-    """Launcher port: runs the fake editor on a thread; returns a made-up execution name."""
+class Editor(Protocol):
+    def run(self, order_id: str) -> None: ...
 
-    def __init__(self, editor: FakeEditor, orders: OrderStore) -> None:
+
+class FakeEditorLauncher:
+    """Launcher port: runs an editor (fake or the laptop's real one) on a thread; returns a
+    made-up execution name."""
+
+    def __init__(self, editor: Editor, orders: OrderStore) -> None:
         self._editor = editor
         self._orders = orders
 

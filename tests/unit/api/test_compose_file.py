@@ -30,8 +30,10 @@ def test_no_service_gets_the_whole_settings_file() -> None:
 
 def test_the_website_receives_exactly_its_settings() -> None:
     block = text().split("x-website-settings:", 1)[1].split("\nservices:", 1)[0]
-    names = set(re.findall(r"^  ([A-Z][A-Z0-9_]*):", block, flags=re.M))
-    assert names == {f.upper() for f in WebSettings.model_fields} | COMPOSE_ONLY
+    listed = re.findall(r"^  ([A-Z][A-Z0-9_]*):", block, flags=re.M)
+    # Compose refuses a repeated key (PyYAML would quietly keep the last): STEP-07 review round 2.
+    assert len(listed) == len(set(listed)), sorted(n for n in listed if listed.count(n) > 1)
+    assert set(listed) == {f.upper() for f in WebSettings.model_fields} | COMPOSE_ONLY
     for name in ("api", "dispatcher"):
         assert "environment: *website" in service(name), name
 

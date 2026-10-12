@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from reel_studio.adapters.launcher_local import Sweep
 from reel_studio.adapters.storage_local import LocalStorage
 from reel_studio.api.app import ApiDeps, create_app
 from reel_studio.core.config import load
@@ -17,6 +18,7 @@ from tests.conftest import MakeSettings
 from tests.fakes.clock import FrozenClock
 from tests.fakes.mailer import FakeMailer
 from tests.fakes.orders import FakeOrders
+from tests.fakes.payments import FakePayments
 
 START = datetime(2026, 10, 12, 9, 0, tzinfo=UTC)
 LIMITS = QueueLimits(
@@ -46,6 +48,7 @@ class Api:
     storage: LocalStorage
     mailer: FakeMailer
     clock: FrozenClock
+    payments: FakePayments | None = None
 
 
 def build(
@@ -54,6 +57,7 @@ def build(
     *,
     voice_available: bool = True,
     weekly_cap: int = LIMITS.weekly_cap,
+    payments: FakePayments | None = None,
 ) -> Api:
     dist = tmp_path / "dist"
     for name, body in SITE_FILES.items():
@@ -74,13 +78,14 @@ def build(
         storage=storage,
         local_storage=storage,
         mailer=mailer,
+        payments=payments,
         clock=clock,
         config=load(),
         settings=settings,
         voice_available=voice_available,
         web_dist=dist,
     )
-    return Api(TestClient(create_app(deps)), orders, storage, mailer, clock)
+    return Api(TestClient(create_app(deps)), orders, storage, mailer, clock, payments)
 
 
 @pytest.fixture
@@ -88,3 +93,22 @@ def api(tmp_path: Path, make_settings: MakeSettings) -> Iterator[Api]:
     settings = make_settings(WebSettings, payments="off")
     assert isinstance(settings, WebSettings)
     yield build(tmp_path, settings)
+
+
+@pytest.fixture
+def stripe_api(tmp_path: Path, make_settings: MakeSettings) -> Iterator[Api]:
+    settings = make_settings(
+        WebSettings,
+        payments="stripe",
+        stripe_secret_key="test-stripe-key",
+        stripe_webhook_secret="test-webhook-secret",
+        stripe_price_id="price_test",
+        stripe_coupon_id="coupon_test",
+    )
+    assert isinstance(settings, WebSettings)
+    yield build(tmp_path, settings, payments=FakePayments())
+
+
+def offline_sweep(orders: FakeOrders) -> Sweep:
+    """The PAYMENTS=off sweep, every minute, for dispatcher tests."""
+    return Sweep(lambda: orders.sweep(expire_checkouts=True), every_s=60)

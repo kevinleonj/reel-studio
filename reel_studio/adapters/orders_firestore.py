@@ -11,11 +11,12 @@ import time
 from collections.abc import Callable, Sequence
 from typing import Any
 
+from google.api_core import exceptions as gexc
 from google.cloud import firestore
 
 from reel_studio.core import order_rules as rules
 from reel_studio.core.constants import MS_PER_S, RUN_TOKEN_BYTES
-from reel_studio.core.errors import ErrorCode, WeekFull
+from reel_studio.core.errors import ErrorCode, OrderBusy, TooLarge, TooManyFiles, WeekFull
 from reel_studio.core.logging import get_logger
 from reel_studio.core.ports import Clock, NewOrder, QueueLimits, Record, SweepReport
 
@@ -64,7 +65,7 @@ class FirestoreOrders:
         extra: dict[str, Any] = {"order_id": order_id, "stage": "orders", "event": event}
         try:
             result = call()
-        except (WeekFull, rules.WrongState) as refusal:
+        except (WeekFull, TooManyFiles, TooLarge, OrderBusy, rules.WrongState) as refusal:
             # Expected refusals, not failures: one INFO line, no traceback (D74).
             extra.update(
                 latency_ms=round((time.monotonic() - started) * MS_PER_S),
@@ -85,7 +86,13 @@ class FirestoreOrders:
     ) -> T:
         def run() -> T:
             tx = self._db.transaction(max_attempts=self._max_attempts)
-            return firestore.transactional(body)(tx)  # type: ignore[no-any-return]
+            try:
+                return firestore.transactional(body)(tx)  # type: ignore[no-any-return]
+            except ValueError as error:
+                # The client wraps its last Aborted in a ValueError once every attempt is used.
+                if isinstance(error.__cause__, gexc.Aborted):
+                    raise OrderBusy(event) from None
+                raise
 
         return self._logged(event, order_id, run)
 
@@ -261,6 +268,24 @@ class FirestoreOrders:
     def pause(self, order_id: str, *, code: ErrorCode) -> None:
         self._end_run("pause", order_id, lambda doc: rules.pause(doc, code), pause=True)
 
+    def reserve_uploads(
+        self, order_id: str, *, files: Sequence[Record], max_files: int, max_bytes: int
+    ) -> None:
+        listed = [dict(f) for f in files]
+        self._single(
+            "reserve_uploads",
+            order_id,
+            lambda doc: rules.reserve_uploads(doc, listed, max_files, max_bytes),
+        )
+
+    def places_held(self, week: str) -> int:
+        def run() -> int:
+            snapshot = self._limit(rules.week_doc_id(week)).get(timeout=self._timeout_s)
+            counter = snapshot.to_dict() if snapshot.exists else None
+            return int(counter["count"]) if counter is not None else 0
+
+        return self._logged("places_held", None, run)
+
     def get(self, order_id: str) -> Record | None:
         def run() -> Record | None:
             snapshot = self._order(order_id).get(timeout=self._timeout_s)
@@ -290,6 +315,44 @@ class FirestoreOrders:
 
         return self._logged(f"list_{status}", None, run)
 
+    def set_checkout(self, order_id: str, *, session_id: str) -> None:
+        self._single("set_checkout", order_id, lambda doc: rules.set_checkout(doc, session_id))
+
+    def checkouts_to_check(self) -> list[Record]:
+        now = self._clock.now()
+        due = []
+        for order_id in self._ids("awaiting_payment"):
+            doc = self.get(order_id)
+            if doc is not None and rules.checkout_missed(dict(doc), self._limits, now):
+                due.append(doc)
+        return due
+
+    def resume_paused(self) -> list[str]:
+        resumed = []
+        for order_id in self._ids("paused"):
+            self._single("resume", order_id, rules.resume)
+            resumed.append(order_id)
+        capacity_ref = self._limit(rules.CAPACITY_ID)
+
+        def reopen(tx: firestore.Transaction) -> None:
+            tx.set(capacity_ref, {**self._capacity(tx), "paused": False})
+
+        self._transaction("resume_service", None, reopen)
+        return resumed
+
+    def list_orders(self, *, status: str | None, limit: int) -> list[Record]:
+        def run() -> list[Record]:
+            query: firestore.Query | firestore.CollectionReference = self._db.collection(ORDERS)
+            if status is not None:
+                query = query.where(filter=firestore.FieldFilter("status", "==", status))
+            ordered = query.order_by("created_at", direction=firestore.Query.DESCENDING).limit(
+                limit
+            )
+            found = (s.to_dict() for s in ordered.stream(timeout=self._timeout_s))
+            return [doc for doc in found if doc is not None]
+
+        return self._logged("list_orders", None, run)
+
     def claim_email(self, order_id: str, kind: str) -> bool:
         ref = self._order(order_id)
         now = self._clock.now()
@@ -303,7 +366,7 @@ class FirestoreOrders:
 
         return self._transaction(f"claim_email_{kind}", order_id, body)
 
-    def sweep(self) -> SweepReport:
+    def sweep(self, *, expire_checkouts: bool) -> SweepReport:
         """Dead leases fail, missed checkouts expire, stale paid orders are abandoned. Each order
         is re-checked inside its own transaction, so a sweep racing a worker changes nothing."""
         now = self._clock.now()
@@ -312,7 +375,7 @@ class FirestoreOrders:
             if self._changed(order_id, lambda doc: doc if rules.lease_expired(doc, now) else None):
                 self.fail(order_id, code=ErrorCode.JOB_KILLED)
                 report["failed"].append(order_id)
-        for order_id in self._ids("awaiting_payment"):
+        for order_id in self._ids("awaiting_payment") if expire_checkouts else []:
             if self._changed(
                 order_id, lambda doc: doc if rules.checkout_missed(doc, self._limits, now) else None
             ):

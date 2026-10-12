@@ -13,6 +13,7 @@ from reel_studio.core.ports import NewOrder
 from tests.fakes.clock import FrozenClock
 from tests.fakes.mailer import FakeMailer
 from tests.fakes.orders import FakeOrders
+from tests.unit.api.conftest import offline_sweep
 from tests.unit.api.test_dispatcher import LIMITS, SETTINGS, RecordingLauncher
 
 START = datetime(2026, 10, 12, 9, 0, tzinfo=UTC)
@@ -39,7 +40,11 @@ def test_a_dead_lease_emails_the_customer_and_kevin_once() -> None:
     orders, mailer = FakeOrders(clock, LIMITS), FakeMailer()
     running(orders, "a" * 32, "friend@example.test")
     dispatcher = Dispatcher(
-        orders, RecordingLauncher(), clock, sweep_every_s=60, notifier=notifier(orders, mailer)
+        orders,
+        RecordingLauncher(),
+        clock,
+        sweep=offline_sweep(orders),
+        notifier=notifier(orders, mailer),
     )
     clock.advance(timedelta(minutes=71))
     dispatcher.tick()
@@ -92,7 +97,11 @@ def test_any_launch_error_fails_the_order_frees_the_slot_and_tells_kevin() -> No
     orders.set_manifest("a" * 32, files=[], bytes_declared=0)
     orders.queue("a" * 32)
     Dispatcher(
-        orders, Crashing(), clock, sweep_every_s=60, notifier=notifier(orders, mailer)
+        orders,
+        Crashing(),
+        clock,
+        sweep=offline_sweep(orders),
+        notifier=notifier(orders, mailer),
     ).tick()
     doc = orders.get("a" * 32)
     assert doc is not None and doc["status"] == "failed"
@@ -115,7 +124,12 @@ def test_the_dispatcher_survives_an_error_in_one_tick() -> None:
         return real()
 
     orders.next_queued = flaky  # type: ignore[method-assign]
-    Dispatcher(orders, RecordingLauncher(), clock, sweep_every_s=60).run_forever(0, stop)
+    Dispatcher(
+        orders,
+        RecordingLauncher(),
+        clock,
+        sweep=offline_sweep(orders),
+    ).run_forever(0, stop)
     assert calls["n"] == 2
 
 
