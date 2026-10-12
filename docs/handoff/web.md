@@ -4,17 +4,66 @@ Written by the web lane only. Newest entry on top.
 
 ## Status board
 Everything left in this lane needs Kevin's hands:
-1. **Stripe login (STEP-07 task 8):** `stripe login`, then `make stripe-listen` in this worktree. It writes `STRIPE_WEBHOOK_SECRET` to `.env` without printing it and forwards the two checkout events to `http://localhost:8080/api/stripe/webhook`.
-2. **Stripe dashboard values (test mode):** the €19 price (`make stripe-setup` is STEP-08's, or the dashboard) and a coupon that is 100% off, duration once, with no `max_redemptions` and no `redeem_by` (a code cannot outlast or out-redeem its coupon, and a coupon's own limit counts across all codes); test mode only, since live-mode keys are refused, then in `.env`: `STRIPE_SECRET_KEY` (sk_test), `STRIPE_PRICE_ID`, `STRIPE_COUPON_ID`, `PAYMENTS=stripe`. Then `uv run reelctl codes create --name <friend> --expires <YYYY-MM-DD>` makes a code (reelctl reads the same `.env` as the site, so every name in `.env.example`'s website block must be set; it names any that are missing).
-3. **Laptop checkout and the one paid Reel (STEP-07 task 9, ≤ $3):** `make up`, order with that code, confirm the €0 checkout, upload, get the Reel; then the handoff line `Stripe e2e order: <order id>, <cost>`.
-4. **iPhone upload (STEP-06 task 8):** from the phone on the same Wi-Fi, `http://<laptop-ip>:8080`, a 300 MB HEVC clip; then the line `iPhone upload: <result>`.
-5. **Analytics value in `.env`:** `GA4_MEASUREMENT_ID` must be empty on the laptop for the step06 gate (it checks analytics is off).
+1. **iPhone upload (STEP-06 task 8):** from the phone on the same Wi-Fi, `http://<laptop-ip>:8080`, a 300 MB HEVC clip; then the line `iPhone upload: <result>`.
+
+## Done — STEP-07 tasks 8-9 on the laptop (branch `step-07-e2e`)
+- Done: `reelctl dotenv-set` writes through `./.env` when it is a symlink (a worktree's link to the shared file stays a link); `make stripe-laptop` finds or creates the €19 price (lookup key `reel-eur-1900`, the same as STEP-08's `make stripe-setup`) and the 100%-off, duration-once coupon `reel-beta-free`, then writes `STRIPE_PRICE_ID`, `STRIPE_COUPON_ID`, `PAYMENTS=stripe` (test keys only, no gcloud; run twice: created, then found); `make stripe-listen` needs no `stripe login`: the pinned Stripe CLI image gets the key on stdin and its output is masked; `make dispatch-real` runs the real editor on the host against the compose stack.
+- Done: task 9, one real order through the site in Stripe test mode with a code, the €0 hosted checkout (no CAPTCHA shown; Stripe's invisible hCaptcha frame is always there), six `pastav2` clips, the real editor, the Reel on the page (Playwright, scratch script). Cost below.
+- Fixed on the way: the first paid order finished but its page crashed (`music: null`; L303), and the page showed a dangling `·` for a hint without a tempo.
+- Partly: the real editor's result fills `music` from `music_hint` and `doubts` from the critic, but sends no `text_lines`, `left_out` or `wishes` yet, so "Text to add in Instagram" is an empty heading and "Check before posting" shows the critic's raw scores (`peak 2 < 3; share 2 < 3; total 20 < 26`). Follow-up for the engine's result shape (EDITOR.md §8) before the cloud job.
+- Blocked: nothing.
+
+## Follow-ups from the STEP-07 e2e review (PASS, 0 critical; fixed: W1 formatter drive-by, W2
+spend limit pauses instead of failing and failures email Kevin, W6 lazy Stripe import, W8 no
+setting values in the real editor's startup error, W9/W10 docs, S7 no codes in the handoff, S8
+mask `whsec_\S+`)
+- W3: `engine_make_reel` (order settings to `make.Request`) and `dispatch(real=True)` have no unit
+  test; only the paid run covers them. Patch `cli.reel.real_deps` with the engine's fakes.
+- W4: reelctl's Stripe commands end in a traceback on a bad key, a docker failure or Ctrl-C;
+  catch them in `main` and print one line (docker's stderr through the same masks).
+- W5: pin the capture branch of `run_docker` (stdin reaches docker, timeout, non-zero exit), a
+  non-404 coupon lookup, and the price's idempotency key.
+- W7: the test-key prefixes exist three times (reelctl, `api/main.py`, scripts/cloud), the lookup
+  key is re-derived from scripts/cloud's rule, and `STRIPE_SECRET_TIMEOUT_S` belongs in
+  `[stripe]`. One home each, with the cloud lane for scripts/cloud.
+- S1: give both listener containers a fixed `STRIPE_DEVICE_NAME` so the secret from
+  `--print-secret` and the forwarding session share one device (they did in the run: events 200).
+- S2: a reused coupon is checked for 100% and once only; also check `valid`, no
+  `max_redemptions`, no `redeem_by`.
+- S3: `api/views.py` forwards a stored `music: null` to the page; default it there too before the
+  cloud job (STEP-08) becomes a second writer.
+- S4-S6, S10: reelctl is 370 lines (split the Stripe CLI half out); the real editor's logs lack
+  `latency_ms` and the full cause of a provider failure; a few docstrings still say "fake";
+  `make up` after `make dispatch-real` restarts the fake dispatcher; `queue.run_token` is still
+  unused (one run per order, STEP-08).
+- The real editor sends no `text_lines`, `left_out` or `wishes` (see Partly above).
+- Re-review N1: an unexpected exception in the real editor fails the order through the
+  launcher's crash handler, which sends no notice; EDITOR.md §10 says every failure
+  emails Kevin. Give that handler the notifier.
+- Re-review N2: a spend-limit pause sends Kevin nothing; EDITOR.md and D45 say he is
+  emailed. Add a Kevin-only `service_paused` notice.
+- Re-review N3: pin the new fixes (a non-alphanumeric `whsec_` value is masked; reelctl
+  imports without the Stripe SDK, in a subprocess; `build_dispatcher` wires the real
+  notifier; a notifier that raises is logged).
+- S9 and ports: no Gemini-key guard for `keep_voice` in `engine_make_reel` (as
+  `cli/reel.py` has); ports 8681 and 1025 are typed in both `compose.yaml` and
+  `mk/web.mk`.
+- `web/.claude/state/review_rounds` (untracked) was written by a hook from a session
+  whose cwd was `web/`; the guard blocks removing it and `.gitignore`'s `.claude/state/`
+  is anchored at the root. Delete it by hand.
 
 ## Done — STEP-07 (branch `step-07-gate`)
 - Done: task 2 (checkout with a code, place reserved with the order, released if Stripe fails), task 3 (fulfilment from the webhook, `/fulfil` and the sweep; expiry from the webhook, `/cancel` and the sweep, which asks Stripe first), task 4 (slots and queue: built in STEP-06, now under race tests; `take_slot` writes `queue.run_token`, but nothing passes it to the job yet: that is the real launcher's, with the engine lane's worker command), task 5 (4 race tests, fake and Firestore emulator), task 6 (`reelctl` commands on the ports), task 7 (write count: 19, F312), task 8's make target (`make stripe-listen`, dry-run only); `/api/config` sends the €19 price in Stripe mode.
 - Also done: task 1, the Stripe adapter (`adapters/payments_stripe.py`, test mode, 22 tests through the real StripeClient and a recording HTTP client), the Stripe composition root (`main.build_payments`) and `reelctl connect()`; REVIEW-FIXES.md WEB items 1-5 and the npm audit triage; the review round 1 fixes (below).
 
 ## Decided by standing orders (STEP-07 and REVIEW-FIXES)
+- `make stripe-listen` hands the key to the Stripe CLI as `STRIPE_API_KEY` on stdin (`docker run -i --env-file /dev/stdin`), not with `--api-key`: an argument shows in `ps` on the host. (The container's own environment still holds it while the listener runs, as with any env-file value.) The CLI's own docs name `STRIPE_API_KEY` for Docker (F322). Undo: pass `--api-key` in `reelctl.stripe_listen`.
+- The Stripe CLI runs from a digest-pinned image (`[stripe] cli_image`, v1.52.0), not a host install, so the laptop needs only Docker. Undo: call a host `stripe` in `run_docker`.
+- Laptop Stripe setup is `make stripe-laptop` (reelctl `stripe-setup`), not a mode of `scripts/cloud/stripe_setup.py`: that file is the cloud lane's. Both use the same lookup key, so they share one price. Undo: move the code there when the cloud lane wants it.
+- `KEVIN_ALERT_EMAIL` in the shared `.env` was empty and WebSettings requires it, so reelctl could not start; it is now the placeholder `kevin@laptop.invalid` (a reserved domain, nothing is delivered). Set your address before STEP-08. Undo: `printf '%s' <address> | uv run reelctl dotenv-set KEVIN_ALERT_EMAIL`.
+- Host processes (`make stripe-laptop`, `stripe-listen`, `dispatch-real`) get `SMTP_HOST`, `SMTP_PORT`, `DATA_DIR`, `WEB_DIST` and `FIRESTORE_EMULATOR_HOST` from `LAPTOP_HOST` in `mk/web.mk`, the host's view of the compose stack, so `.env` keeps no laptop-only values. Compose publishes the emulator (8681) and Mailpit's SMTP (1025) on 127.0.0.1 only. Undo: drop `LAPTOP_HOST` and the two port lines.
+- The laptop's real editor runs in the host dispatcher (`make dispatch-real` stops the compose dispatcher), because the api image has no editor extra and no Anthropic key (D62). Undo: `make up` again.
+- `stripe_setup` refuses any key that is not `sk_test_`/`rk_test_`. Undo: not advised (D58).
 - Upload limits: every `/uploads` batch reserves its declared names and sizes on the order (`uploads`, `OrderUpkeep.reserve_uploads`, one transaction), keyed by the exact stored name; asking again for a name never lowers its reservation; names are checked before anything is reserved. Start still re-checks the finished files. Undo: revert the item-1 and round-1 commits.
 - A newer upload session for a name closes the older one and its bytes (the storage contract changed from Cloud Storage's "last completed wins"; see For CLOUD). The session index (`_current_file`, `_is_current`, `_commit` in `storage_local.py`) holds the live session per name; a session opened before the index existed is refused with 404 and its partial bytes stay until the order is deleted. Undo: drop the index and restore the three contract tests.
 - A transaction that runs out of attempts on a busy order answers 503 `busy` with `Retry-After` (`[web] busy_retry_after_s = 2`), not 500. Undo: remove `on_busy`.
@@ -24,6 +73,12 @@ Everything left in this lane needs Kevin's hands:
 - An address a mail header refuses is a 422 `invalid_request` at checkout, like the other address checks (the review said 400; 422 is what this API answers for every bad body). Undo: change `invalid()` there.
 - File names over 255 UTF-8 bytes answer 400 `name_too_long` with the file, and the page says "{name} has a name too long to store. Rename it and choose it again." (new words, not in UX.md §2). Undo: revert the item-4 commit.
 - npm audit (7 high): one chain, `braces` ReDoS via `micromatch`/`fast-glob`, all under the `shadcn` CLI. The site imports only `shadcn/tailwind.css` at build time and ships static files, so nothing of it runs in production or on user input. Accepted; `npm audit fix --force` would change shadcn's major. Revisit when shadcn ships a fixed range.
+
+## For MAIN (STEP-07 e2e)
+- `.gitignore`: change `.claude/state/` to `**/.claude/state/`. The current pattern matches only
+  at the root, so a hook's state file written from a session whose cwd was `web/` left the tree
+  dirty and `make ci` could not stamp `.ci-pass` (L305; Kevin deleted the file by hand on
+  12 Oct 2026). The lane guard refuses the edit from this worktree (`.gitignore` is lane main's).
 
 ## For CLOUD (REVIEW-FIXES WEB 2 and STEP-07 review round 1)
 - The storage contract now says a newer session for a name supersedes the older: the Cloud Storage adapter must cancel the older resumable session (DELETE on its session URL; check the docs first). `gcp_storage.create_upload_session` also returns `{key, url}` where the routes read `name`/`upload_url`, and reads `content_type` the routes do not send (review round 1 suggestion); reconcile before the cloud composition root.
@@ -56,6 +111,14 @@ Everything left in this lane needs Kevin's hands:
 
 
 ## Needs Kevin (decisions, not blocking)
+- **Review verdict file:** the senior review could not write `.claude/review-verdict.json` from this
+  worktree (the lane guard says it is lane main's). Its verdict, for the record: PASS, 0 critical,
+  on the diff before the fixes above. Add the path to the shared list, or have lane main write it.
+- **Laptop webhook signing secret:** it appeared in a local scratch log (test mode, scrubbed, no
+  remote; Log 12 Oct). It does not change between restarts (F313). How to rotate a CLI listen secret
+  is not looked up (it is not a dashboard endpoint secret); say if you want it done.
+- **`KEVIN_ALERT_EMAIL`** is the placeholder `kevin@laptop.invalid` (Decided above); set your
+  address before STEP-08.
 - **Decision on D18's edge (link email after Stripe):** the webhook does not know the link token, which is stored only as a hash. The success URL Stripe keeps (`/o/<id>?t=<token>`, as STEP-07 specifies) does carry it, so fulfilment reads it back from the retrieved session, checks it against the stored hash, and sends `/o/<id>#t=<token>`. No new copy of the token is stored. Confirm, or pick another way (this also answers the "ready" email question below if the editor may call Stripe).
 - **More STEP-07 tunables in `config/limits.toml` to review:** `[firestore] timeout_s = 10`, `max_attempts = 12` (an aborted transaction retries at once keeping its place in line, so N simultaneous writers on the week document need up to N attempts; with 5, 8 of the 10 racing checkouts failed on the emulator), `[reelctl] list_limit = 200`, `[payments] price_minor = 1900`, `currency = "EUR"`.
 - **Port changes:** `PaymentsUpkeep` (`expire_session`, `create_code`, `expire_code`) and `PaymentGateway` beside the pinned `Payments`; `OrderUpkeep` gained `set_checkout`, `checkouts_to_check`, `resume_paused`, `list_orders`, `places_held`, and `sweep(*, expire_checkouts)` (with Stripe the API checks missed checkouts at Stripe before they expire, so a paid checkout whose webhook was lost is not dropped). New `reelctl dotenv-set NAME` (value from stdin) for `make stripe-listen`.
@@ -71,8 +134,28 @@ Everything left in this lane needs Kevin's hands:
 - Kevin's global hook commits every edit as `chore(auto)`; the branch was rebuilt into logical commits on top of `origin/main` before the push (TONIGHT.md rule).
 
 ## Evidence lines (the gates read these)
+Stripe e2e order: c86d1bf26052af262931df7ab248a8c5, $0.3587172 (12 Oct 2026, Stripe test mode, a friend code, €0 checkout, six clips, real editor, critic 20, render 2)
 
 ## Log
+
+### 12 Oct 2026 — STEP-07 tasks 8-9 on the laptop (branch `step-07-e2e`)
+
+- Before: Status board items 1-3 waited for Kevin (`stripe login`, dashboard values, the paid order).
+  After: all three are code and were run; only the iPhone upload is left (item 5, analytics, was
+  already off: `WebSettings().ga4_measurement_id` is empty).
+- Run: `make stripe-laptop` created the price and the coupon, a second run found both; `.env` is
+  still a symlink. `make up`, `make stripe-listen` (events answered 200), `make dispatch-real`.
+  Order `ba76b749…` reached `done` ($0.3622) but the page crashed on `music: null`;
+  fixed test first (L303), rebuilt, order `c86d1bf2…` showed the Reel. Paid
+  total $0.7209 of the $3 budget.
+- Incident: the Stripe CLI's "Ready!" line printed the test-mode webhook signing secret into a
+  local scratch log. Not in a commit, a remote or the conversation; the API key never appeared.
+  Stopped the listener, scrubbed the log (0 left), masked every listener line (L304), and the
+  restarted listener's log shows `whsec_<redacted>`. The secret is test mode and reached no remote,
+  so it was not rotated; it does not change between restarts (F313), so if you want it rotated anyway, that is your call (Needs Kevin).
+- The Stripe setup calls go through the adapter's wrapper (`_timed`, `_call`): one line with latency
+  each where logging is configured (the api); reelctl does not configure logging, so on the
+  command line only failures surface.
 
 ### 11 Oct 2026 (night) — STEP-07 review round 3: PASS; follow-ups (branch `step-07-followups`)
 

@@ -192,10 +192,15 @@ class FakeEditor:
         }
 
 
-class FakeEditorLauncher:
-    """Launcher port: runs the fake editor on a thread; returns a made-up execution name."""
+class Editor(Protocol):
+    def run(self, order_id: str) -> None: ...
 
-    def __init__(self, editor: FakeEditor, orders: OrderStore) -> None:
+
+class FakeEditorLauncher:
+    """Launcher port: runs an editor (fake or the laptop's real one) on a thread; returns a
+    made-up execution name."""
+
+    def __init__(self, editor: Editor, orders: OrderStore) -> None:
         self._editor = editor
         self._orders = orders
 

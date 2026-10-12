@@ -16,7 +16,13 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 import stripe
 
-from reel_studio.adapters.payments_stripe import StripePayments, StripeSetup, build_client
+from reel_studio.adapters.payments_stripe import (
+    StripePayments,
+    StripeSetup,
+    build_client,
+    ensure_coupon,
+    ensure_price,
+)
 from reel_studio.api.main import build_payments
 from reel_studio.core.config import load
 from reel_studio.core.constants import STRIPE_API_VERSION
@@ -438,3 +444,69 @@ def test_a_live_mode_key_is_refused_during_the_beta(
     assert isinstance(settings, WebSettings)
     with pytest.raises(SystemExit, match="test mode"):
         build_payments(settings, load(), FrozenClock(NOW))
+
+
+# ---------------------------------------------------------------- laptop setup (task 9)
+
+PRICES = ("GET", "/v1/prices")
+COUPON = "reel-beta-free"
+
+
+def client_with(answers: Answers) -> tuple[stripe.StripeClient, Recorder]:
+    recorder = Recorder(answers)
+    client = stripe.StripeClient(
+        ACCOUNT, stripe_version=STRIPE_API_VERSION, max_network_retries=0, http_client=recorder
+    )
+    return client, recorder
+
+
+def test_the_price_is_created_once_by_its_lookup_key() -> None:
+    created = {"id": "price_new", "object": "price"}
+    client, sent = client_with(
+        {
+            PRICES: (200, {"object": "list", "data": [], "has_more": False}),
+            ("POST", "/v1/prices"): (200, created),
+        }
+    )
+    assert ensure_price(
+        client, lookup_key="reel-eur-1900", unit_amount=1900, currency="eur", product_name="Reel"
+    ) == ("price_new", True)
+    assert sent.sent[0]["query"]["lookup_keys[0]"] == ["reel-eur-1900"]
+    form = sent.sent[1]["form"]
+    assert form["lookup_key"] == ["reel-eur-1900"]
+    assert form["unit_amount"] == ["1900"]
+    assert form["currency"] == ["eur"]
+    assert form["product_data[name]"] == ["Reel"]
+    found = {"object": "list", "data": [{"id": "price_old", "object": "price"}], "has_more": False}
+    again, sent_again = client_with({PRICES: (200, found)})
+    assert ensure_price(
+        again, lookup_key="reel-eur-1900", unit_amount=1900, currency="eur", product_name="Reel"
+    ) == ("price_old", False)
+    assert len(sent_again.sent) == 1  # found, nothing created
+
+
+def test_the_coupon_is_created_once_with_its_own_id() -> None:
+    missing = {"error": {"type": "invalid_request_error", "code": "resource_missing"}}
+    made = coupon(id=COUPON, duration="once")
+    client, sent = client_with(
+        {("GET", f"/v1/coupons/{COUPON}"): (404, missing), ("POST", "/v1/coupons"): (200, made)}
+    )
+    assert ensure_coupon(client, coupon_id=COUPON, name="Friends beta") == (COUPON, True)
+    form = sent.sent[1]["form"]
+    assert form["id"] == [COUPON]
+    assert form["percent_off"] == ["100"]
+    assert form["duration"] == ["once"]
+    assert "max_redemptions" not in form  # a code may not out-redeem its coupon
+    assert "redeem_by" not in form
+    existing, sent_again = client_with({("GET", f"/v1/coupons/{COUPON}"): (200, made)})
+    assert ensure_coupon(existing, coupon_id=COUPON, name="Friends beta") == (COUPON, False)
+    assert len(sent_again.sent) == 1
+
+
+@pytest.mark.parametrize("changes", [{"percent_off": 50.0}, {"duration": "forever"}])
+def test_a_coupon_with_that_id_but_other_terms_is_refused(changes: dict[str, Any]) -> None:
+    """D58: never reuse a coupon that could leave something to pay."""
+    other = coupon(id=COUPON, **{"duration": "once", **changes})
+    client, _ = client_with({("GET", f"/v1/coupons/{COUPON}"): (200, other)})
+    with pytest.raises(PaymentsFailed, match="not 100% off once"):
+        ensure_coupon(client, coupon_id=COUPON, name="Friends beta")
