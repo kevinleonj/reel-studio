@@ -8,7 +8,7 @@ our critic judges both finished cuts.
 
 | fixture | pick | reason | new critic | old critic | new $ | old $ | new s | old s |
 |---|---|---|---|---|---|---|---|---|
-| cookies | pending |  | 17 | 19 | 0.70 | 1.44 | 264 | 574 |
+| cookies | pending |  | 22 | 23 | 1.14 | 1.51 | 469 | 740 |
 | creami | pending |  | 23 | 21 | 0.81 | 1.20 | 290 | 430 |
 | meat | pending |  | 23 | 24 | 0.86 | 1.77 | 349 | 675 |
 | mercadona | pending |  | 16 | 20 | 0.28 | 1.06 | 159 | 336 |
@@ -16,8 +16,8 @@ our critic judges both finished cuts.
 
 Verdict: pending Kevin's blind picks (make ab-pick)
 
-- `ok    mean critic new 20.4, old 21.2`
+- `ok    mean critic new 21.4, old 22.0`
 - `ok    gates lost by new: none`
-- `ok    mean new cost $0.62`
-- `ok    budget: $9.79 of $15.0`
-- every paid attempt, superseded ones included: ledger $10.95
+- `ok    mean new cost $0.71`
+- `ok    budget: $10.30 of $15.0`
+- every paid attempt, superseded ones included: ledger $12.90
