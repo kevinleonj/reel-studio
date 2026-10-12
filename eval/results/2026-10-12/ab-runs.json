@@ -1,5 +1,5 @@
 {
- "spent_usd": 9.777245899999999,
+ "spent_usd": 10.952444499999999,
  "stopped": null,
  "fixtures": [
   {
@@ -22,15 +22,15 @@
     "IMG_0487.mov"
    ],
    "new": {
-    "critic_total": 19,
+    "critic_total": 17,
     "passed": false,
-    "weakness": "hook 3 < 4; peak 2 < 3; share 2 < 3; total 19 < 26",
-    "loop_critic_total": 20,
+    "weakness": "hook 3 < 4; retention 2 < 3; story 2 < 3; peak 2 < 3; share 2 < 3; total 17 < 26",
+    "loop_critic_total": 18,
     "outputs": {
-     "text": "out/ab/2026-10-12/cookies/new-200938/text.mp4"
+     "text": "out/ab/2026-10-12/cookies/new-204422/text.mp4"
     },
-    "cost_usd": 0.3677717,
-    "wall_s": 301.4,
+    "cost_usd": 0.7044288,
+    "wall_s": 263.7,
     "error": null
    },
    "old": {
@@ -61,6 +61,19 @@
      "wall_s": 286.3,
      "error": null,
      "carried": true
+    },
+    {
+     "side": "new",
+     "critic_total": 19,
+     "passed": false,
+     "weakness": "hook 3 < 4; peak 2 < 3; share 2 < 3; total 19 < 26",
+     "loop_critic_total": 20,
+     "outputs": {
+      "text": "out/ab/2026-10-12/cookies/new-200938/text.mp4"
+     },
+     "cost_usd": 0.3677717,
+     "wall_s": 301.4,
+     "error": null
     }
    ]
   },
@@ -83,15 +96,15 @@
     "IMG_0416_VSCO.jpg"
    ],
    "new": {
-    "critic_total": 24,
+    "critic_total": 23,
     "passed": false,
-    "weakness": "total 24 < 26",
-    "loop_critic_total": 23,
+    "weakness": "hook 3 < 4; total 23 < 26",
+    "loop_critic_total": 24,
     "outputs": {
-     "text": "out/ab/2026-10-12/creami/new-201439/text.mp4"
+     "text": "out/ab/2026-10-12/creami/new-204845/text.mp4"
     },
-    "cost_usd": 0.4106789,
-    "wall_s": 343.9,
+    "cost_usd": 0.8095667,
+    "wall_s": 290.4,
     "error": null
    },
    "old": {
@@ -122,6 +135,19 @@
      "wall_s": 237.0,
      "error": null,
      "carried": true
+    },
+    {
+     "side": "new",
+     "critic_total": 24,
+     "passed": false,
+     "weakness": "total 24 < 26",
+     "loop_critic_total": 23,
+     "outputs": {
+      "text": "out/ab/2026-10-12/creami/new-201439/text.mp4"
+     },
+     "cost_usd": 0.4106789,
+     "wall_s": 343.9,
+     "error": null
     }
    ]
   },
@@ -150,10 +176,10 @@
     "weakness": "total 23 < 26",
     "loop_critic_total": 23,
     "outputs": {
-     "text": "out/ab/2026-10-12/meat/new-202023/text.mp4"
+     "text": "out/ab/2026-10-12/meat/new-205336/text.mp4"
     },
-    "cost_usd": 0.4197306,
-    "wall_s": 324.8,
+    "cost_usd": 0.8593843,
+    "wall_s": 348.6,
     "error": null
    },
    "old": {
@@ -184,6 +210,19 @@
      "wall_s": 281.1,
      "error": null,
      "carried": true
+    },
+    {
+     "side": "new",
+     "critic_total": 23,
+     "passed": false,
+     "weakness": "total 23 < 26",
+     "loop_critic_total": 23,
+     "outputs": {
+      "text": "out/ab/2026-10-12/meat/new-202023/text.mp4"
+     },
+     "cost_usd": 0.4197306,
+     "wall_s": 324.8,
+     "error": null
     }
    ]
   },

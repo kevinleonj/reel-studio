@@ -11,20 +11,22 @@ Written by the engine lane only. Newest entry on top.
   (eval/results/2026-10-11/ab.json). Round 2 (12 Oct): the editor prompt now follows Kevin's
   reasons (finished food shown and last, photos at most 1.2 s and never two in a row, at most four
   process steps and no hands-filling-frame shots); only our engine reran on cookies, creami and
-  meat (`REDO=<name>:new`); the kit's 11 Oct cuts are kept. $1.20 for round 2; ledger $9.78 of
-  $15. The round 2 cuts keep the new rules (no two photos in a row, photos at most 1.2 s, each
-  ends on its payoff). Cookies: the editor reports no finished cookies among the 15 files both
+  meat (`REDO=<name>:new`); the kit's 11 Oct cuts are kept. A first pass ($1.20) dropped every
+  step label, so the rule now says it limits shots, not labels, and our arm ran again ($1.17):
+  4, 4 and 6 labels, no two photos in a row, photos at most 1.2 s, each ends on its payoff.
+  Ledger $10.95 of $15; a fixture's new cost in the report includes both same-day passes. Cookies: the editor reports no finished cookies among the 15 files both
   engines get (the kit's 15-file limit, videos first by name). The review confirmed they are in
   files 16-26 (IMG_0499, 0500, 0502), and the plated pasta is outside pastav2's 15 too: for those
   two fixtures no prompt can show the finished dish. Not changed in round 2, because Kevin's goal
   kept the kit's 11 Oct cuts; changing the file choice means rerunning both engines on cookies and
   pastav2 (about $3.5; the ledger would reach about $13.3 of $15).
-- Open from the round 2 review (not done): the round 2 cuts carry no step labels (round 1 had
-  2-4); "at most four process steps" and "photo at most 1.2 s" pull against the recipe structure
+- Open from the round 2 review (not done): "at most four process steps" and "photo at most 1.2 s" pull against the recipe structure
   and the craft reference, and the critic does not know the new rules; REDO with the same name
   twice keeps only the last entry; the prompt tests pin phrases, not whole rules; the cross-day
   side-only redo has no saved test.
-- Needs Kevin's hands: round 2 blind picks. In a terminal: `cd ~/projects/reel/reel-studio-engine
+- Needs Kevin's hands: round 2 blind picks; and, if cookies and pastav2 should show their
+  finished dish, a yes to rerunning both engines on them with a file choice that keeps the end of
+  the shoot (about $3.5, inside the $15). For the picks: In a terminal: `cd ~/projects/reel/reel-studio-engine
   && make ab-pick`, open the page it prints, type x, y or tie and a reason for each of the 5
   fixtures (mercadona and pastav2 are the round 1 pairs again). Read eval/AB-RESULT.md only after.
   PR #10 waits for the picks: the step04 gate reads the newest ab.json.
