@@ -222,7 +222,8 @@ export function Result({ id, token, config, result, feedbackSent, onDeleted }: R
       </section>
       <section className="flex flex-col gap-1">
         <Heading>{t.music}</Heading>
-        <p>{format(t.musicLine, { mood: result.music.mood, tempo: result.music.tempo })}</p>
+        {/* The real editor's hint is one line (docs/EDITOR.md music_hint), so it has no tempo apart. */}
+        <p>{result.music.tempo ? format(t.musicLine, { mood: result.music.mood, tempo: result.music.tempo }) : result.music.mood}</p>
         <p className="text-muted-foreground">{t.musicHint}</p>
       </section>
       {result.left_out.length > 0 && (

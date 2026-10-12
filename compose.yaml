@@ -69,6 +69,8 @@ services:
     image: gcr.io/google.com/cloudsdktool/google-cloud-cli@sha256:be2f0e582a94c9e06e7a384fe2b3b39d590eeb8da65a110eda991598c100fe80
     command: ["gcloud", "emulators", "firestore", "start", "--host-port=0.0.0.0:8080"]
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:8681:8080"  # this machine only: the real-editor dispatcher runs on the host
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/"]  # hardcode-ok: compose is this value's home
       interval: 5s  # hardcode-ok: compose is this value's home
@@ -80,3 +82,4 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8025:8025"  # this machine only: the inbox holds every order link (D18)
+      - "127.0.0.1:1025:1025"  # SMTP for the host dispatcher, this machine only

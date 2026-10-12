@@ -5,6 +5,7 @@ import io
 import runpy
 import time
 from datetime import timedelta
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from reel_studio.adapters.launcher_local import Dispatcher
+from reel_studio.adapters.launcher_real import MadeReel
 from reel_studio.adapters.mailer_smtp import SmtpMailer
 from reel_studio.adapters.payments_stripe import StripePayments, StripeSetup
 from reel_studio.api import main
@@ -269,7 +271,15 @@ def test_the_stripe_knobs_must_be_positive() -> None:
     """A webhook tolerance of 0 turns Stripe's replay check off (review round 2)."""
     stripe_times = load().limits.stripe
     with pytest.raises(ValidationError):
-        type(stripe_times)(timeout_s=20, max_network_retries=2, webhook_tolerance_s=0)
+        type(stripe_times)(
+            timeout_s=20,
+            max_network_retries=2,
+            webhook_tolerance_s=0,
+            coupon_id="c",
+            coupon_name="n",
+            cli_image="i",
+            listen_forward_to="f",
+        )
 
 
 def test_check_names_a_missing_stripe_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -287,3 +297,54 @@ def test_check_names_a_missing_stripe_id(monkeypatch: pytest.MonkeyPatch, tmp_pa
     assert main.check(out) == 2
     assert "STRIPE_COUPON_ID" in out.getvalue()
     assert "stand-in-value" not in out.getvalue()
+
+
+def test_the_dispatcher_runs_the_real_editor_when_given_one(
+    tmp_path: Path, make_settings: MakeSettings
+) -> None:
+    settings = laptop(tmp_path, make_settings)
+    clock = FrozenClock(START)
+    orders = FakeOrders(clock, LIMITS)
+    order_id = f"{5:032x}"
+    orders.create_awaiting_payment(
+        NewOrder(order_id, "h", SETTINGS, "", START + timedelta(minutes=31))
+    )
+    orders.mark_paid(order_id, {})
+    orders.set_manifest(order_id, files=[], bytes_declared=0)
+    orders.queue(order_id)
+    made: list[str] = []
+
+    def make_reel(inputs: Path, out: Path, order: dict[str, object]) -> MadeReel:
+        made.append(str(order["style"]))
+        out.mkdir(parents=True, exist_ok=True)
+        for name in ("text.mp4", "clean.mp4"):
+            (out / name).write_bytes(b"reel")
+        return MadeReel(out / "text.mp4", out / "clean.mp4", Decimal("0.5"), 30, "", [], None)
+
+    dispatcher = build_dispatcher(
+        settings, orders=orders, clock=clock, config=quick_config(), make_reel=make_reel
+    )
+    dispatcher.tick()
+    deadline = time.monotonic() + WAIT_S
+    while time.monotonic() < deadline and (orders.get(order_id) or {})["status"] != "done":
+        time.sleep(POLL_S)
+    assert made == ["recipe"]
+    doc = orders.get(order_id)
+    assert doc is not None
+    assert doc["cost"] == {"usd_total": "0.5"}
+
+
+def test_the_real_editor_names_a_missing_setting_without_any_value(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # pydantic's own message carries the input dict, so a missing Anthropic key printed the
+    # first characters of the Gemini key (STEP-07 review W8).
+    planted = "AIza" + "planted-value-" + "x" * 20
+    monkeypatch.chdir(tmp_path)  # no dotenv file here
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", planted)
+    with pytest.raises(SystemExit) as stopped:
+        main.engine_make_reel(load())
+    message = str(stopped.value)
+    assert "ANTHROPIC_API_KEY" in message
+    assert planted[:5] not in message
