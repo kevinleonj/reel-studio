@@ -122,3 +122,54 @@ def test_a_gh_failure_is_a_command_error() -> None:
 
     with pytest.raises(_shell.CommandError, match="403"):
         github_env.ensure_environment(refuse, REPO, cfg(), TIMEOUT_S)
+
+
+class DriftingGitHub(FakeGitHub):
+    """Answers GET with one field changed from what was sent."""
+
+    def __init__(self, change: str) -> None:
+        super().__init__(policies=[cfg().branch])
+        self.change = change
+
+    def rendered(self) -> dict[str, object]:
+        env = super().rendered()
+        rules = env["protection_rules"]
+        assert isinstance(rules, list)
+        rule = rules[0]
+        if self.change == "other reviewer":
+            rule["reviewers"] = [{"type": "User", "reviewer": {"id": OWNER_ID + 1}}]
+        elif self.change == "second reviewer":
+            rule["reviewers"] = [*rule["reviewers"], {"type": "User", "reviewer": {"id": 7}}]
+        elif self.change == "team with the owner's id":
+            rule["reviewers"] = [{"type": "Team", "reviewer": {"id": OWNER_ID}}]
+        elif self.change == "no reviewers rule":
+            env["protection_rules"] = []
+        elif self.change == "protected branches":
+            env["deployment_branch_policy"] = {
+                "protected_branches": True,
+                "custom_branch_policies": False,
+            }
+        return env
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "other reviewer",
+        "second reviewer",
+        "team with the owner's id",
+        "no reviewers rule",
+        "protected branches",
+    ],
+)
+def test_every_read_back_assertion_catches_its_drift(change: str) -> None:
+    with pytest.raises(github_env.GateError):
+        github_env.ensure_environment(DriftingGitHub(change), REPO, cfg(), TIMEOUT_S)
+
+
+def test_a_tag_policy_beside_main_fails_the_check() -> None:
+    github = FakeGitHub(policies=[cfg().branch])
+    github.policies.append({"id": 9, "name": "*", "type": "tag"})
+
+    with pytest.raises(github_env.GateError, match="branch policies"):
+        github_env.ensure_environment(github, REPO, cfg(), TIMEOUT_S)

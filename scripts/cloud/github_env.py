@@ -55,21 +55,25 @@ def verify(runner: Runner, repo: str, cfg: GithubEnv, owner: int, timeout_s: flo
     reviewers_rule = next((r for r in rules if r.get("type") == "required_reviewers"), None)
     if reviewers_rule is None:
         raise GateError(f"{cfg.name}: no required reviewers")
-    ids = []
+    reviewers = []
     for entry in dicts(reviewers_rule.get("reviewers")):
         reviewer = entry.get("reviewer")
-        ids.append(reviewer.get("id") if isinstance(reviewer, dict) else None)
-    if ids != [owner]:
-        raise GateError(f"{cfg.name}: reviewers {ids}, expected only the owner {owner}")
+        reviewers.append(
+            (entry.get("type"), reviewer.get("id") if isinstance(reviewer, dict) else None)
+        )
+    if reviewers != [("User", owner)]:
+        raise GateError(f"{cfg.name}: reviewers {reviewers}, expected only the owner {owner}")
     self_review = reviewers_rule.get("prevent_self_review")
     if self_review is not cfg.prevent_self_review:
         raise GateError(f"{cfg.name}: prevent_self_review is {self_review}")
     policy = env.get("deployment_branch_policy")
     if not isinstance(policy, dict) or policy.get("custom_branch_policies") is not True:
         raise GateError(f"{cfg.name}: deployment branch policy is not custom: {policy}")
-    names = policy_names(runner, f"{env_path}/deployment-branch-policies", timeout_s)
-    if names != [cfg.branch]:
-        raise GateError(f"{cfg.name}: branch policies {names}, expected only {cfg.branch}")
+    # Every policy, tags included: an extra tag pattern would widen what may deploy.
+    listed = get_json(runner, f"{env_path}/deployment-branch-policies", timeout_s)
+    policies = [(p.get("name"), p.get("type")) for p in dicts(listed.get("branch_policies"))]
+    if policies != [(cfg.branch, "branch")]:
+        raise GateError(f"{cfg.name}: branch policies {policies}, expected only {cfg.branch}")
 
 
 def ensure_environment(runner: Runner, repo: str, cfg: GithubEnv, timeout_s: float) -> None:
