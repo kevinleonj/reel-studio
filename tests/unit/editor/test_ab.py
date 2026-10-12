@@ -519,3 +519,12 @@ def test_redo_names_a_side_that_exists() -> None:
     assert ab.parse_redo("cookies:new,meat") == (("cookies", ("new",)), ("meat", ab.SIDES))
     with pytest.raises(ab.PreflightError, match="side"):
         ab.parse_redo("cookies:kit")
+
+
+def test_the_report_states_the_whole_ledger_not_only_the_kept_arms(tmp_path: Path) -> None:
+    runs = _harness(tmp_path, FakeKit(), FakeJudge()).run()
+    spent = _json(runs)["spent_usd"]
+
+    report = ab_pick.write_pending(runs, tmp_path / "repo").read_text(encoding="utf-8")
+
+    assert f"ledger ${spent:.2f}" in report

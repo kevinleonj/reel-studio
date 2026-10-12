@@ -144,6 +144,10 @@ def report(rows: list[Row], cfg: Ab, root: Path, source: Path) -> Path:
         passed = all(ok for ok, _ in checks)
         lines += ["", f"Verdict: {'PASS' if passed else 'FAIL'}", ""]
     lines += [f"- `{'ok  ' if ok else 'FAIL'}  {text}`" for ok, text in checks]
+    # The budget check sums the kept arms; superseded attempts were paid too (the harness ledger).
+    ledger = json.loads(source.read_text(encoding="utf-8")).get("spent_usd")
+    if ledger is not None:
+        lines.append(f"- every paid attempt, superseded ones included: ledger ${ledger:.2f}")
     lines += _tune(checks)
     target = root / REPORT
     target.parent.mkdir(parents=True, exist_ok=True)

@@ -20,3 +20,4 @@ Verdict: pending Kevin's blind picks (make ab-pick)
 - `ok    gates lost by new: none`
 - `ok    mean new cost $0.39`
 - `ok    budget: $8.61 of $15.0`
+- every paid attempt, superseded ones included: ledger $9.78
