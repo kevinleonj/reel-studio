@@ -55,6 +55,17 @@ class PreflightError(RuntimeError):
     """Something a paid run would hit, found before any money is spent."""
 
 
+def parse_redo(text: str) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """`cookies:new,meat` -> rerun cookies' new arm only, and both of meat's arms."""
+    entries = []
+    for item in (i for i in text.split(",") if i):
+        name, _, side = item.partition(":")
+        if side and side not in SIDES:
+            raise PreflightError(f"REDO side {side!r} is not one of {SIDES}")
+        entries.append((name, (side,) if side else SIDES))
+    return tuple(entries)
+
+
 def select_inputs(folder: Path, max_files: int) -> list[Path]:
     """The files both engines get: media only, videos first, then photos, each by name."""
     files = sorted(
@@ -111,7 +122,7 @@ class Harness:
     kit: ab_kit.Kit
     judge: Callable[[ab_judge.Cut, Path], ab_judge.Judged]
     only: tuple[str, ...] = ()
-    redo: tuple[str, ...] = ()  # fixtures whose finished arms run again (after a tune)
+    redo: tuple[str, ...] = ()  # name or name:side, rerun after a tune (parse_redo)
     spent: Decimal = Decimal(0)
     rows: list[Row] = field(default_factory=list)
 
@@ -252,7 +263,8 @@ class Harness:
     def run(self) -> Path:
         ab_cfg = self.cfg.limits.eval.ab
         day = self.ports.clock.now().date().isoformat()
-        unknown = [n for n in (*self.only, *self.redo) if n not in ab_cfg.fixtures]
+        redo = dict(parse_redo(",".join(self.redo)))
+        unknown = [n for n in (*self.only, *redo) if n not in ab_cfg.fixtures]
         if unknown:
             raise PreflightError(f"not A/B fixtures: {unknown}; see limits.toml [eval.ab]")
         names = [n for n in ab_cfg.fixtures if not self.only or n in self.only]
@@ -272,7 +284,8 @@ class Harness:
             row["files"] = [f.name for f in files]
             base = self.root / OUT / day / name
             for side in SIDES:
-                if side in row and row[side]["error"] is None and name not in self.redo:
+                again = side in redo.get(name, ())
+                if side in row and row[side]["error"] is None and not again:
                     continue  # finished on an earlier run
                 if not self._fits(caps[side]):
                     stopped = f"budget: ${self.spent} spent, a {side} run could take ${caps[side]}"
@@ -326,7 +339,7 @@ def _interrupt(signum: int, frame: object) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="make ab", description=__doc__)
     parser.add_argument("--only", default="", help="comma-separated fixture names to (re)run")
-    parser.add_argument("--redo", default="", help="fixtures whose finished arms run again")
+    parser.add_argument("--redo", default="", help="name or name:side to run again")
     args = parser.parse_args(argv)
     signal.signal(signal.SIGTERM, _interrupt)  # a task stop kills the kit too, as Ctrl-C does
     configure()

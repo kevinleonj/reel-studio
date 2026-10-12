@@ -495,3 +495,27 @@ def test_the_pending_report_asks_for_the_picks_before_the_scores(tmp_path: Path)
     report = ab_pick.write_pending(runs, tmp_path / "repo").read_text(encoding="utf-8")
 
     assert report.index("make ab-pick` before reading") < report.index("| fixture |")
+
+
+def test_redo_of_one_side_keeps_the_other_sides_cut_and_pays_nothing_for_it(
+    tmp_path: Path,
+) -> None:
+    """Round 2 tunes our prompts only: the kit's finished cuts stay, only the new arm reruns."""
+    first = _json(_harness(tmp_path, FakeKit(), FakeJudge()).run())["fixtures"][0]
+    kit = FakeKit()
+    again = _harness(tmp_path, kit, FakeJudge(), script=[edl_turn("e1"), critic_turn(5)])
+    again.redo = (f"{AB.fixtures[0]}:new",)
+
+    runs = again.run()
+
+    row = _json(runs)["fixtures"][0]
+    assert kit.calls == []
+    assert row["old"] == first["old"]
+    assert [a["side"] for a in row["attempts"]] == ["new"]
+    assert row["new"]["error"] is None
+
+
+def test_redo_names_a_side_that_exists() -> None:
+    assert ab.parse_redo("cookies:new,meat") == (("cookies", ("new",)), ("meat", ab.SIDES))
+    with pytest.raises(ab.PreflightError, match="side"):
+        ab.parse_redo("cookies:kit")
