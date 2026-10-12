@@ -68,18 +68,14 @@ def parse_redo(text: str) -> tuple[tuple[str, tuple[str, ...]], ...]:
 
 
 def select_inputs(folder: Path, max_files: int) -> list[Path]:
-    """The files both engines get: media only, by name (the shoot's order), and when there are
-    more than the kit takes, evenly spread from the first file to the last, so the end of the
-    shoot (the finished dish) is never cut off. The first 15 by name hid the finished cookies."""
+    """The files both engines get: media only, videos first, then photos, each by name."""
     files = sorted(
         p
         for p in folder.iterdir()
         if p.is_file() and p.suffix.lower() in MEDIA_EXT and p.name not in constants.SKIP_NAMES
     )
-    if len(files) <= max_files:
-        return files
-    last, steps = len(files) - 1, max_files - 1
-    return [files[round(i * last / steps)] for i in range(max_files)]
+    videos = [p for p in files if p.suffix.lower() in VIDEO_EXT]
+    return (videos + [p for p in files if p not in videos])[:max_files]
 
 
 def stage(files: list[Path], folder: Path) -> Path:

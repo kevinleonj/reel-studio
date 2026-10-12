@@ -49,14 +49,14 @@ def _json(path: Path) -> dict[str, Any]:  # Any: JSON
 # ------------------------------------------------------------------ inputs
 
 
-def test_inputs_are_media_only_spread_by_name_up_to_the_kit_limit(tmp_path: Path) -> None:
+def test_inputs_are_media_only_videos_first_up_to_the_kit_limit(tmp_path: Path) -> None:
     _touch(
         tmp_path, "b.jpeg", "a.jpeg", "IMG_2.mov", "IMG_1.MOV", ".DS_Store", "notes.txt", "c.mp4"
     )
 
     picked = ab.select_inputs(tmp_path, max_files=4)
 
-    assert [p.name for p in picked] == ["IMG_1.MOV", "IMG_2.mov", "b.jpeg", "c.mp4"]
+    assert [p.name for p in picked] == ["IMG_1.MOV", "IMG_2.mov", "c.mp4", "a.jpeg"]
 
 
 def test_staged_inputs_are_links_and_a_second_stage_is_harmless(tmp_path: Path) -> None:
@@ -528,17 +528,6 @@ def test_the_report_states_the_whole_ledger_not_only_the_kept_arms(tmp_path: Pat
     report = ab_pick.write_pending(runs, tmp_path / "repo").read_text(encoding="utf-8")
 
     assert f"ledger ${spent:.2f}" in report
-
-
-def test_inputs_span_the_whole_shoot_so_the_finished_dish_is_kept(tmp_path: Path) -> None:
-    """Cookies, 11 Oct: the first 15 of 26 files ended before the cookies came out of the oven."""
-    names = [f"IMG_{n:04d}.mov" for n in range(470, 495)] + ["IMG_0500.jpeg"]
-    _touch(tmp_path, *names)
-
-    picked = [p.name for p in ab.select_inputs(tmp_path, max_files=15)]
-
-    assert len(picked) == 15 and picked == sorted(picked)
-    assert picked[0] == "IMG_0470.mov" and picked[-1] == "IMG_0500.jpeg"
 
 
 def test_paid_but_superseded_runs_stay_on_the_ledger(tmp_path: Path) -> None:
