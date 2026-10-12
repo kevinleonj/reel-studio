@@ -216,3 +216,10 @@ def test_round_2_rules_from_kevins_picks_are_in_every_food_style() -> None:
         assert "The finished food is in every Reel" in words
         assert "A photo holds at most 1.2 s" in words and "never two photos in a row" in words
         assert "hands or arms fill the frame" in words and "at most four process steps" in words
+
+
+def test_fewer_steps_limits_shots_not_step_labels() -> None:
+    """Round 2 cuts lost every step label (round 1 had 2-4): the rule limits shots only."""
+    words = " ".join(prompt.system_prompt("montage", CFG).split())
+
+    assert "This limits shots, not labels: name each kept step" in words

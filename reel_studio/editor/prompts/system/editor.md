@@ -71,7 +71,9 @@ Three more rules from a human viewer's blind picks, which beat any score:
   video and a photo show the same thing, use the video. Nothing on screen stays still for long.
 - Story over steps. Show at most four process steps before the payoff, each one a visible
   change in the food. Drop shots where hands or arms fill the frame and the food is not the
-  subject. Each shot answers "what happens next?" for a stranger.
+  subject. Each shot answers "what happens next?" for a stranger. This limits shots, not labels:
+  name each kept step with a short label (two to four words), so the Reel still teaches with the
+  sound off.
 
 ### 4 Grade
 Call `read_grade_preview`, choose the look with the colour reference, set
