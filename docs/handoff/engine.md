@@ -14,18 +14,20 @@ Written by the engine lane only. Newest entry on top.
   meat (`REDO=<name>:new`); the kit's 11 Oct cuts are kept. A first pass ($1.20) dropped every
   step label, so the rule now says it limits shots, not labels, and our arm ran again ($1.17):
   4, 4 and 6 labels, no two photos in a row, photos at most 1.2 s, each ends on its payoff.
-  Cookies: the first 15 files by name ended before the cookies came out of the oven, for both
-  engines, so the A/B inputs now spread 15 files from the first to the last (decided by standing
-  orders; undo: revert 3d5f3da) and both engines reran on cookies ($1.95): our cut now ends on the
-  finished tray (IMG_0502, IMG_0499) and the kit's cut is new too. pastav2's plated pasta is
-  still outside its 15 kept files: rerunning both engines there does not fit the $15 guard.
+  Cookies: the first 15 files by name end before the cookies come out of the oven (IMG_0499,
+  0500, 0502 are left out), for both engines, so no prompt can show the finished cookies. A
+  spread file choice fixed that (3d5f3da, both engines rerun, $1.95) but replaced the kit's 11 Oct
+  cut, which Kevin's goal keeps; it was reverted (f879cac) and the cookies row restored to our
+  round-2 cut and the kit's 11 Oct cut. The $1.95 stays on the ledger (`superseded_paid_usd`).
   Ledger $12.90 of $15; a fixture's new cost in the report includes every same-day pass.
 - Open from the round 2 review (not done): "at most four process steps" and "photo at most 1.2 s" pull against the recipe structure
   and the craft reference, and the critic does not know the new rules; REDO with the same name
   twice keeps only the last entry; the prompt tests pin phrases, not whole rules; the cross-day
   side-only redo has no saved test. meat and pastav2 rows keep their first-15 files; a later
   REDO on them would pick the spread files, so rerun both sides there, never one.
-- Needs Kevin's hands: round 2 blind picks: In a terminal: `cd ~/projects/reel/reel-studio-engine
+- Needs Kevin's hands: round 2 blind picks. Cookies still cannot show its finished tray unless
+  you approve a new file choice and a kit rerun (about $1.9, it fits the $15). For the picks, in
+  a terminal: `cd ~/projects/reel/reel-studio-engine
   && make ab-pick`, open the page it prints, type x, y or tie and a reason for each of the 5
   fixtures (mercadona and pastav2 are the round 1 pairs again). Read eval/AB-RESULT.md only after.
   PR #10 waits for the picks: the step04 gate reads the newest ab.json.
