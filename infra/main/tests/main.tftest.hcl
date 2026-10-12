@@ -126,6 +126,10 @@ run "request_logs_keep_only_a_sample" {
     error_message = "Any status: a flood of 5xx answers during a spend-cap pause must not be stored in full."
   }
   assert {
+    condition     = strcontains(google_logging_project_exclusion.requests.filter, "resource.labels.service_name=\"reel-api\"")
+    error_message = "Only reel-api's request log is sampled, no other service's."
+  }
+  assert {
     condition     = google_logging_project_exclusion.requests.disabled == false
     error_message = "The exclusion must be active."
   }
