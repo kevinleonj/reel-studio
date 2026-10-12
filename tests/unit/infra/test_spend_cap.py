@@ -6,15 +6,17 @@ answers in the documented shapes (FACTS F414): list -> {budgets, nextPageToken},
 """
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 import httpx
 import pytest
 
 from reel_studio.core import config
-from scripts.cloud import spend_cap
+from scripts.cloud import _shell, spend_cap
 
 PROJECT, NUMBER, ACCOUNT = "reel-studio-beta-test", "123456789012", "000000-000000-000000"
+FAKE_TOKEN = "test-access-token"
 
 
 def target(units: str | None = None, service: str | None = None) -> spend_cap.Target:
@@ -60,12 +62,26 @@ def api(fake: FakeBudgets) -> spend_cap.BudgetApi:
 
 
 def existing_cap(units: str, state: str = "CONFIGURED") -> dict[str, object]:
-    # The API reports projects by number (UNCONFIRMED: matched by id or number either way).
+    # Copied from the response samples on the Budget API spend-cap page (F414): responses carry
+    # spendCap.outputState only (inputState is write-only) and name the project by number.
     return {
         "name": f"billingAccounts/{ACCOUNT}/budgets/cap-1",
-        "budgetFilter": {"projects": [f"projects/{NUMBER}"], "services": [target().service]},
+        "displayName": "spend cap",
+        "budgetFilter": {
+            "projects": [f"projects/{NUMBER}"],
+            "services": [target().service],
+            "creditTypesTreatment": "EXCLUDE_ALL_CREDITS",
+            "calendarPeriod": "MONTH",
+        },
         "amount": {"specifiedAmount": {"currencyCode": "EUR", "units": units}},
-        "spendCap": {"inputState": "CONFIGURED", "outputState": state},
+        "thresholdRules": [
+            {"thresholdPercent": 0.5, "spendBasis": "CURRENT_SPEND"},
+            {"thresholdPercent": 0.8, "spendBasis": "CURRENT_SPEND"},
+            {"thresholdPercent": 1, "spendBasis": "CURRENT_SPEND"},
+        ],
+        "notificationsRule": {"enableProjectLevelRecipients": True},
+        "etag": "abc",
+        "spendCap": {"outputState": state},
     }
 
 
@@ -191,3 +207,80 @@ def test_lift_without_a_cap_is_an_error() -> None:
 
     assert spend_cap.lift_command(api(fake), target(), confirm=lambda prompt: PROJECT) != 0
     assert fake.writes() == []
+
+
+def test_lift_refuses_a_cap_that_is_not_enforced() -> None:
+    fake = FakeBudgets(pages=[[existing_cap(target().units, state="CONFIGURED")]])
+
+    assert spend_cap.lift_command(api(fake), target(), confirm=lambda prompt: PROJECT) != 0
+    assert fake.writes() == []
+
+
+class FakeGcloud:
+    def __init__(self, answer: str = FAKE_TOKEN) -> None:
+        self.token = answer
+        self.calls: list[list[str]] = []
+
+    def __call__(self, args: Sequence[str], stdin: str | None, timeout_s: float) -> str:
+        self.calls.append(list(args))
+        if args[1:3] == ["projects", "describe"]:
+            return f"{NUMBER}\n"
+        if args[1:3] == ["auth", "print-access-token"]:
+            return f"{self.token}\n"
+        if args[1:4] == ["billing", "accounts", "describe"]:
+            return json.dumps({"currencyCode": "EUR"})
+        raise AssertionError(f"unexpected command {args}")
+
+
+def test_build_sets_auth_quota_project_currency_and_amount() -> None:
+    gcloud = FakeGcloud()
+
+    budgets, built = spend_cap.build(gcloud, ACCOUNT, PROJECT, target().service, 5.0)
+
+    client = budgets._client  # the one place the headers can be seen
+    assert client.headers["Authorization"] == f"Bearer {FAKE_TOKEN}"
+    assert client.headers["x-goog-user-project"] == PROJECT
+    assert built == target()
+    assert all(FAKE_TOKEN not in " ".join(c) for c in gcloud.calls)
+
+
+@pytest.mark.parametrize(
+    "token", ["", "two words", "line\nbreak"], ids=["empty", "space", "newline"]
+)
+def test_an_unusable_token_never_reaches_a_header(token: str) -> None:
+    with pytest.raises(_shell.CommandError, match="no usable token"):
+        spend_cap.build(FakeGcloud(answer=token), ACCOUNT, PROJECT, target().service, 5.0)
+
+
+def test_transport_errors_print_the_type_not_the_text(capsys: pytest.CaptureFixture[str]) -> None:
+    def fail(request: httpx.Request) -> httpx.Response:
+        raise httpx.LocalProtocolError("Illegal header value b'Bearer secret-token'")
+
+    client = httpx.Client(base_url="https://budgets.test/v1", transport=httpx.MockTransport(fail))
+
+    code = spend_cap.cap_command(spend_cap.BudgetApi(client, ACCOUNT), target())
+
+    out = capsys.readouterr().out
+    assert code != 0
+    assert "LocalProtocolError" in out
+    assert "secret-token" not in out
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        httpx.Response(200, text="not json"),
+        httpx.Response(200, json=["a"]),
+        httpx.Response(200, json={"budgets": "x"}),
+    ],
+    ids=["not-json", "list", "budgets-not-list"],
+)
+def test_an_unexpected_answer_takes_the_refusal_path(
+    answer: httpx.Response, capsys: pytest.CaptureFixture[str]
+) -> None:
+    client = httpx.Client(
+        base_url="https://budgets.test/v1", transport=httpx.MockTransport(lambda r: answer)
+    )
+
+    assert spend_cap.cap_command(spend_cap.BudgetApi(client, ACCOUNT), target()) != 0
+    assert "Console fallback" in capsys.readouterr().out

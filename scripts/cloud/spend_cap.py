@@ -20,7 +20,7 @@ import httpx
 
 from reel_studio.core.config import load_cloud
 from reel_studio.settings import CloudSettings
-from scripts.cloud._shell import CommandError, Runner, run, say
+from scripts.cloud._shell import STDERR_TAIL_CHARS, CommandError, Runner, run, say
 from scripts.cloud.bootstrap_plan import billing_currency
 
 BUDGETS_API = "https://billingbudgets.googleapis.com/v1"  # hardcode-ok: vendor base URL (F414)
@@ -39,7 +39,11 @@ Body = dict[str, object]
 
 
 class BudgetApiError(Exception):
-    """The Budget API refused, or the cap is in a state this run must not change."""
+    """The Budget API refused, or answered in a shape this script does not know."""
+
+
+class EnforcedError(BudgetApiError):
+    """The cap is ENFORCED: only a lift may change it this month."""
 
 
 @dataclass(frozen=True)
@@ -69,13 +73,16 @@ class BudgetApi:
     ) -> Body:
         response = self._client.request(method, path, params=params, json=body)
         if not response.is_success:
-            try:
-                reason = str(response.json().get("error", {}).get("message", ""))
-            except ValueError:
-                reason = response.text[:200]
-            raise BudgetApiError(f"{method} budgets: HTTP {response.status_code}: {reason}")
-        body: Body = response.json()
-        return body
+            raise BudgetApiError(
+                f"{method} budgets: HTTP {response.status_code}: {reason(response)}"
+            )
+        try:
+            answer = response.json()
+        except ValueError as exc:
+            raise BudgetApiError(f"{method} budgets: the answer is not JSON") from exc
+        if not isinstance(answer, dict):
+            raise BudgetApiError(f"{method} budgets: unexpected answer shape")
+        return answer
 
     def list_budgets(self) -> list[Body]:
         budgets: list[Body] = []
@@ -83,7 +90,9 @@ class BudgetApi:
         while True:
             page = self._call("GET", self._parent, params={"pageToken": token} if token else {})
             found = page.get("budgets", [])
-            budgets += [b for b in found if isinstance(b, dict)] if isinstance(found, list) else []
+            if not isinstance(found, list):
+                raise BudgetApiError("GET budgets: `budgets` is not a list")
+            budgets += [b for b in found if isinstance(b, dict)]
             token = str(page.get("nextPageToken") or "")
             if not token:
                 return budgets
@@ -96,6 +105,17 @@ class BudgetApi:
         return self._call(
             "PATCH", f"{self._parent}/{budget_id}", params={"updateMask": mask}, body=body
         )
+
+
+def reason(response: httpx.Response) -> str:
+    """Google's error message, or the start of the body when it is not the documented shape."""
+    try:
+        error = response.json().get("error")
+    except (ValueError, AttributeError):
+        return response.text[:STDERR_TAIL_CHARS]
+    if isinstance(error, dict):
+        return str(error.get("message", ""))
+    return str(error)[:STDERR_TAIL_CHARS]
 
 
 def amount(target: Target) -> Body:
@@ -121,16 +141,19 @@ def cap_body(target: Target, display_name: str) -> Body:
 
 
 def find_cap(budgets: list[Body], target: Target) -> Body | None:
-    """The spend-cap budget for this project (by id or number) and service, if any."""
+    """The spend-cap budget for this project (by id or number) and service, if any.
+
+    Responses carry `spendCap.outputState` only (inputState is write-only, F414), so any budget
+    with a non-empty `spendCap` is a cap; one without is alerts-only and cannot be converted.
+    """
     projects = {f"projects/{target.project}", f"projects/{target.project_number}"}
     for budget in budgets:
         scope = budget.get("budgetFilter")
         cap = budget.get("spendCap")
-        if not isinstance(scope, dict) or not isinstance(cap, dict) or not cap.get("inputState"):
-            continue  # alerts-only budgets cannot be converted (F414)
-        if set(scope.get("projects", [])) & projects and target.service in scope.get(
-            "services", []
-        ):
+        if not isinstance(scope, dict) or not isinstance(cap, dict) or not cap:
+            continue
+        in_project = set(scope.get("projects", [])) & projects
+        if in_project and target.service in scope.get("services", []):
             return budget
     return None
 
@@ -162,7 +185,7 @@ def ensure_cap(api: BudgetApi, target: Target) -> str:
         say(f"spend-cap: exists, {target.units} {target.currency}, state {current}")
         return "unchanged"
     if current == ENFORCED:
-        raise BudgetApiError("cap is ENFORCED; only make spend-cap-lift may change it this month")
+        raise EnforcedError("cap is ENFORCED; only make spend-cap-lift may change it this month")
     api.patch(str(found["name"]), "amount.specifiedAmount", {"amount": amount(target)})
     say(f"spend-cap: amount changed to {target.units} {target.currency}, state {current}")
     return "updated"
@@ -171,47 +194,73 @@ def ensure_cap(api: BudgetApi, target: Target) -> str:
 def cap_command(api: BudgetApi, target: Target) -> int:
     try:
         ensure_cap(api, target)
-    except (BudgetApiError, httpx.HTTPError) as exc:
+    except EnforcedError as exc:
+        say(f"spend-cap: {exc}")
+        return 1
+    except BudgetApiError as exc:
         say(f"spend-cap: {exc}")
         say(CONSOLE_FALLBACK)
+        return 1
+    except httpx.HTTPError as exc:
+        # Type only: httpx error text can quote request headers, the bearer token included.
+        say(f"spend-cap: could not reach the Budget API: {type(exc).__name__}")
         return 1
     return 0
 
 
 def lift_command(api: BudgetApi, target: Target, confirm: Callable[[str], str]) -> int:
-    """Lift an enforced cap for the rest of the month after the project id is typed back."""
+    """Lift an ENFORCED cap for the rest of the month after the project id is typed back.
+
+    AWAITING_NEXT_PERIOD is only valid to lift an enforced cap (F414); on a CONFIGURED cap it
+    would disarm the cap for the month, so that is refused.
+    """
     try:
         found = find_cap(api.list_budgets(), target)
         if found is None:
             say(f"spend-cap-lift: no spend cap for {target.project} {target.service}")
             return 1
-        typed = confirm(
-            f"Type {target.project} to lift the {target.service} cap until next month: "
-        )
+        if state(found) != ENFORCED:
+            say(f"spend-cap-lift: the cap is {state(found)}, not {ENFORCED}; nothing to lift")
+            return 1
+        typed = confirm(f"Type {target.project} to lift the cap until next month: ")
         if typed.strip() != target.project:
             say("spend-cap-lift: not confirmed, nothing changed")
             return 1
         api.patch(str(found["name"]), "spendCap.inputState", {"spendCap": {"inputState": LIFTED}})
-    except (BudgetApiError, httpx.HTTPError) as exc:
+    except BudgetApiError as exc:
         say(f"spend-cap-lift: {exc}")
         say(CONSOLE_FALLBACK)
+        return 1
+    except httpx.HTTPError as exc:
+        say(f"spend-cap-lift: could not reach the Budget API: {type(exc).__name__}")
         return 1
     say("spend-cap-lift: lifted until the next budget period (services return within an hour)")
     return 0
 
 
-def build(runner: Runner, project: str, service: str, timeout_s: float) -> tuple[BudgetApi, Target]:
-    settings = CloudSettings()
-    account = settings.gcp_billing_account
+def access_token(runner: Runner, timeout_s: float) -> str:
+    """Kevin's gcloud access token, checked to be one printable word before it goes in a header."""
+    token = runner(["gcloud", "auth", "print-access-token"], None, timeout_s).strip()
+    if not token or not token.isprintable() or any(ch.isspace() for ch in token):
+        raise CommandError("gcloud auth print-access-token returned no usable token")
+    return token
+
+
+def build(
+    runner: Runner, account: str, project: str, service: str, timeout_s: float
+) -> tuple[BudgetApi, Target]:
+    """Client and target. The quota project (x-goog-user-project) is the capped project, which
+    needs the Budget API enabled (infra/bootstrap enables it for the beta project)."""
+    cfg = load_cloud().spend_cap
     number = runner(
         ["gcloud", "projects", "describe", project, "--format=value(projectNumber)"],
         None,
         timeout_s,
     ).strip()
-    token = runner(["gcloud", "auth", "print-access-token"], None, timeout_s).strip()
+    token = access_token(runner, timeout_s)
     client = httpx.Client(
         base_url=BUDGETS_API,
-        timeout=load_cloud().spend_cap.http_timeout_s,
+        timeout=cfg.http_timeout_s,
         headers={"Authorization": f"Bearer {token}", "x-goog-user-project": project},
     )
     target = Target(
@@ -220,7 +269,7 @@ def build(runner: Runner, project: str, service: str, timeout_s: float) -> tuple
         project_number=number,
         service=service,
         currency=billing_currency(runner, account, timeout_s),
-        units=str(load_cloud().spend_cap.amount_units),
+        units=str(cfg.amount_units),
     )
     return BudgetApi(client, account), target
 
@@ -228,13 +277,16 @@ def build(runner: Runner, project: str, service: str, timeout_s: float) -> tuple
 def main(argv: list[str] | None = None) -> int:
     cfg = load_cloud()
     parser = argparse.ArgumentParser(description="Spend cap on one service of one project.")
-    parser.add_argument("--project", help="project id (default: GCP_PROJECT from .env)")
+    parser.add_argument("--project", help="project id (default: GCP_PROJECT from the settings)")
     parser.add_argument("--service", default=cfg.spend_cap.service, help="services/XXXX-XXXX-XXXX")
     parser.add_argument("--lift", action="store_true", help="lift an enforced cap until next month")
     options = parser.parse_args(argv)
-    project = options.project if options.project is not None else CloudSettings().gcp_project
+    settings = CloudSettings()
+    project = options.project if options.project is not None else settings.gcp_project
     try:
-        api, target = build(run, project, options.service, cfg.gcloud.timeout_s)
+        api, target = build(
+            run, settings.gcp_billing_account, project, options.service, cfg.gcloud.timeout_s
+        )
     except CommandError as exc:
         say(f"spend-cap: {exc}")
         return 1
