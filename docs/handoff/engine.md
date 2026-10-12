@@ -6,12 +6,22 @@ Written by the engine lane only. Newest entry on top.
 - Done: STEP-03 merged (PR #5, 11 Oct 19:28 UTC; gate 12 of 13, only the model-judged
   `critic.passed` failed after 3 rounds: 24, 21, 23 of 35, gate 26; $1.4731 of $5). STEP-04 tasks 1,
   2 and 4 built on `step-04-ab`: `make ab` (both engines, same files, our critic judges both, budget
-  guard) and `make ab-pick` (blind X/Y picks, ab.json, eval/AB-RESULT.md). The paid A/B ran on 11
-  Oct: $8.58 of $15. Scores are in eval/AB-RESULT.md: read them after your picks, not before.
-- Needs Kevin's hands: STEP-04 task 3, the blind picks: run `make ab-pick` in a terminal, open the
-  page it prints, type x, y or tie and a reason for each of the 5 fixtures. It writes ab.json and
-  the verdict; the step04 gate reads ab.json, so the STEP-04 PR waits for the picks
-- Next: STEP-05 (speech) tasks that need no filming
+  guard) and `make ab-pick` (blind X/Y picks, ab.json, eval/AB-RESULT.md). Round 1 (11 Oct,
+  $8.58): Kevin's picks gave new 1, tie 1, old 3, so the gate failed on the picks rule only
+  (eval/results/2026-10-11/ab.json). Round 2 (12 Oct): the editor prompt now follows Kevin's
+  reasons (finished food shown and last, photos at most 1.2 s and never two in a row, at most four
+  process steps and no hands-filling-frame shots); only our engine reran on cookies, creami and
+  meat (`REDO=<name>:new`); the kit's 11 Oct cuts are kept. $1.20 for round 2; ledger $9.78 of
+  $15. The round 2 cuts keep the new rules (no two photos in a row, photos at most 1.2 s, each
+  ends on its payoff). Cookies: the editor reports no finished cookies among the 15 files both
+  engines get (the kit's 15-file limit, videos first by name); if they are in files 16-26, the
+  fixture's file choice, not the edit, hides them.
+- Needs Kevin's hands: round 2 blind picks. In a terminal: `cd ~/projects/reel/reel-studio-engine
+  && make ab-pick`, open the page it prints, type x, y or tie and a reason for each of the 5
+  fixtures (mercadona and pastav2 are the round 1 pairs again). Read eval/AB-RESULT.md only after.
+  PR #10 waits for the picks: the step04 gate reads the newest ab.json.
+- Waits on #10 and Kevin: STEP-05 on PR #12 (see that branch's handoff: film the speech
+  fixtures; main adds google-genai to the doc ledger)
 - Ledger: anthropic `messages.stream` and httpx2 `MockTransport` uses added to `eval/doc-ledger.pending.json`
 
 ## Decided by standing orders
