@@ -112,6 +112,12 @@ currency = "EUR"                    # ISO 4217, as GA4 expects it
 timeout_s = 20                      # one Stripe request; the SDK's own default is 80 s (F311)
 max_network_retries = 2             # the SDK retries connection errors and 409/5xx with backoff
 webhook_tolerance_s = 300           # how old a signed event may be: Stripe's documented default (F23)
+coupon_id = "reel-beta-free"        # the 100%-off, once coupon friends' codes hang on (D58)
+coupon_name = "Friends beta"        # shown on Stripe's checkout page
+# The Stripe CLI as a pinned image (v1.52.0, 24 Sep 2026; F322): no host install needed.
+cli_image = "stripe/stripe-cli@sha256:da11dbbdb78100602014096a6cbf764b211243111b3b8a57309d18c3939c9777"
+# hardcode-ok on the next line: the laptop site as a container sees it
+listen_forward_to = "http://host.docker.internal:8080/api/stripe/webhook"
 
 [smtp]                               # STEP-06 task 6; added 11 Oct 2026, Kevin to review
 timeout_s = 10                      # connect and send to Mailpit; no outside call without a timeout

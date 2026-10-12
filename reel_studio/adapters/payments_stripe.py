@@ -18,7 +18,11 @@ import stripe
 from stripe.params import PromotionCodeCreateParams, PromotionCodeListParams
 from stripe.params.checkout import SessionCreateParams
 
-from reel_studio.core.constants import MS_PER_S, PROMO_CODE_SUFFIX_BYTES
+from reel_studio.core.constants import (
+    FULL_DISCOUNT_PERCENT,
+    MS_PER_S,
+    PROMO_CODE_SUFFIX_BYTES,
+)
 from reel_studio.core.errors import BadSignature, PaymentsFailed
 from reel_studio.core.logging import get_logger
 from reel_studio.core.ports import Clock, Record
@@ -56,6 +60,37 @@ def _elapsed_ms(started: float) -> int:
     return round((time.monotonic() - started) * MS_PER_S)
 
 
+def _timed[T](event: str, order_id: str | None, call: Callable[[], T]) -> T:
+    """One Stripe call, logged once with its latency; Stripe's own error goes on."""
+    started = time.monotonic()
+    extra: dict[str, Any] = {"order_id": order_id, "stage": "payments", "event": event}
+    try:
+        result = call()
+    except stripe.StripeError as error:
+        log.warning(
+            "stripe %s failed: %s %s",
+            event,
+            type(error).__name__,
+            getattr(error, "code", None),
+            extra={**extra, "latency_ms": _elapsed_ms(started), "outcome": "error"},
+        )
+        raise
+    log.info(
+        "stripe %s", event, extra={**extra, "latency_ms": _elapsed_ms(started), "outcome": "ok"}
+    )
+    return result
+
+
+def _call[T](event: str, order_id: str | None, call: Callable[[], T]) -> T:
+    """`_timed`, with Stripe's error turned into this boundary's own (no message, no key)."""
+    try:
+        return _timed(event, order_id, call)
+    except stripe.StripeError as error:
+        raise PaymentsFailed(
+            f"{event}: {type(error).__name__} {getattr(error, 'code', None)}"
+        ) from None
+
+
 class StripePayments:
     def __init__(self, client: stripe.StripeClient, clock: Clock, setup: StripeSetup) -> None:
         if not setup.webhook_secret:  # refuse at startup rather than at the first webhook
@@ -69,26 +104,7 @@ class StripePayments:
         return self._setup
 
     def _call[T](self, event: str, order_id: str | None, call: Callable[[], T]) -> T:
-        started = time.monotonic()
-        extra: dict[str, Any] = {"order_id": order_id, "stage": "payments", "event": event}
-        try:
-            result = call()
-        except stripe.StripeError as error:
-            kind, code = type(error).__name__, getattr(error, "code", None)
-            log.warning(
-                "stripe %s failed: %s %s",
-                event,
-                kind,
-                code,
-                extra={**extra, "latency_ms": _elapsed_ms(started), "outcome": "error"},
-            )
-            raise PaymentsFailed(f"{event}: {kind} {code}") from None
-        log.info(
-            "stripe %s",
-            event,
-            extra={**extra, "latency_ms": _elapsed_ms(started), "outcome": "ok"},
-        )
-        return result
+        return _call(event, order_id, call)
 
     # ------------------------------------------------------------ Payments
 
@@ -206,3 +222,63 @@ class StripePayments:
             lambda: self._client.v1.promotion_codes.update(promo.id, params={"active": False}),
         )
         return True
+
+
+# ---------------------------------------------------------------- laptop setup (STEP-07 task 9)
+
+FULL_PERCENT, ONCE = FULL_DISCOUNT_PERCENT, "once"  # D58: everything off, on one payment
+
+
+def ensure_price(
+    client: stripe.StripeClient,
+    *,
+    lookup_key: str,
+    unit_amount: int,
+    currency: str,
+    product_name: str,
+) -> tuple[str, bool]:
+    """The price found by its lookup key, or created with its product; True when created (F323).
+    The same key as `make stripe-setup` (scripts/cloud), so laptop and cloud share one price."""
+    found = _call(
+        "price_find",
+        None,
+        lambda: client.v1.prices.list(params={"lookup_keys": [lookup_key], "limit": 1}).data,
+    )
+    if found:
+        return str(found[0].id), False
+    price = _call(
+        "price_create",
+        None,
+        lambda: client.v1.prices.create(
+            params={
+                "currency": currency,
+                "unit_amount": unit_amount,
+                "lookup_key": lookup_key,
+                "product_data": {"name": product_name},
+            },
+            options={"idempotency_key": f"price-{lookup_key}"},
+        ),
+    )
+    return str(price.id), True
+
+
+def ensure_coupon(client: stripe.StripeClient, *, coupon_id: str, name: str) -> tuple[str, bool]:
+    """The beta coupon under its own id, created if missing; True when created. No
+    `max_redemptions` and no `redeem_by`: a code may not out-redeem or outlast its coupon."""
+    try:
+        found = _timed("coupon_find", None, lambda: client.v1.coupons.retrieve(coupon_id))
+    except stripe.StripeError as error:
+        if getattr(error, "code", None) != "resource_missing":
+            raise PaymentsFailed(f"coupon_find: {type(error).__name__} {error.code}") from None
+    else:
+        if found.percent_off != FULL_PERCENT or found.duration != ONCE:
+            raise PaymentsFailed(f"coupon {coupon_id} exists but is not 100% off once")
+        return coupon_id, False
+    _call(
+        "coupon_create",
+        None,
+        lambda: client.v1.coupons.create(
+            params={"id": coupon_id, "name": name, "percent_off": FULL_PERCENT, "duration": ONCE}
+        ),
+    )
+    return coupon_id, True

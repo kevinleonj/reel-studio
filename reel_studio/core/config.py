@@ -134,6 +134,10 @@ class StripeTimes(_Strict):
     timeout_s: PositiveInt
     max_network_retries: NonNegativeInt  # 0 is a valid choice: no retries
     webhook_tolerance_s: PositiveInt  # 0 would turn Stripe's replay check off
+    coupon_id: str
+    coupon_name: str
+    cli_image: str
+    listen_forward_to: str
 
 
 class Upload(_Strict):

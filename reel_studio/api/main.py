@@ -13,6 +13,7 @@ import secrets
 import signal
 import sys
 import threading
+from pathlib import Path
 from typing import TextIO
 
 from fastapi import FastAPI
@@ -21,10 +22,12 @@ from pydantic import ValidationError
 from reel_studio.adapters.clock import SystemClock
 from reel_studio.adapters.launcher_local import (
     Dispatcher,
+    Editor,
     FakeEditor,
     FakeEditorLauncher,
     Sweep,
 )
+from reel_studio.adapters.launcher_real import MadeReel, MakeReel, RealEditor
 from reel_studio.adapters.mailer_smtp import SmtpMailer
 from reel_studio.adapters.payments_stripe import StripePayments, StripeSetup, build_client
 from reel_studio.adapters.storage_local import LocalStorage
@@ -116,16 +119,25 @@ def build_deps(
 
 
 def build_dispatcher(
-    settings: WebSettings, *, orders: OrderStore, clock: Clock, config: Config
+    settings: WebSettings,
+    *,
+    orders: OrderStore,
+    clock: Clock,
+    config: Config,
+    make_reel: MakeReel | None = None,
 ) -> Dispatcher:
-    """The fake editor until the engine lane's worker command exists (STEP-06 task 4). The
-    sweep is the API's own (payments.sweep), so with Stripe it asks Stripe about missed
-    checkouts here too."""
+    """The fake editor (STEP-06 task 4), or the real one when `make_reel` is given (STEP-07
+    task 9, `make dispatch-real`). The sweep is the API's own (payments.sweep), so with Stripe
+    it asks Stripe about missed checkouts here too."""
     times = config.limits.dispatcher
     deps = build_deps(settings, orders=orders, clock=clock, config=config)
-    editor = FakeEditor(orders, deps.storage, stage_seconds=times.fake_stage_seconds)
     notifier = Notifier(
         orders, deps.mailer, site_url=settings.site_url, kevin=settings.kevin_alert_email
+    )
+    editor: Editor = (
+        FakeEditor(orders, deps.storage, stage_seconds=times.fake_stage_seconds)
+        if make_reel is None
+        else RealEditor(orders, deps.storage, make_reel, notifier=notifier)
     )
     return Dispatcher(
         orders,
@@ -134,6 +146,52 @@ def build_dispatcher(
         sweep=Sweep(lambda: payments.sweep(deps), every_s=times.sweep_seconds),
         notifier=notifier,
     )
+
+
+def engine_make_reel(config: Config) -> MakeReel:
+    """The engine's `make` (STEP-03) for one order: the same deps as `reel make`."""
+    # Imported here: the api image has no editor extra; only the laptop's host dispatcher runs it.
+    from reel_studio.cli.reel import real_deps  # noqa: PLC0415
+    from reel_studio.editor import make, prompt  # noqa: PLC0415
+    from reel_studio.editor.media import render  # noqa: PLC0415
+    from reel_studio.settings import EditorSettings  # noqa: PLC0415
+
+    try:
+        editor_settings = EditorSettings()
+    except ValidationError as error:
+        raise SystemExit(settings_problem(error)) from None
+    deps = real_deps()
+
+    def make_reel(inputs: Path, out: Path, order: dict[str, object]) -> MadeReel:
+        chips = order.get("chips")
+        note = order.get("note")
+        request = make.Request(
+            folder=inputs,
+            out=out,
+            order=prompt.OrderSettings(
+                style=str(order["style"]),
+                length_s=int(str(order["length_s"])),
+                text_lang=str(order["text_lang"]),
+                voice=bool(order.get("keep_voice")),
+                chips=tuple(str(c) for c in chips) if isinstance(chips, list) else (),
+                note=str(note) if note else None,
+            ),
+        )
+        made = make.make(
+            request, deps.ports(editor_settings), deps.steps(inputs, editor_settings), config
+        )
+        final = made.final
+        return MadeReel(
+            text=out / render.TEXT,
+            clean=out / render.CLEAN,
+            cost_usd=made.cost,
+            duration_s=final.render.timeline.duration,
+            caption=made.edl.caption or "",
+            doubts=[] if final.passed else [str(final.weakness)],
+            music_hint=made.edl.music_hint,
+        )
+
+    return make_reel
 
 
 def firestore_orders(settings: WebSettings, config: Config, clock: Clock) -> OrderStore:
@@ -179,7 +237,7 @@ def create() -> FastAPI:
     return create_app(build_deps(settings, orders=orders, clock=clock, config=config))
 
 
-def dispatch() -> None:
+def dispatch(*, real: bool = False) -> None:
     reel_logging.configure()
     stop = threading.Event()
 
@@ -189,7 +247,10 @@ def dispatch() -> None:
     signal.signal(signal.SIGTERM, on_signal)  # `docker compose down` sends SIGTERM
     settings, config, clock = WebSettings(), load(), SystemClock()
     orders = firestore_orders(settings, config, clock)
-    dispatcher = build_dispatcher(settings, orders=orders, clock=clock, config=config)
+    make_reel = engine_make_reel(config) if real else None
+    dispatcher = build_dispatcher(
+        settings, orders=orders, clock=clock, config=config, make_reel=make_reel
+    )
     log.info("dispatcher started", extra={"stage": "dispatcher", "event": "start"})
     dispatcher.run_forever(config.limits.dispatcher.poll_seconds, stop)
     # An order the fake editor is running now stays `running` until its lease runs out and the
@@ -200,7 +261,9 @@ def dispatch() -> None:
 if __name__ == "__main__":
     if sys.argv[1:] == ["dispatch"]:
         dispatch()
+    elif sys.argv[1:] == ["dispatch-real"]:
+        dispatch(real=True)
     elif sys.argv[1:] == ["check"]:
         sys.exit(check(sys.stdout))
     else:
-        raise SystemExit("usage: python -m reel_studio.api.main dispatch|check")
+        raise SystemExit("usage: python -m reel_studio.api.main dispatch|dispatch-real|check")

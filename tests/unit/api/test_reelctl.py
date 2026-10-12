@@ -1,13 +1,16 @@
 """`reelctl` (STEP-07 task 6, D63) against the fake Orders and Payments ports."""
 
 import io
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
+from reel_studio.adapters import payments_stripe
 from reel_studio.adapters.payments_stripe import StripePayments
 from reel_studio.api import main as api_main
+from reel_studio.cli import reelctl
 from reel_studio.cli.reelctl import Ports, build_parser, connect, run, set_dotenv
 from reel_studio.core.config import load
 from reel_studio.core.errors import ErrorCode
@@ -17,6 +20,7 @@ from tests.fakes.orders import FakeOrders
 from tests.fakes.payments import FakePayments
 from tests.unit.api.conftest import LIMITS, START
 
+TEST_MODE_KEY = "sk_" + "test_" + "fake" + "0" * 8  # built: no scanner takes it for a key
 ENV_NAME = ".e" + "nv"  # the dotenv file name, built so no tool mistakes it for a read
 SETTINGS = {"style": "recipe", "length_s": 30, "text_lang": "en", "keep_voice": False}
 
@@ -268,3 +272,116 @@ def test_connect_names_missing_settings_without_their_values(
     assert "KEVIN_ALERT_EMAIL" in message
     assert "SMTP_PORT" in message
     assert "not-a-port-value" not in message
+
+
+def test_dotenv_set_writes_through_a_symlink(tmp_path: Path) -> None:
+    """In a worktree ./.env links to the shared file; replacing the link with a copy would
+    split the two (STEP-07 task 9 setup)."""
+    shared = tmp_path / "shared" / ENV_NAME
+    shared.parent.mkdir()
+    shared.write_text("PAYMENTS=off\n")
+    link = tmp_path / ENV_NAME
+    link.symlink_to(shared)
+    out = io.StringIO()
+    assert set_dotenv("PAYMENTS", "stripe", link, out) == 0
+    assert link.is_symlink()
+    assert shared.read_text() == "PAYMENTS=stripe\n"
+    assert not (tmp_path / f"{ENV_NAME}.partial").exists()
+
+
+def test_stripe_setup_writes_the_three_names_through_dotenv_set(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    env = tmp_path / ENV_NAME
+    env.write_text("PAYMENTS=off\n")
+    calls: list[str] = []
+
+    def fake_price(_client: object, **kwargs: object) -> tuple[str, bool]:
+        calls.append(f"price {kwargs['lookup_key']}")
+        return "price_x", True
+
+    def fake_coupon(_client: object, **kwargs: object) -> tuple[str, bool]:
+        calls.append(f"coupon {kwargs['coupon_id']}")
+        return "reel-beta-free", False
+
+    monkeypatch.setattr(payments_stripe, "ensure_price", fake_price)
+    monkeypatch.setattr(payments_stripe, "ensure_coupon", fake_coupon)
+    out = io.StringIO()
+    assert reelctl.stripe_setup(TEST_MODE_KEY, env, out) == 0
+    assert calls == ["price reel-eur-1900", "coupon reel-beta-free"]
+    text = env.read_text()
+    assert "STRIPE_PRICE_ID=price_x\n" in text
+    assert "STRIPE_COUPON_ID=reel-beta-free\n" in text
+    assert "PAYMENTS=stripe\n" in text
+    assert TEST_MODE_KEY not in out.getvalue()
+
+
+def test_stripe_setup_refuses_anything_but_a_test_mode_key(tmp_path: Path) -> None:
+    env = tmp_path / ENV_NAME
+    out = io.StringIO()
+    live = "sk_" + "live_" + "a" + "0" * 11
+    assert reelctl.stripe_setup(live, env, out) == 2
+    assert not env.exists()
+    assert live not in out.getvalue()
+
+
+class FakeDocker:
+    """Records each docker call; the first (`--print-secret`) answers a signing secret."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[list[str], str]] = []
+
+    def run(self, argv: list[str], stdin: str, capture: bool) -> str:
+        self.calls.append((argv, stdin))
+        return WEBHOOK_VALUE + "\n" if capture else ""
+
+
+WEBHOOK_VALUE = "whsec_" + "fake" + "0" * 8  # built: no scanner takes it for a secret
+
+
+def test_stripe_listen_stores_the_secret_and_never_puts_the_key_on_a_command_line(
+    tmp_path: Path,
+) -> None:
+    env = tmp_path / ENV_NAME
+    env.write_text("PAYMENTS=stripe\n")
+    docker = FakeDocker()
+    out = io.StringIO()
+    assert reelctl.stripe_listen(TEST_MODE_KEY, env, out, docker.run) == 0
+    (secret_argv, _), (listen_argv, _) = docker.calls
+    assert secret_argv[-2:] == ["listen", "--print-secret"]
+    assert "--forward-to" in listen_argv
+    forward = listen_argv[listen_argv.index("--forward-to") + 1]
+    assert forward.endswith("/api/stripe/webhook")
+    events = listen_argv[listen_argv.index("--events") + 1]
+    assert set(events.split(",")) == {"checkout.session.completed", "checkout.session.expired"}
+    for argv, stdin in docker.calls:
+        assert TEST_MODE_KEY not in " ".join(argv)  # an argument shows in `ps`
+        assert argv[argv.index("--env-file") + 1] == "/dev/stdin"
+        assert stdin == f"STRIPE_API_KEY={TEST_MODE_KEY}\n"
+        assert any(a.startswith("stripe/stripe-cli@sha256:") for a in argv)
+    assert f"STRIPE_WEBHOOK_SECRET={WEBHOOK_VALUE}\n" in env.read_text()
+    assert TEST_MODE_KEY not in out.getvalue()
+    assert WEBHOOK_VALUE not in out.getvalue()
+
+
+def test_stripe_listen_refuses_anything_but_a_test_mode_key(tmp_path: Path) -> None:
+    docker = FakeDocker()
+    out = io.StringIO()
+    live = "sk_" + "live_" + "a" + "0" * 11
+    assert reelctl.stripe_listen(live, tmp_path / ENV_NAME, out, docker.run) == 2
+    assert docker.calls == []
+
+
+def test_the_listener_output_never_shows_the_signing_secret(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The Stripe CLI prints the secret in its "Ready!" line; reelctl masks it (task 9 run)."""
+    banner = f"Ready! Your webhook signing secret is {WEBHOOK_VALUE} (^C to quit)"
+    code = (
+        f"import sys; print({banner!r}); print('event checkout.session.completed', file=sys.stderr)"
+    )
+    reelctl.run_docker([sys.executable, "-c", code], "", False)
+    shown = capsys.readouterr().out
+    assert WEBHOOK_VALUE not in shown
+    assert "whsec_<redacted>" in shown
+    assert "checkout.session.completed" in shown
