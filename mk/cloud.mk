@@ -10,7 +10,7 @@ TF_ROOTS := infra/bootstrap infra/main
 TRIVY_SEVERITY := HIGH,CRITICAL
 
 .PHONY: ci-cloud policy tf-fmt tf-validate tf-test tflint tflint-init trivy \
-	gcp-project bootstrap-plan secrets-push stripe-setup dns smoke
+	gcp-project bootstrap-plan secrets-push stripe-setup dns smoke spend-cap spend-cap-lift
 
 ci-cloud: policy tf-fmt tf-validate tf-test tflint trivy
 
@@ -65,3 +65,13 @@ dns:
 smoke:
 	@test -n "$(URL)" || { echo "usage: make smoke URL=<service url>"; exit 2; }
 	$(UV) python scripts/smoke.py --url "$(URL)"
+
+# Hard stop on one service's monthly bill (F414). Optional: PROJECT=<id> SERVICE=services/XXXX-XXXX-XXXX.
+SPEND_CAP_ARGS = $(if $(PROJECT),--project "$(PROJECT)") $(if $(SERVICE),--service "$(SERVICE)")
+
+spend-cap:
+	$(UV) python scripts/cloud/spend_cap.py $(SPEND_CAP_ARGS)
+
+# Asks for the project id to be typed back before lifting an enforced cap.
+spend-cap-lift:
+	$(UV) python scripts/cloud/spend_cap.py --lift $(SPEND_CAP_ARGS)
