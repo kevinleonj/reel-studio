@@ -206,3 +206,13 @@ def test_the_crop_effect_is_given_as_typical_and_most() -> None:
     text = prompt.brief(_order(), CFG, MEDIA, SHOTS, transcripts={})
 
     assert "usually by 10-15 and\nup to about 30" in text
+
+
+def test_round_2_rules_from_kevins_picks_are_in_every_food_style() -> None:
+    """STEP-04 A/B, 11 Oct: the finished cookies never appeared; creami held stills too long;
+    meat showed too many steps with arms and told no story."""
+    for style in ("montage", "recipe"):
+        words = " ".join(prompt.system_prompt(style, CFG).split())
+        assert "The finished food is in every Reel" in words
+        assert "A photo holds at most 1.2 s" in words and "never two photos in a row" in words
+        assert "hands or arms fill the frame" in words and "at most four process steps" in words

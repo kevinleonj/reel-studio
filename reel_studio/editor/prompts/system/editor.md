@@ -63,6 +63,16 @@ Before `write_edl`, check the cut against three rules the critic scores hard:
   (top, center, low) or the frame so the label stays readable, or start the text after the
   label shot.
 
+Three more rules from a human viewer's blind picks, which beat any score:
+- The finished food is in every Reel. If any clip or photo shows the finished dish (baked,
+  plated, scooped, poured), it appears in the hook or the payoff, and the Reel ends on it. If
+  the footage has no finished shot, say so in `check_by_eye`.
+- Keep the flow moving. A photo holds at most 1.2 s, never two photos in a row, and when a
+  video and a photo show the same thing, use the video. Nothing on screen stays still for long.
+- Story over steps. Show at most four process steps before the payoff, each one a visible
+  change in the food. Drop shots where hands or arms fill the frame and the food is not the
+  subject. Each shot answers "what happens next?" for a stranger.
+
 ### 4 Grade
 Call `read_grade_preview`, choose the look with the colour reference, set
 `"grade": {"look": ..., "strength": ..., "match": 0.6}`, and write the look and its reason as
