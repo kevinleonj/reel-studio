@@ -539,3 +539,14 @@ def test_inputs_span_the_whole_shoot_so_the_finished_dish_is_kept(tmp_path: Path
 
     assert len(picked) == 15 and picked == sorted(picked)
     assert picked[0] == "IMG_0470.mov" and picked[-1] == "IMG_0500.jpeg"
+
+
+def test_paid_but_superseded_runs_stay_on_the_ledger(tmp_path: Path) -> None:
+    """A rerun that is later withdrawn was still paid: the row keeps its cost."""
+    runs = _harness(tmp_path, FakeKit(), FakeJudge()).run()
+    data = _json(runs)
+    data["fixtures"][0]["superseded_paid_usd"] = Decimal("1.95")
+    runs.write_text(json.dumps(data, default=float), encoding="utf-8")
+    later = _harness(tmp_path, FakeKit(), FakeJudge(), script=[])
+
+    assert _json(later.run())["spent_usd"] == data["spent_usd"] + Decimal("1.95")

@@ -37,6 +37,7 @@ log = get_logger(__name__)
 
 STAGE = "ab"
 RUNS_JSON = "ab-runs.json"
+SUPERSEDED = "superseded_paid_usd"  # paid runs withdrawn from the comparison
 OUT = Path("out") / "ab"
 SIDES = ("new", "old")
 MEDIA_EXT = {e.lower() for e in (*constants.VIDEO_EXT, *constants.IMAGE_EXT)}
@@ -145,12 +146,15 @@ class Harness:
             for row in data["fixtures"]:
                 arms = [row[s] for s in SIDES if s in row and not row[s].get("carried")]
                 self.spent += sum((Decimal(str(a["cost_usd"])) for a in arms), Decimal(0))
+                # runs withdrawn from the comparison were still paid (kept in this file only)
+                self.spent += Decimal(str(row.get(SUPERSEDED, 0)))
         if not paths:
             return
         newest: dict[str, Any] = json.loads(paths[-1].read_text(encoding="utf-8"))  # Any: JSON
         self.rows = newest["fixtures"]
         if paths[-1] != self._target(day):
             for row in self.rows:
+                row.pop(SUPERSEDED, None)  # counted in the file it was paid in
                 for side in SIDES:
                     if side in row:
                         row[side]["carried"] = True
