@@ -10,7 +10,7 @@ TF_ROOTS := infra/bootstrap infra/main
 TRIVY_SEVERITY := HIGH,CRITICAL
 
 .PHONY: ci-cloud policy tf-fmt tf-validate tf-test tflint tflint-init trivy \
-	gcp-project bootstrap-plan secrets-push stripe-setup dns smoke spend-cap spend-cap-lift
+	gcp-project bootstrap-plan secrets-push stripe-setup dns smoke spend-cap spend-cap-lift github-env
 
 ci-cloud: policy tf-fmt tf-validate tf-test tflint trivy
 
@@ -75,3 +75,7 @@ spend-cap:
 # Asks for the project id to be typed back before lifting an enforced cap.
 spend-cap-lift:
 	$(UV) python scripts/cloud/spend_cap.py --lift $(SPEND_CAP_ARGS)
+
+# The beta approval gate as code: owner as only reviewer, deploys from main only (F417).
+github-env:
+	$(UV) python scripts/cloud/github_env.py

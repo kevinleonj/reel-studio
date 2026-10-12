@@ -319,6 +319,13 @@ class SpendCap(_Strict):
     http_timeout_s: float = Field(gt=0)
 
 
+class GithubEnv(_Strict):
+    name: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    wait_timer_minutes: int = Field(ge=0)
+    prevent_self_review: bool
+
+
 class Cloud(_Strict):
     gcp: Gcp
     resend: Resend
@@ -328,6 +335,7 @@ class Cloud(_Strict):
     stripe: StripeSetup
     smoke: Smoke
     spend_cap: SpendCap
+    github_env: GithubEnv
 
 
 # ---------------------------------------------------------------- loading

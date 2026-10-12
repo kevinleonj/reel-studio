@@ -60,3 +60,11 @@ service = "services/152E-C115-5142"   # Cloud Run (Gemini API: services/AEFD-769
 amount_units = 30
 display_name = "reel-studio spend cap"
 http_timeout_s = 30
+
+[github_env]
+# make github-env: the deploy approval gate deploy.yml and the Workload Identity binding rely on
+# (infra/bootstrap/wif.tf trusts any job in this environment). Reviewer: the repository owner.
+name = "beta"
+branch = "main"   # the only branch that may deploy
+wait_timer_minutes = 0
+prevent_self_review = false   # Kevin dispatches and approves his own deploy
