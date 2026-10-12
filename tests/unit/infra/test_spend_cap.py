@@ -284,3 +284,70 @@ def test_an_unexpected_answer_takes_the_refusal_path(
 
     assert spend_cap.cap_command(spend_cap.BudgetApi(client, ACCOUNT), target()) != 0
     assert "Console fallback" in capsys.readouterr().out
+
+
+@dataclass
+class FakeSettings:
+    gcp_project: str = PROJECT
+    gcp_billing_account: str = ACCOUNT
+
+
+def wire_main(monkeypatch: pytest.MonkeyPatch, fake: FakeBudgets) -> None:
+    real_client = httpx.Client
+
+    def client(**kwargs: object) -> httpx.Client:
+        return real_client(transport=httpx.MockTransport(fake), **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(spend_cap, "run", FakeGcloud())
+    monkeypatch.setattr(spend_cap, "CloudSettings", FakeSettings)
+    monkeypatch.setattr(httpx, "Client", client)  # the module spend_cap uses
+
+
+def test_main_creates_the_cap_for_the_settings_project_and_account(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = FakeBudgets()
+    wire_main(monkeypatch, fake)
+
+    assert spend_cap.main([]) == 0
+
+    [post] = fake.writes()
+    assert post.url.path.endswith(f"/billingAccounts/{ACCOUNT}/budgets")
+    assert post.headers["x-goog-user-project"] == PROJECT
+    assert json.loads(post.content)["budgetFilter"]["projects"] == [f"projects/{PROJECT}"]
+
+
+def test_main_lift_routes_to_the_lift_and_names_the_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = FakeBudgets(pages=[[existing_cap(target().units, state="ENFORCED")]])
+    wire_main(monkeypatch, fake)
+    prompts: list[str] = []
+
+    def typed(prompt: str) -> str:
+        prompts.append(prompt)
+        return PROJECT
+
+    monkeypatch.setattr("builtins.input", typed)
+
+    assert spend_cap.main(["--lift"]) == 0
+
+    [patch] = fake.writes()
+    assert patch.url.params["updateMask"] == "spendCap.inputState"
+    assert target().service in prompts[0]
+
+
+def test_lift_transport_errors_print_the_type_not_the_text(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def fail(request: httpx.Request) -> httpx.Response:
+        raise httpx.LocalProtocolError("Illegal header value b'Bearer secret-token'")
+
+    client = httpx.Client(base_url="https://budgets.test/v1", transport=httpx.MockTransport(fail))
+    budgets = spend_cap.BudgetApi(client, ACCOUNT)
+
+    assert spend_cap.lift_command(budgets, target(), confirm=lambda prompt: PROJECT) != 0
+
+    out = capsys.readouterr().out
+    assert "LocalProtocolError" in out
+    assert "secret-token" not in out

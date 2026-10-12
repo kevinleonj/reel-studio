@@ -222,7 +222,10 @@ def lift_command(api: BudgetApi, target: Target, confirm: Callable[[str], str]) 
         if state(found) != ENFORCED:
             say(f"spend-cap-lift: the cap is {state(found)}, not {ENFORCED}; nothing to lift")
             return 1
-        typed = confirm(f"Type {target.project} to lift the cap until next month: ")
+        # Name the service: one project can carry two caps (Cloud Run, Gemini API).
+        typed = confirm(
+            f"Type {target.project} to lift its {target.service} cap until next month: "
+        )
         if typed.strip() != target.project:
             say("spend-cap-lift: not confirmed, nothing changed")
             return 1

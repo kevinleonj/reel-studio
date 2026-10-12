@@ -181,7 +181,7 @@ Before: no limit on the Cloud Run bill, every request log stored in full, the `b
 manual API call, image scanning left to the project default. After, each with a failing test first:
 - `make spend-cap` / `make spend-cap-lift` (scripts/cloud/spend_cap.py, config `[spend_cap]`): a
   spend-cap budget, this project and Cloud Run, 30 units a month gross; idempotent; refusal prints
-  Google's reason and the console path (20 tests, F414). Not run: the project does not exist.
+  Google's reason and the console path (23 tests, F414). Not run: the project does not exist.
   Review round 1 (FAIL, fixed in a621675): the first version recognised a cap by
   `spendCap.inputState`, which Google's responses never carry (they hold `outputState` only), so
   a re-run would have created a second cap and `spend-cap-lift` could not find one. The fake now
@@ -195,11 +195,10 @@ manual API call, image scanning left to the project default. After, each with a 
   back required_reviewers [kevinleonj], prevent_self_review false, custom policy, one branch `main`;
   a second run added nothing (F417).
 - docs/INFRA.md is main's file: the exact edits are under "For MAIN".
-- Follow-ups from review round 2 (no behaviour defect): test `spend_cap.main()` (lift routing,
-  account/project order); pin the lift path's type-only transport error; put the service back in
-  the lift prompt; F414's "inputState is write-only" rests on the samples omitting it (the code
-  works either way); after the first real create, check that `find_cap` sees Google's actual list
-  answer, since no live response has been observed yet.
+- Review round 2 warnings, closed after it: `spend_cap.main()` tested (routing, settings project
+  and account, quota header), the lift path's type-only transport error pinned, the service back in
+  the lift prompt, F414 marks the inferred parts UNCONFIRMED. Open: after the first real create,
+  check that a second `make spend-cap` says "unchanged" (no live list answer has been seen yet).
 
 ### 10 Oct 2026 — REVIEW-FIXES.md, CLOUD items 1-5
 Before: the deployer held projectIamAdmin without a condition and any main-branch job could use it;
