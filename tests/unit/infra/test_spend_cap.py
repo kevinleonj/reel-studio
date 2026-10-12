@@ -62,8 +62,8 @@ def api(fake: FakeBudgets) -> spend_cap.BudgetApi:
 
 
 def existing_cap(units: str, state: str = "CONFIGURED") -> dict[str, object]:
-    # Copied from the response samples on the Budget API spend-cap page (F414): responses carry
-    # spendCap.outputState only (inputState is write-only) and name the project by number.
+    # Copied from the response samples on the Budget API spend-cap page (F414): the samples carry
+    # spendCap.outputState only and name the project by number.
     return {
         "name": f"billingAccounts/{ACCOUNT}/budgets/cap-1",
         "displayName": "spend cap",
@@ -351,3 +351,79 @@ def test_lift_transport_errors_print_the_type_not_the_text(
     out = capsys.readouterr().out
     assert "LocalProtocolError" in out
     assert "secret-token" not in out
+
+
+GEMINI = "services/AEFD-7695-64FA"
+OTHER = "gemini-key-project"
+
+
+def test_main_lifts_the_cap_named_by_project_and_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    run_cap = existing_cap(target().units, state="ENFORCED")
+    gemini_cap = existing_cap(target().units, state="ENFORCED")
+    gemini_cap["name"] = f"billingAccounts/{ACCOUNT}/budgets/cap-gemini"
+    gemini_cap["budgetFilter"] = {"projects": [f"projects/{NUMBER}"], "services": [GEMINI]}
+    fake = FakeBudgets(pages=[[run_cap, gemini_cap]])
+    wire_main(monkeypatch, fake)
+    prompts: list[str] = []
+
+    def typed(prompt: str) -> str:
+        prompts.append(prompt)
+        return OTHER
+
+    monkeypatch.setattr("builtins.input", typed)
+
+    assert spend_cap.main(["--project", OTHER, "--service", GEMINI, "--lift"]) == 0
+
+    [patch] = fake.writes()
+    assert patch.url.path.endswith("/budgets/cap-gemini")
+    assert patch.headers["x-goog-user-project"] == OTHER
+    assert GEMINI in prompts[0]
+    assert OTHER in prompts[0]
+
+
+def test_main_reports_a_gcloud_failure_and_exits_non_zero(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def refuse(args: Sequence[str], stdin: str | None, timeout_s: float) -> str:
+        raise _shell.CommandError("gcloud projects describe exited 1: NOT_FOUND")
+
+    wire_main(monkeypatch, FakeBudgets())
+    monkeypatch.setattr(spend_cap, "run", refuse)
+
+    assert spend_cap.main([]) == 1
+    assert "NOT_FOUND" in capsys.readouterr().out
+
+
+def test_main_client_has_the_configured_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+    real_client = httpx.Client
+
+    def client(**kwargs: object) -> httpx.Client:
+        seen.update(kwargs)
+        return real_client(transport=httpx.MockTransport(FakeBudgets()), **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(spend_cap, "run", FakeGcloud())
+    monkeypatch.setattr(spend_cap, "CloudSettings", FakeSettings)
+    monkeypatch.setattr(httpx, "Client", client)
+
+    spend_cap.main([])
+
+    assert seen["timeout"] == config.load_cloud().spend_cap.http_timeout_s
+
+
+def test_a_cap_on_another_project_with_the_same_service_is_not_ours() -> None:
+    elsewhere = existing_cap(target().units, state="ENFORCED")
+    elsewhere["name"] = f"billingAccounts/{ACCOUNT}/budgets/cap-elsewhere"
+    elsewhere["budgetFilter"] = {
+        "projects": ["projects/999999999999"],
+        "services": [target().service],
+    }
+    fake = FakeBudgets(pages=[[elsewhere]])
+
+    assert spend_cap.ensure_cap(api(fake), target()) == "created"
+    assert (
+        spend_cap.lift_command(
+            api(FakeBudgets(pages=[[elsewhere]])), target(), confirm=lambda prompt: PROJECT
+        )
+        != 0
+    )
