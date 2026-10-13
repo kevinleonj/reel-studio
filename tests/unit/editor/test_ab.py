@@ -549,6 +549,33 @@ def test_redo_of_one_side_reads_the_files_the_kept_side_read(tmp_path: Path) -> 
     assert row["files"] == first["files"]
 
 
+def test_a_kit_only_redo_on_a_later_day_hands_the_kit_the_carried_files(tmp_path: Path) -> None:
+    first = _json(_harness(tmp_path, FakeKit(), FakeJudge()).run())["fixtures"][0]
+    _touch(tmp_path / "fixtures" / AB.fixtures[0], "IMG_0.mov")
+    kit = FakeKit()
+    later = _harness(tmp_path, kit, FakeJudge(), script=[])
+    later.ports = make.Ports(FakeClaude([]), FrozenClock(NOW.replace(day=13)))
+    later.redo = (f"{AB.fixtures[0]}:old",)
+
+    row = _json(later.run())["fixtures"][0]
+
+    assert [[f.name for f in files] for _, files, *_ in kit.calls] == [first["files"]]
+    assert row["files"] == first["files"] and row["new"]["carried"] is True
+
+
+def test_redo_of_both_sides_takes_todays_choice(tmp_path: Path) -> None:
+    _harness(tmp_path, FakeKit(), FakeJudge()).run()
+    _touch(tmp_path / "fixtures" / AB.fixtures[0], "IMG_0.mov")
+    kit = FakeKit()
+    again = _harness(tmp_path, kit, FakeJudge(), script=[edl_turn("e1"), critic_turn(5)])
+    again.redo = (AB.fixtures[0],)
+
+    row = _json(again.run())["fixtures"][0]
+
+    assert row["files"] == ["IMG_0.mov", "IMG_1.mov", "IMG_2.mov"]
+    assert [[f.name for f in files] for _, files, *_ in kit.calls] == [row["files"]]
+
+
 def test_a_run_that_reruns_nothing_keeps_every_rows_files(tmp_path: Path) -> None:
     before = _json(_harness(tmp_path, FakeKit(), FakeJudge()).run())["fixtures"]
     for name in AB.fixtures:
