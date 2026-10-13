@@ -576,6 +576,18 @@ def test_redo_of_both_sides_takes_todays_choice(tmp_path: Path) -> None:
     assert [[f.name for f in files] for _, files, *_ in kit.calls] == [row["files"]]
 
 
+def test_a_failed_arm_is_not_kept_so_a_full_rerun_takes_todays_choice(tmp_path: Path) -> None:
+    name = AB.fixtures[0]
+    _harness(tmp_path, FakeKit(fail={f"ab{name}"}), FakeJudge()).run()
+    _touch(tmp_path / "fixtures" / name, "IMG_0.mov")
+    again = _harness(tmp_path, FakeKit(), FakeJudge(), script=[edl_turn("e1"), critic_turn(5)])
+    again.redo = (f"{name}:new",)  # and the failed kit arm reruns anyway
+
+    row = _json(again.run())["fixtures"][0]
+
+    assert row["files"] == ["IMG_0.mov", "IMG_1.mov", "IMG_2.mov"]
+
+
 def test_a_run_that_reruns_nothing_keeps_every_rows_files(tmp_path: Path) -> None:
     before = _json(_harness(tmp_path, FakeKit(), FakeJudge()).run())["fixtures"]
     for name in AB.fixtures:
