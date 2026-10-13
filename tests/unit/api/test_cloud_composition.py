@@ -2,6 +2,7 @@
 the same routes, every Google and Resend client replaced by its fake."""
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import httpx
@@ -12,11 +13,18 @@ from google.api_core import exceptions as google_exceptions
 from reel_studio.adapters.gcp_launcher import ORDER_ID_ENV, GcpLauncher
 from reel_studio.adapters.gcp_storage import GcpStorage, SigningIdentity
 from reel_studio.adapters.resend_mailer import ResendMailer
-from reel_studio.api import main
+from reel_studio.api import cloud, main
 from reel_studio.api.app import create_app
-from reel_studio.api.cloud import CloudClients, Process, build_cloud_deps, link_email_worst_case_s
+from reel_studio.api.cloud import (
+    Budget,
+    CloudClients,
+    Process,
+    build_cloud_deps,
+    link_email_worst_case_s,
+)
 from reel_studio.api.deps import ApiDeps
 from reel_studio.core.config import load, load_cloud
+from reel_studio.core.errors import DeliveryFailed, OrderBusy
 from reel_studio.settings import RuntimeSettings, WebSettings
 from tests.conftest import MakeSettings
 from tests.fakes.clock import FrozenClock
@@ -48,6 +56,13 @@ class Sent:
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.bodies.append(json.loads(request.content))
         return httpx.Response(200, json={"id": "email-1"})
+
+
+class Broken(Sent):
+    """A mail transport that fails with something other than an HTTP answer."""
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        raise RuntimeError("mail transport fell over")
 
 
 def clients(bucket: FakeBucket, jobs: FakeJobsClient, sent: Sent) -> CloudClients:
@@ -144,6 +159,51 @@ def test_a_job_that_cannot_start_fails_the_order_and_frees_its_slot(
     doc = deps.orders.get(order_id)
     assert doc is not None and doc["status"] == "failed"
     assert deps.orders.next_queued() is None
+    assert order_id not in deps.orders.capacity["slots"]  # type: ignore[attr-defined]
+
+
+def test_a_failure_notice_that_breaks_never_breaks_start(
+    tmp_path: Path, make_settings: MakeSettings
+) -> None:
+    """The launch failed and so does the mail transport, not with DeliveryFailed: the order is
+    still failed and Start still answers (notify.launch_failed's catch-all, review S1)."""
+    unavailable = google_exceptions.ServiceUnavailable("down")  # type: ignore[no-untyped-call]
+    bucket, jobs = FakeBucket(), FakeJobsClient(raises=unavailable)
+    deps = cloud_deps(tmp_path, make_settings, (bucket, jobs, Broken()))
+    client = TestClient(create_app(deps))
+    order_id, headers = checkout(client, "")
+    upload(client, bucket, order_id, headers)
+
+    assert client.post(f"/api/orders/{order_id}/start", headers=headers).status_code == 200
+    doc = deps.orders.get(order_id)
+    assert doc is not None and doc["status"] == "failed"
+
+
+def test_a_start_retried_after_busy_still_launches(
+    tmp_path: Path, make_settings: MakeSettings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The first Start queues, then take_slot runs out of attempts (503 busy); the retry finds
+    the order queued and must launch it, or nothing ever does in the cloud (review W1)."""
+    bucket, jobs = FakeBucket(), FakeJobsClient()
+    deps = cloud_deps(tmp_path, make_settings, (bucket, jobs, Sent()))
+    client = TestClient(create_app(deps))
+    order_id, headers = checkout(client, "")
+    upload(client, bucket, order_id, headers)
+    take_slot = deps.orders.take_slot
+    busy = [OrderBusy("take_slot")]
+
+    def once_busy(order: str) -> bool:
+        if busy:
+            raise busy.pop()
+        return take_slot(order)
+
+    monkeypatch.setattr(deps.orders, "take_slot", once_busy)
+
+    assert client.post(f"/api/orders/{order_id}/start", headers=headers).status_code == 503
+    assert client.post(f"/api/orders/{order_id}/start", headers=headers).status_code == 200
+    assert len(jobs.calls) == 1
+    doc = deps.orders.get(order_id)
+    assert doc is not None and doc["status"] == "running"
 
 
 def test_a_cloud_outage_answers_503_cloud_unavailable(
@@ -195,9 +255,58 @@ def test_create_builds_the_cloud_app_when_tier_is_cloud(
     assert built == ["reel-studio-media-test"]
 
 
-def test_the_link_email_fits_inside_one_api_request() -> None:
-    """cloud.md W7: 4 attempts of 15 s exceed Cloud Run's 30 s request timeout, and Cloud Run
-    gives no CPU after the response (F90), so the request path gets a budget of its own."""
-    timeout = str(terraform_locals()["api_request_timeout"]).strip('"').removesuffix("s")
+def api_request_timeout_s() -> float:
+    return float(str(terraform_locals()["api_request_timeout"]).strip('"').removesuffix("s"))
 
-    assert link_email_worst_case_s(load_cloud().resend) < int(timeout)
+
+def test_every_call_on_a_request_path_fits_inside_one_api_request() -> None:
+    """cloud.md W7: 4 attempts of 15 s exceed Cloud Run's 30 s request timeout, and Cloud Run
+    gives no CPU after the response (F90). The webhook sends the link email after a Firestore
+    call; Start lists the bucket, then launches (review W2)."""
+    budget = Budget.request(load_cloud())
+
+    assert link_email_worst_case_s(budget) + budget.call_timeout_s < api_request_timeout_s()
+    start = budget.retry_deadline_s + budget.call_timeout_s  # list the uploads, then launch
+    assert start < api_request_timeout_s()
+
+
+def test_reel_api_mails_with_its_request_budget(
+    make_settings: MakeSettings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The wiring, not only the numbers: two attempts, one wait (review W4)."""
+    attempts: list[httpx.Request] = []
+
+    def failing(request: httpx.Request) -> httpx.Response:
+        attempts.append(request)
+        return httpx.Response(500)
+
+    sleeps: list[float] = []
+    monkeypatch.setattr("time.sleep", sleeps.append)  # the Backoff cloud_adapters builds
+    runtime = make_settings(RuntimeSettings, **CLOUD)
+    assert isinstance(runtime, RuntimeSettings)
+    fakes = clients(FakeBucket(), FakeJobsClient(), Sent())
+    resend = httpx.Client(base_url=RESEND, transport=httpx.MockTransport(failing))
+    budget = Budget.request(load_cloud())
+    adapters = cloud.cloud_adapters(
+        runtime,
+        load_cloud(),
+        replace(fakes, resend=resend),
+        FakeOrders(FrozenClock(START), LIMITS),
+        budget,
+    )
+
+    with pytest.raises(DeliveryFailed):
+        adapters.mailer.send(
+            "kevin",
+            "kevin@example.test",
+            {"order_id": "o", "status": "s", "stage": "x", "code": "c"},
+        )
+
+    assert len(attempts) == budget.resend_retries + 1 == 2
+    assert sleeps == [load_cloud().resend.backoff_s]
+
+
+def test_the_site_origin_has_no_path() -> None:
+    assert cloud.origin("https://reel-api-1.europe-west1.run.app/") == (
+        "https://reel-api-1.europe-west1.run.app"
+    )

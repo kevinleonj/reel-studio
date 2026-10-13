@@ -5,6 +5,10 @@
 # Every Cloud Storage and Cloud Run call: a per-call timeout and a bounded retry with backoff.
 call_timeout_s = 30
 retry_deadline_s = 120   # google.api_core default, written out (doc ledger: google-cloud-storage)
+# reel-api's calls inside one 30 s request (infra/main/locals.tf): Start lists the bucket, then
+# launches; tests/unit/api/test_cloud_composition.py sums them against the request timeout.
+request_timeout_s = 10
+request_retry_deadline_s = 10
 retry_initial_s = 1.0
 retry_multiplier = 2.0
 retry_max_s = 30.0

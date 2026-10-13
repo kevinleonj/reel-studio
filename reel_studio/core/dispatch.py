@@ -1,10 +1,12 @@
 """Start queued orders while running slots are free (docs/ARCHITECTURE.md §4, "One run per
-order"). One rule for every caller: the laptop dispatcher, reel-api after Start, the sweep and
-the editor job when it finishes (ARCHITECTURE §1, steps 8, 12 and 14).
+order"). One rule for every caller: the laptop dispatcher, reel-api after Start and the editor
+job when it finishes (ARCHITECTURE §1, steps 8 and 12). The cloud sweep (step 14) does not call
+it yet: a follow-up in HANDOFF.md.
 
 A launch is never retried (the Launcher port is at most once). When it fails, the order fails at
 once and frees its slot, instead of holding the slot for the 70-minute lease: an execution the
-lost response may have started finds the order no longer running and exits before any work.
+lost response may have started finds the order no longer running at its claim and exits. One
+that already claimed before the order failed keeps running to its end (HANDOFF.md, task 2).
 """
 
 from collections.abc import Callable
