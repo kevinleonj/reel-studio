@@ -267,6 +267,17 @@ class Harness:
         if problem is not None:
             raise PreflightError(problem)
 
+    def _inputs(self, row: Row, again: tuple[str, ...]) -> list[Path]:
+        """The files for this fixture. While an arm is kept, the other side reruns on the files
+        that arm read and the row is not rewritten; only a fresh pair takes today's choice."""
+        folder = self.fixtures / row["name"]
+        kept = [s for s in SIDES if s in row and row[s]["error"] is None and s not in again]
+        if "files" in row and kept:
+            return [folder / f for f in row["files"]]
+        files = select_inputs(folder, self.cfg.limits.eval.ab.max_files)
+        row["files"] = [f.name for f in files]
+        return files
+
     def _fits(self, cap: Decimal) -> bool:
         ab_cfg = self.cfg.limits.eval.ab
         return self.spent + cap + ab_cfg.judge_reserve_usd <= ab_cfg.budget_usd
