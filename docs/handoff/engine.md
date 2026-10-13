@@ -32,11 +32,8 @@ Written by the engine lane only. Newest entry on top.
   twice keeps only the last entry; the prompt tests pin phrases, not whole rules; the cross-day
   side-only redo has no saved test. meat and pastav2 rows keep their first-15 files; a later
   REDO on them would pick the spread files, so rerun both sides there, never one.
-- Needs Kevin's hands: round 2 blind picks (cookies is now the spread-file pair, finished tray
-  shown). For the picks, in a terminal: `cd ~/projects/reel/reel-studio-engine
-  && make ab-pick`, open the page it prints, type x, y or tie and a reason for each of the 5
-  fixtures (mercadona and pastav2 are the round 1 pairs again). Read eval/AB-RESULT.md only after.
-  PR #10 waits for the picks: the step04 gate reads the newest ab.json.
+- Needs Kevin: the round 3 decision in the BLOCKED line above. PR #10 stays open until the
+  step04 gate passes.
 - Waits on #10 and Kevin: STEP-05 on PR #12 (see that branch's handoff: film the speech
   fixtures; main adds google-genai to the doc ledger)
 - Ledger: anthropic `messages.stream` and httpx2 `MockTransport` uses added to `eval/doc-ledger.pending.json`
