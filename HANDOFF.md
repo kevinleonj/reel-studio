@@ -4,7 +4,7 @@ The main checkout's log and the status of every lane. Lanes write their own file
 Newest entry on top.
 
 ## Status board
-MAIN-NEXT in progress (13 Oct 2026): task 1, the parked docs and config (branch `main-parked`)
+MAIN-NEXT in progress (13 Oct 2026): task 1 is PR #17 (branch `parked-docs`)
 - Done: starter kit v1.1; STEP-01 (#1), STEP-02 (#2), STEP-03 (#5), STEP-08 short of the real project
   (#3), STEP-06 except task 8 (#4, #8), STEP-07 (#11, #13, #14), `httpx2` and laptop `WebSettings`
   (#6), auto-merge guardrail (#7), Stripe ids (#9), cloud cost cap (#15, #16), all merged
@@ -12,7 +12,8 @@ MAIN-NEXT in progress (13 Oct 2026): task 1, the parked docs and config (branch 
   in lane engine; MAIN-NEXT tasks 1-3
 - Blocked: —
 - Not started: STEP-09
-- Next: MAIN-NEXT task 2 (cloud composition) after task 1's pull request
+- Next: MAIN-NEXT task 2 (cloud composition), then task 3. Task 3's claim follows ARCHITECTURE §4
+  (`queue.claimed_token`), not the `queue.started_at` wording in MAIN-NEXT.md and cloud.md
 
 ## Lanes
 | Lane | Worktree | Steps | File |
@@ -26,7 +27,6 @@ MAIN-NEXT in progress (13 Oct 2026): task 1, the parked docs and config (branch 
 - D35 in the decisions file still says `write_edl` is strict; since 11 Oct it is not (F211, engine.md
   Needs Kevin 20). The file is locked (a hook blocks edits), so that line is yours; EDITOR.md §4 now
   says so.
-- Merge PR #1 (STEP-01). The three lanes wait for it.
 - Two more footage folders in `REEL_FIXTURES_DIR` before STEP-04 (5 needed, 3 present).
 - STEP-00 leftovers on the Mac, needed from STEP-02 (ffmpeg) and STEP-06 (node): `command -v ffmpeg` is
   `/opt/homebrew/bin/ffmpeg` (plain, no zscale), and `node` is Homebrew Node 26, which fails to start
@@ -41,7 +41,7 @@ MAIN-NEXT in progress (13 Oct 2026): task 1, the parked docs and config (branch 
   (one class per consumer; a test keeps the two in step). A lane that needs a new variable asks here.
 
 ## Log
-### 13 Oct 2026 — MAIN-NEXT task 1: the parked docs and config (branch `main-parked`)
+### 13 Oct 2026 — MAIN-NEXT task 1: the parked docs and config (PR #17, branch `parked-docs`)
 - Before: the lanes' "For MAIN" doc edits waited (INFRA §1, §2, §5 from cloud.md; ARCHITECTURE §3, §4,
   §5 and INFRA §4 behind the code; EDITOR §2 and §4 behind the brief and `write_edl`); `.gitignore`
   matched `.claude/state/` only at the root (L305) and missed `*.tfvars`, `tfplan.json`, `crash.log`;
@@ -50,9 +50,9 @@ MAIN-NEXT in progress (13 Oct 2026): task 1, the parked docs and config (branch 
 - After: INFRA §1 first-deploy order with `make spend-cap` and `make github-env`; §2 the sampled request
   log exclusion (F415) and the registry's scanning off (F416); §4 two approvals (plan and apply both in
   `beta`, F411) and how smoke reads; §5 the Cloud Run spend cap (F414). ARCHITECTURE §3 the launcher is
-  at most once and reads `queue.run_token`; §4 the worker claims the token by setting
-  `queue.claimed_at` in a transaction (`take_slot` already writes `started_at`); §5 the
-  conditional projectIamAdmin (F410), the `beta`
+  at most once and reads `queue.run_token`; §4 the worker claims the run by recording its token as
+  `queue.claimed_token` in a transaction (`take_slot` already writes `started_at`, and a
+  timestamp would survive a pause and resume); §5 the conditional projectIamAdmin (F410), the `beta`
   environment, `serviceAccountUser` granted by the main root. EDITOR §2 brightness, length ranges and
   reading time; §4 `write_edl` not strict; §10 rows for `ProviderRejected` and `CloudUnavailable`.
   `en.json`, `types.ts` and `StatusViews.tsx` carry both codes (Start again). mypy override for

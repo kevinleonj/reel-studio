@@ -32,7 +32,7 @@ flowchart LR
   API -- 5 reserve place, order, slots --> FS
   API -- 6 upload sessions, signed links --> GCS
   B -- 7 upload chunks, download Reels --> GCS
-  API -- 8 run with ORDER_ID --> JOB
+  API -- 8 run with ORDER_ID, RUN_TOKEN --> JOB
   JOB -- 9 read clips, write sheets and Reels --> GCS
   JOB -- 10 transcribe, voice on only --> G
   JOB -- 11 edit loop and critic --> C
@@ -96,7 +96,7 @@ adapter. One contract test suite runs against every adapter.
 
 | Document | Key fields | Written when | Read when |
 |---|---|---|---|
-| `orders/{order_id}` (32 hex chars, our own random id) | `status`, `settings{style, length_s, text_lang, keep_voice, chips[], note}`, `token_hash`, `week_id`, `place_held`, `stripe{session_id, promo_id, email}`, `files[]` (manifest, ≤40), `bytes_declared`, `queue{queued_at, started_at, lease_until, run_token, claimed_at}`, `stage{name, started_at}`, `stages_done[]`, `result{...}`, `cost{usd_total, by_model{}}`, `error{code, user_message}`, `feedback{rating, comment}`, `emails{link_at, ready_at, failed_at}`, `created_at`, `expires_at` | Checkout creation, webhook, upload-link batch, start, each stage, finish | Status polling, worker, sweep, `reelctl` |
+| `orders/{order_id}` (32 hex chars, our own random id) | `status`, `settings{style, length_s, text_lang, keep_voice, chips[], note}`, `token_hash`, `week_id`, `place_held`, `stripe{session_id, promo_id, email}`, `files[]` (manifest, ≤40), `bytes_declared`, `queue{queued_at, started_at, lease_until, run_token, claimed_token, claimed_at}`, `stage{name, started_at}`, `stages_done[]`, `result{...}`, `cost{usd_total, by_model{}}`, `error{code, user_message}`, `feedback{rating, comment}`, `emails{link_at, ready_at, failed_at}`, `created_at`, `expires_at` | Checkout creation, webhook, upload-link batch, start, each stage, finish | Status polling, worker, sweep, `reelctl` |
 | `limits/week-YYYY-Www` (ISO week) | `count`, `cap` | +1 in the checkout transaction; −1 on expiry or failure | Checkout |
 | `limits/capacity` | `slots{order_id: lease_until}` (at most 2), `paused` | Start, finish, sweep, spend-limit error, `reelctl resume` | Start, sweep |
 
@@ -114,7 +114,7 @@ done | failed | expired ─"Delete my files now"→ deleted
 Rules (each has a test in `tests/contract/test_orders.py`):
 - **One place per checkout:** the week counter and the order are created in one transaction; `count < cap` is checked inside it (F51).
 - **Idempotent fulfilment:** `mark_paid` and `expire` do nothing when the status already moved. Webhook and success page both call `fulfil(order_id)`.
-- **One run per order:** `queued → running` happens inside the `take_slot` transaction, which also writes a random `queue.run_token`; the launcher passes `ORDER_ID` and `RUN_TOKEN` as overrides, and the worker exits at once unless the order is `running` with that token. The worker then claims the token in a transaction that sets `queue.claimed_at` (a field `take_slot` never writes; `started_at` is the slot's start), and exits if it is already set, so a second execution with the same token does nothing.
+- **One run per order:** `queued → running` happens inside the `take_slot` transaction, which also writes a random `queue.run_token`; the launcher passes `ORDER_ID` and `RUN_TOKEN` as overrides, and the worker exits at once unless the order is `running` with that token. The worker then claims the run in a transaction that records its token as `queue.claimed_token` (with `claimed_at`), and exits if `claimed_token` already equals its `RUN_TOKEN`, so a second execution with the same token does nothing. Keyed to the token, not to a timestamp: an order resumed after a pause (D26) keeps its old `queue` fields, and `take_slot` gives it a new token, which claims again.
 - **Lease:** `lease_until = start + 70 min` (job timeout 60 + 10). The sweep fails orders whose lease ran out and frees the slot.
 - **Service pause (D26):** a spend-limit error sets `limits/capacity.paused = true`, frees the slot and puts the order back at the front of the queue; nothing launches until `reelctl resume`.
 - **Abandoned (D25):** the sweep moves `paid` orders not started within 7 days to `abandoned`.

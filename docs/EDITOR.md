@@ -44,8 +44,9 @@ Style to prompt files (from `config/styles.toml`):
 
 **First user message** (`prompts/brief.md.j2`): the order settings (style, target length, text
 language, voice on or off), the file inventory from `shots.json` (clip id, kind, duration, fps,
-orientation, has audio, sharpest window, motion), the brightness of each clip (mean luma 0-255, with QA's `luma_jump` limit for a cut), the order
-target with every format's length range from the edit-list checks, the text reading time (at least
+orientation, sharpest window, motion), the brightness of each clip (mean luma 0-255, with QA's
+`luma_jump` limit for a cut), the order target with every format's length range from the
+edit-list checks, the text reading time (at least
 `read_min_s`, and one second per `read_chars_per_s` characters), the list of sheet ids, the
 transcript (voice on),
 the defaults that replace the kit's questions (no names, prices or facts printed unless the note

@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 GIT = shutil.which("git")
+GIT_TIMEOUT_S = 30  # a local index lookup; anything near this is a hung git
 ROOT = Path(__file__).resolve().parents[2]
 # A hook writes .claude/state/ under the session's working directory, which may be web/ (L305).
 MUST_IGNORE = (
@@ -28,6 +29,7 @@ def _ignored(path: str) -> bool:
         [GIT, "check-ignore", "--no-index", "--quiet", path],
         cwd=ROOT,
         check=False,
+        timeout=GIT_TIMEOUT_S,
     )
     # 0 ignored, 1 not ignored; anything else (not a repository, a bad path) is an error.
     assert result.returncode in (0, 1), f"git check-ignore failed with {result.returncode}"

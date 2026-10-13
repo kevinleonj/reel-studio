@@ -129,5 +129,6 @@ Levers, largest first: (1) caching stays on and stable (forgetting it costs abou
 Hard stops: Anthropic workspace limit $100 a month (D59); $5 per Reel (D37); 2 running jobs and
 50 Reels a week (D55); API max 2 instances (D51); Cloud Run spend cap 30 units a month in the
 billing account's currency, gross cost, pauses new Cloud Run usage until next month or a lift
-(set by `make spend-cap`, lifted by `make spend-cap-lift`; enforcement can lag up to a day, F414).
+(set by `make spend-cap`, lifted by `make spend-cap-lift`; enforcement is not instant, cost data
+arrives within a day and sometimes later, and usage until the cap acts is billed, F414).
 Warning only: the $10 Google Cloud budget alert.
