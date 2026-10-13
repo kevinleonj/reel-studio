@@ -432,3 +432,24 @@ def test_only_a_running_order_can_be_claimed(orders: tuple[OrderStore, FrozenClo
     assert store.claim_run("a" * 32, "any-token") is False
     assert store.claim_run("b" * 32, token) is False
     assert store.claim_run("c" * 32, "any-token") is False  # no such order
+
+
+def test_a_run_resumed_after_a_pause_claims_with_its_new_token(
+    orders: tuple[OrderStore, FrozenClock],
+) -> None:
+    """A spend-limit pause keeps the order's queue fields (D26); the resumed run gets a new
+    token from take_slot and must be able to claim, while the old token stays spent."""
+    store, _ = orders
+    first = running(store, "a" * 32)
+    assert store.claim_run("a" * 32, first) is True
+    store.pause("a" * 32, code=ErrorCode.SPEND_LIMIT)
+    assert store.resume_paused() == ["a" * 32]
+    assert store.take_slot("a" * 32) is True
+    doc = store.get("a" * 32)
+    assert doc is not None and isinstance(doc["queue"], dict)
+    second = str(doc["queue"]["run_token"])
+
+    assert second != first
+    assert store.claim_run("a" * 32, first) is False
+    assert store.claim_run("a" * 32, second) is True
+    assert store.claim_run("a" * 32, second) is False

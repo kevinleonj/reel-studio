@@ -2,7 +2,8 @@
 9 to 13).
 
 The launcher starts the job with ORDER_ID and RUN_TOKEN as overrides (gcp_launcher). The job
-claims the run first (`claim_run`): when another execution already has it, or the order is no
+claims the run first (`claim_run`, `queue.claimed_token`): when another execution already has
+it, or the order is no
 longer running, it exits without touching anything. Then it downloads the files Start listed,
 runs the engine, uploads both Reels, finishes the order, emails the result and starts the next
 waiting order. Nothing is retried: Cloud Run runs the job with 0 retries (D52), because a second

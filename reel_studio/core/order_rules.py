@@ -247,16 +247,17 @@ def abandon(doc: Doc | None, limits: QueueLimits, now: datetime) -> Doc | None:
 
 
 def claim_run(doc: Doc | None, run_token: str, now: datetime) -> Doc | None:
-    """The editor's first write (ARCHITECTURE §4): `queue.claimed_at` once, only for a running
-    order with this token. `take_slot` writes `started_at`, never `claimed_at`, so a second
-    execution with the same token finds it set and does nothing."""
+    """The editor's first write (ARCHITECTURE §4): records this run's token as
+    `queue.claimed_token`, only for a running order with that token, so a second execution with
+    the same token does nothing. Keyed to the token: a run resumed after a pause (D26) keeps the
+    old queue fields and gets a new token from take_slot, which claims again."""
     if doc is None or doc["status"] != "running":
         return None
     queue = doc.get("queue") or {}
-    if queue.get("run_token") != run_token or "claimed_at" in queue:
+    if queue.get("run_token") != run_token or queue.get("claimed_token") == run_token:
         return None
     changed = deepcopy(doc)
-    changed["queue"] = {**queue, "claimed_at": now}
+    changed["queue"] = {**queue, "claimed_token": run_token, "claimed_at": now}
     return changed
 
 
