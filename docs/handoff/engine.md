@@ -3,6 +3,8 @@
 Written by the engine lane only. Newest entry on top.
 
 ## Status board
+- Kevin: run `make ab-pick` before reading the round 3 entry below; it names the engines and
+  their scores, which would anchor the blind picks.
 - Round 3 (13 Oct, Kevin: budget $20, compare the edit lists, tune, rerun only our arm on
   cookies, creami, meat, mercadona). Comparison of the kept cuts (`edl.json` in
   `out/ab/<day>/<fixture>/new-*` against the kit's `work/<job>/edl.json`):
