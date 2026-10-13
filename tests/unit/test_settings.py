@@ -144,6 +144,11 @@ def test_one_stripe_key_is_not_enough(make_settings: MakeSettings) -> None:
         make_settings(WebSettings, payments="stripe", stripe_secret_key="x")
 
 
+# The laptop values .env.example fills are all WebSettings needs; every other class waits for
+# a key, a path or an address only the person running it has.
+LOADS_FROM_THE_EXAMPLE = {WebSettings}
+
+
 @pytest.mark.parametrize("cls", SETTINGS_CLASSES, ids=lambda cls: cls.__name__)
 def test_fresh_env_example_copy_reports_only_missing_values(
     cls: type[AppSettings], tmp_path: Path
@@ -151,10 +156,12 @@ def test_fresh_env_example_copy_reports_only_missing_values(
     dotenv = tmp_path / ".env"
     shutil.copy(ENV_EXAMPLE, dotenv)  # what `make setup` gives a new clone
 
-    try:
-        cls(_env_file=dotenv)  # a class whose laptop values the example fills loads as is
-    except ValidationError as caught:
-        assert {error["type"] for error in caught.errors()} == {"missing"}
+    if cls in LOADS_FROM_THE_EXAMPLE:
+        cls(_env_file=dotenv)
+        return
+    with pytest.raises(ValidationError) as caught:
+        cls(_env_file=dotenv)
+    assert {error["type"] for error in caught.value.errors()} == {"missing"}
 
 
 def test_blank_optional_key_is_none(tmp_path: Path) -> None:
@@ -207,6 +214,19 @@ CLOUD_VALUES = {
     "editor_job": "projects/test-project/locations/test-region/jobs/reel-editor",
     "resend_sending_key": "test-sending-key",
 }
+
+
+def test_a_settings_error_never_echoes_a_key(make_settings: MakeSettings) -> None:
+    """A model-level rule makes pydantic print the input, cut in the middle: the last field,
+    the Resend key, kept its tail (task 2 review C1)."""
+    key = "sending-key-QwErTyUiOpAsDfGhJkLzXc"
+    with pytest.raises(ValidationError) as caught:
+        make_settings(
+            RuntimeSettings, **{**CLOUD_VALUES, "editor_job": None, "resend_sending_key": key}
+        )
+    text = str(caught.value)
+    assert "EDITOR_JOB" in text
+    assert not [key[i : i + 6] for i in range(len(key) - 5) if key[i : i + 6] in text]
 
 
 def test_the_tier_is_chosen_never_defaulted() -> None:

@@ -14,12 +14,14 @@ from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_FILE = ".env"
-# jobs.run takes the job's full resource name (F30); a short name would fail at the first Start.
+# jobs.run takes the job's full resource name (F92); a short name would fail at the first Start.
 JOB_NAME = re.compile(r"^projects/[^/]+/locations/[^/]+/jobs/[^/]+$")
 
 
 class _Base(BaseSettings):
     # extra="ignore": .env holds every tier's variables; each class reads only its own.
+    # hide_input_in_errors: a model-level rule makes pydantic print the input, which holds keys
+    # (task 2 review C1).
     # env_ignore_empty: a blank `KEY=` (as copied from .env.example) counts as missing, so a
     # required value fails by name and an optional one falls back to its default (F81).
     model_config = SettingsConfigDict(
@@ -28,6 +30,7 @@ class _Base(BaseSettings):
         env_ignore_empty=True,
         extra="ignore",
         frozen=True,
+        hide_input_in_errors=True,
     )
 
 
