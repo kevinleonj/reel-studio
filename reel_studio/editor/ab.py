@@ -1,8 +1,8 @@
 """`make ab` (STEP-04, docs/EDITOR.md §11): the new engine against the old kit on the same files.
 
 Each fixture in limits.toml [eval.ab] gets the same files and the same order on both sides (the
-kit takes at most 15 files, videos first). The new engine runs `make` with Sonnet; the old kit
-runs its own make_reel.py (ab_kit). One judge (ab_judge) scores both finished cuts.
+kit takes at most 15 files, spread across the shoot). The new engine runs `make` with Sonnet; the
+old kit runs its own make_reel.py (ab_kit). One judge (ab_judge) scores both finished cuts.
 
 Money is guarded three ways: a free preflight before the first paid call; a ledger summed from
 every ab-runs.json on disk, so a rerun cannot spend the budget twice; and ab-runs.json written
@@ -41,7 +41,6 @@ SUPERSEDED = "superseded_paid_usd"  # paid runs withdrawn from the comparison
 OUT = Path("out") / "ab"
 SIDES = ("new", "old")
 MEDIA_EXT = {e.lower() for e in (*constants.VIDEO_EXT, *constants.IMAGE_EXT)}
-VIDEO_EXT = {e.lower() for e in constants.VIDEO_EXT}
 STOPS = (
     SpendLimitReached,
     ProviderRejected,
