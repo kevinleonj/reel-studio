@@ -299,7 +299,7 @@ def wire_main(monkeypatch: pytest.MonkeyPatch, fake: FakeBudgets) -> None:
         return real_client(transport=httpx.MockTransport(fake), **kwargs)  # type: ignore[arg-type]
 
     monkeypatch.setattr(spend_cap, "run", FakeGcloud())
-    monkeypatch.setattr(spend_cap, "CloudSettings", FakeSettings)
+    monkeypatch.setattr(spend_cap, "CloudProjectSettings", FakeSettings)
     monkeypatch.setattr(httpx, "Client", client)  # the module spend_cap uses
 
 
@@ -403,7 +403,7 @@ def test_main_client_has_the_configured_timeout(monkeypatch: pytest.MonkeyPatch)
         return real_client(transport=httpx.MockTransport(FakeBudgets()), **kwargs)  # type: ignore[arg-type]
 
     monkeypatch.setattr(spend_cap, "run", FakeGcloud())
-    monkeypatch.setattr(spend_cap, "CloudSettings", FakeSettings)
+    monkeypatch.setattr(spend_cap, "CloudProjectSettings", FakeSettings)
     monkeypatch.setattr(httpx, "Client", client)
 
     spend_cap.main([])

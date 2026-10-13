@@ -41,6 +41,19 @@ MAIN-NEXT in progress (13 Oct 2026): task 1 is PR #17 (branch `parked-docs`)
   (one class per consumer; a test keeps the two in step). A lane that needs a new variable asks here.
 
 ## Log
+### 13 Oct 2026 — CloudSettings split (Kevin, before MAIN-NEXT task 3; branch `cloud-settings-split`)
+- Before: `make gcp-project` and `make bootstrap-plan` read `CloudSettings`, which required the
+  two cloud model keys, the Resend key and the Cloudflare token, though they use only the project,
+  billing account and region (the GitHub ids come from `gh`); STEP-08 said `gcloud config
+  get-value project`.
+- After: `CloudProjectSettings` (`GCP_PROJECT`, `GCP_REGION`, `GCP_BILLING_ACCOUNT`) for
+  `gcp-project`, `bootstrap-plan` and `spend-cap`; `CloudSettings` keeps the keys and the email
+  domain, and `secrets-push` and `dns` read both; `stripe-setup` reads only the project class.
+  STEP-08 uses `gcloud config get project` (docs/cli-verified.md).
+- Tests first: `test_gcp_project_runs_without_any_api_key`,
+  `test_bootstrap_plan_runs_without_any_api_key` (only the three project values set) and
+  `test_the_project_setup_holds_no_key` failed (missing keys, missing class), then passed.
+
 ### 13 Oct 2026 — MAIN-NEXT task 1: the parked docs and config (PR #17, branch `parked-docs`)
 - Before: the lanes' "For MAIN" doc edits waited (INFRA §1, §2, §5 from cloud.md; ARCHITECTURE §3, §4,
   §5 and INFRA §4 behind the code; EDITOR §2 and §4 behind the brief and `write_edl`); `.gitignore`

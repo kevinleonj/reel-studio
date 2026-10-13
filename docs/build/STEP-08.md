@@ -12,7 +12,7 @@ Before the first apply: run the reviewer agent on the Terraform and on this plan
 
 ```bash
 git rev-parse --show-toplevel && git status --short
-gcloud auth list --format='value(account)' && gcloud config get-value project
+gcloud auth list --format='value(account)' && gcloud config get project
 grep -o '^\(GCP_BILLING_ACCOUNT\|CLOUDFLARE_API_TOKEN\|RESEND_API_KEY\)=' .env
 terraform version | head -1                                  # 1.16.5
 ```

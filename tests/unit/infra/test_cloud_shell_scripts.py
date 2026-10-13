@@ -295,3 +295,43 @@ def test_gcloud_secrets_missing_container_raises() -> None:
 
     with pytest.raises(_shell.CommandError):
         store.ready("resend-api-key")
+
+
+# ---------------------------------------------------------------- what each command needs
+
+PROJECT_ONLY = {
+    "GCP_PROJECT": PROJECT,
+    "GCP_REGION": "europe-west1",
+    "GCP_BILLING_ACCOUNT": "000000-000000-000000",
+}
+
+
+def project_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only the project values: none of the four API keys (Kevin, 13 Oct 2026)."""
+    for name, value in PROJECT_ONLY.items():
+        monkeypatch.setenv(name, value)
+
+
+def test_gcp_project_runs_without_any_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    project_only(monkeypatch)
+    runner = FakeRunner(answers={"projects describe": json.dumps({"projectId": PROJECT})})
+    monkeypatch.setattr(gcp_project, "run", runner)
+
+    assert gcp_project.main() == 0
+    assert any(f"--project={PROJECT}" in c[0] for c in runner.calls)
+
+
+def test_bootstrap_plan_runs_without_any_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    project_only(monkeypatch)
+    runner = FakeRunner(
+        answers={
+            "gh repo view": "owner/repo\n",
+            "billing accounts describe": json.dumps({"currencyCode": "EUR"}),
+            "gh api": "123\n456\n",
+        }
+    )
+    monkeypatch.setattr(bootstrap_plan, "run", runner)
+
+    assert bootstrap_plan.main() == 0
+    plan_args = [c[0] for c in runner.calls if c[0][0] == "terraform"][-1]
+    assert f"-var=project_id={PROJECT}" in plan_args

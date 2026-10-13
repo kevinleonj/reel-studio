@@ -17,7 +17,7 @@ from pydantic import SecretStr
 
 from reel_studio.adapters.resend_mailer import Backoff
 from reel_studio.core.config import load_cloud
-from reel_studio.settings import CloudSettings
+from reel_studio.settings import CloudProjectSettings, CloudSettings
 from scripts.cloud._shell import CommandError, GcloudSecrets, SecretStore, run, say
 
 RESEND_API = "https://api.resend.com"  # hardcode-ok: vendor base URL (doc ledger: resend)
@@ -213,7 +213,7 @@ def configure(
 
 
 def main() -> int:
-    env = CloudSettings()
+    env, project = CloudSettings(), CloudProjectSettings().gcp_project
     cfg = load_cloud()
     timeout = httpx.Timeout(cfg.dns.http_timeout_s)
     resend = httpx.Client(
@@ -240,7 +240,7 @@ def main() -> int:
             apis,
             env.email_domain,
             settings,
-            GcloudSecrets(run, env.gcp_project, cfg.gcloud.timeout_s),
+            GcloudSecrets(run, project, cfg.gcloud.timeout_s),
             time.monotonic,
         )
     except (DnsError, CommandError, ValueError) as exc:
