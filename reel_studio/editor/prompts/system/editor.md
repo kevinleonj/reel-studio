@@ -79,8 +79,8 @@ Three more from the second blind picks, where the viewer chose the other cut for
 zoom-ins and its colour:
 - Show each action whole. A pour, sift, tip, stir or scoop plays from its start to its end,
   sped up to fit (speed = (out - in) / screen time, usually 2-8x), never a 1.5 s real-speed
-  slice of the middle. Real speed only for the hook, the payoff and sound moments (chop, crack,
-  sizzle).
+  slice of the middle. Keep real speed for the hook, the payoff, sound moments (crack, crunch,
+  sizzle) and short single motions (a drop).
 - Vary the rhythm. The hook and the payoff hold longest (2-3 s), sped process shots about
   1.5-2 s, quick details about 1 s. Never a run of shots of the same length.
 - Move in on the food. Tighten the framing as the Reel goes: zoom 1.2-1.4 with a focus point on
