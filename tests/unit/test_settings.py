@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from reel_studio.settings import (
     SETTINGS_CLASSES,
     AppSettings,
+    CloudProjectSettings,
     CloudSettings,
     EditorSettings,
     RuntimeSettings,
@@ -49,6 +50,25 @@ def test_secret_never_appears_in_repr(make_settings: MakeSettings) -> None:
 
     assert "test-cloud-anthropic-key" not in repr(built)
     assert "test-cloud-anthropic-key" not in str(built)
+
+
+def test_the_project_setup_holds_no_key() -> None:
+    """`make gcp-project` and `make bootstrap-plan` read only the project values; the four API
+    keys stay in CloudSettings for the commands that use them (Kevin, 13 Oct 2026)."""
+    built = CloudProjectSettings(
+        _env_file=None,
+        gcp_project="test-project",
+        gcp_region="test-region",
+        gcp_billing_account="000000-000000-000000",
+    )
+
+    assert set(CloudProjectSettings.model_fields) == {
+        "gcp_project",
+        "gcp_region",
+        "gcp_billing_account",
+    }
+    assert built.gcp_project == "test-project"
+    assert not {f for f in CloudSettings.model_fields if f.startswith("gcp_")}
 
 
 def test_payments_off_needs_no_stripe_key(make_settings: MakeSettings) -> None:

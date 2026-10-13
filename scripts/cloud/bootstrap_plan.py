@@ -9,7 +9,7 @@ import json
 import sys
 
 from reel_studio.core.config import load_cloud
-from reel_studio.settings import CloudSettings
+from reel_studio.settings import CloudProjectSettings
 from scripts.cloud._shell import CommandError, Runner, run, say
 
 ROOT = "infra/bootstrap"
@@ -63,7 +63,7 @@ def plan(
 
 
 def main() -> int:
-    settings = CloudSettings()
+    settings = CloudProjectSettings()
     timeout_s = load_cloud().gcloud.timeout_s
     try:
         repository = run(

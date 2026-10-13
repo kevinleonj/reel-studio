@@ -163,12 +163,19 @@ class WebSettings(_Base):
         return self
 
 
-class CloudSettings(_Base):
-    """Google Cloud setup from the laptop: Terraform inputs, secrets push, DNS (STEP-08)."""
+class CloudProjectSettings(_Base):
+    """The Google Cloud project from the laptop (STEP-08): `make gcp-project`,
+    `make bootstrap-plan` and `make spend-cap` need these and no API key."""
 
     gcp_project: str
     gcp_region: str
     gcp_billing_account: str
+
+
+class CloudSettings(_Base):
+    """The keys and domain the laptop's cloud setup pushes or uses (STEP-08): secrets push,
+    DNS, Stripe setup. Each command reads CloudProjectSettings too."""
+
     cloud_anthropic_api_key: SecretStr
     cloud_gemini_api_key: SecretStr
     resend_api_key: SecretStr
@@ -176,11 +183,19 @@ class CloudSettings(_Base):
     email_domain: str
 
 
-AppSettings = EditorSettings | BuildSettings | RuntimeSettings | WebSettings | CloudSettings
+AppSettings = (
+    EditorSettings
+    | BuildSettings
+    | RuntimeSettings
+    | WebSettings
+    | CloudProjectSettings
+    | CloudSettings
+)
 SETTINGS_CLASSES: tuple[type[_Base], ...] = (
     EditorSettings,
     BuildSettings,
     RuntimeSettings,
     WebSettings,
+    CloudProjectSettings,
     CloudSettings,
 )

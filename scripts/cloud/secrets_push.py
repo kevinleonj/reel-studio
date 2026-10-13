@@ -11,7 +11,7 @@ import sys
 from pydantic import SecretStr
 
 from reel_studio.core.config import load_cloud
-from reel_studio.settings import CloudSettings, WebSettings
+from reel_studio.settings import CloudProjectSettings, CloudSettings, WebSettings
 from scripts.cloud._shell import CommandError, Runner, rotate_secret, run, say
 
 # settings field -> Secret Manager container (infra/bootstrap/locals.tf secret_ids)
@@ -29,7 +29,7 @@ def push_all(runner: Runner, project: str, values: dict[str, SecretStr], timeout
 
 
 def main() -> int:
-    cloud = CloudSettings()
+    cloud, project = CloudSettings(), CloudProjectSettings().gcp_project
     web = WebSettings()
     if web.stripe_secret_key is None:
         say("secrets-push: STRIPE_SECRET_KEY is not set in .env")
@@ -40,7 +40,7 @@ def main() -> int:
         SECRET_FIELDS["stripe_secret_key"]: web.stripe_secret_key,
     }
     try:
-        push_all(run, cloud.gcp_project, values, load_cloud().gcloud.timeout_s)
+        push_all(run, project, values, load_cloud().gcloud.timeout_s)
     except (CommandError, ValueError) as exc:
         say(f"secrets-push: {exc}")
         return 1

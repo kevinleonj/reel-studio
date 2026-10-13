@@ -19,7 +19,7 @@ from dataclasses import dataclass
 import httpx
 
 from reel_studio.core.config import load_cloud
-from reel_studio.settings import CloudSettings
+from reel_studio.settings import CloudProjectSettings
 from scripts.cloud._shell import STDERR_TAIL_CHARS, CommandError, Runner, run, say
 from scripts.cloud.bootstrap_plan import billing_currency
 
@@ -284,7 +284,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--service", default=cfg.spend_cap.service, help="services/XXXX-XXXX-XXXX")
     parser.add_argument("--lift", action="store_true", help="lift an enforced cap until next month")
     options = parser.parse_args(argv)
-    settings = CloudSettings()
+    settings = CloudProjectSettings()
     project = options.project if options.project is not None else settings.gcp_project
     try:
         api, target = build(
