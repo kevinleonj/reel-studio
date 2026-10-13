@@ -3,7 +3,7 @@
 Written by the web lane only. Newest entry on top.
 
 ## Status board
-Nothing in this lane waits for Kevin's hands. Decisions still open are under Needs Kevin; the `.gitignore` change is under For MAIN.
+Nothing in this lane waits for Kevin's hands. Decisions still open are under Needs Kevin.
 
 ## Done — STEP-07 tasks 8-9 on the laptop (branch `step-07-e2e`)
 - Done: `reelctl dotenv-set` writes through `./.env` when it is a symlink (a worktree's link to the shared file stays a link); `make stripe-laptop` finds or creates the €19 price (lookup key `reel-eur-1900`, the same as STEP-08's `make stripe-setup`) and the 100%-off, duration-once coupon `reel-beta-free`, then writes `STRIPE_PRICE_ID`, `STRIPE_COUPON_ID`, `PAYMENTS=stripe` (test keys only, no gcloud; run twice: created, then found); `make stripe-listen` needs no `stripe login`: the pinned Stripe CLI image gets the key on stdin and its output is masked; `make dispatch-real` runs the real editor on the host against the compose stack.
@@ -47,9 +47,6 @@ mask `whsec_\S+`)
 - S9 and ports: no Gemini-key guard for `keep_voice` in `engine_make_reel` (as
   `cli/reel.py` has); ports 8681 and 1025 are typed in both `compose.yaml` and
   `mk/web.mk`.
-- `web/.claude/state/review_rounds` (untracked) was written by a hook from a session
-  whose cwd was `web/`; the guard blocks removing it and `.gitignore`'s `.claude/state/`
-  is anchored at the root. Delete it by hand.
 
 ## Done — STEP-07 (branch `step-07-gate`)
 - Done: task 2 (checkout with a code, place reserved with the order, released if Stripe fails), task 3 (fulfilment from the webhook, `/fulfil` and the sweep; expiry from the webhook, `/cancel` and the sweep, which asks Stripe first), task 4 (slots and queue: built in STEP-06, now under race tests; `take_slot` writes `queue.run_token`, but nothing passes it to the job yet: that is the real launcher's, with the engine lane's worker command), task 5 (4 race tests, fake and Firestore emulator), task 6 (`reelctl` commands on the ports), task 7 (write count: 19, F312), task 8's make target (`make stripe-listen`, dry-run only); `/api/config` sends the €19 price in Stripe mode.
@@ -72,12 +69,6 @@ mask `whsec_\S+`)
 - An address a mail header refuses is a 422 `invalid_request` at checkout, like the other address checks (the review said 400; 422 is what this API answers for every bad body). Undo: change `invalid()` there.
 - File names over 255 UTF-8 bytes answer 400 `name_too_long` with the file, and the page says "{name} has a name too long to store. Rename it and choose it again." (new words, not in UX.md §2). Undo: revert the item-4 commit.
 - npm audit (7 high): one chain, `braces` ReDoS via `micromatch`/`fast-glob`, all under the `shadcn` CLI. The site imports only `shadcn/tailwind.css` at build time and ships static files, so nothing of it runs in production or on user input. Accepted; `npm audit fix --force` would change shadcn's major. Revisit when shadcn ships a fixed range.
-
-## For MAIN (STEP-07 e2e)
-- `.gitignore`: change `.claude/state/` to `**/.claude/state/`. The current pattern matches only
-  at the root, so a hook's state file written from a session whose cwd was `web/` left the tree
-  dirty and `make ci` could not stamp `.ci-pass` (L305; Kevin deleted the file by hand on
-  12 Oct 2026). The lane guard refuses the edit from this worktree (`.gitignore` is lane main's).
 
 ## For CLOUD (REVIEW-FIXES WEB 2 and STEP-07 review round 1)
 - The storage contract now says a newer session for a name supersedes the older: the Cloud Storage adapter must cancel the older resumable session (DELETE on its session URL; check the docs first). `gcp_storage.create_upload_session` also returns `{key, url}` where the routes read `name`/`upload_url`, and reads `content_type` the routes do not send (review round 1 suggestion); reconcile before the cloud composition root.
@@ -137,6 +128,24 @@ iPhone upload: 345 MiB HEVC .mov from Photos, Safari, home Wi-Fi, complete in 9 
 Stripe e2e order: c86d1bf26052af262931df7ab248a8c5, $0.3587172 (12 Oct 2026, Stripe test mode, a friend code, €0 checkout, six clips, real editor, critic 20, render 2)
 
 ## Log
+
+### 13 Oct 2026 — why the iPhone upload ran at 0.66 MB/s; one real Reel for the phone
+
+- The phone's Wi-Fi was the bottleneck, not the server. The same 345 MiB clip
+  (IMG_0266.mov, 361,733,068 bytes) went from this Mac through the real flow (payments off:
+  checkout, `/uploads`, 44 PUTs of 8 MiB with Content-Range, like the browser) in 2.2 s
+  (162.5 MB/s) to `localhost:8080` and in 2.1 s (170.6 MB/s) to `192.168.0.54:8080`, the
+  address the phone used. Per chunk: median 0.046 s, max 0.082 s; checkout 0.06-0.25 s,
+  upload session 0.02-0.03 s. That is about 250 times the phone's rate, so nothing to fix
+  here. Caveat: the Mac reaches its own LAN address without the radio, so this proves the
+  site and Docker's published port, not the Wi-Fi path.
+- One real Reel from that clip via `make dispatch-real`: order
+  `1338562be0ce1d62aa2ce58265d640a8`, done (render 2, critic 12, $0.2460; one clip gives the
+  critic little to work with). Link given to Kevin for the phone.
+- Stripe put back: `make up` with no overrides; `/api/config` says `"payments":"stripe"`.
+  The order above survived (the emulator container was not recreated).
+- STEP-07 paid total: $0.7209 + $0.2460 = $0.9669 of $3.
+- MAIN landed the `**/.claude/state/` pattern (#17); the For MAIN item is removed.
 
 ### 13 Oct 2026 — STEP-06 task 8: the iPhone upload (Kevin)
 
