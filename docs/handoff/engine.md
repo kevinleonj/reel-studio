@@ -3,6 +3,32 @@
 Written by the engine lane only. Newest entry on top.
 
 ## Status board
+- Round 3 (13 Oct, Kevin: budget $20, compare the edit lists, tune, rerun only our arm on
+  cookies, creami, meat, mercadona). Comparison of the kept cuts (`edl.json` in
+  `out/ab/<day>/<fixture>/new-*` against the kit's `work/<job>/edl.json`):
+
+  | fixture | grade new / kit | zoomed shots new / kit | speed-ups new / kit | shots, mean s, total s new / kit |
+  |---|---|---|---|---|
+  | cookies | warm 0.5 m0.6 / warm 0.6 m0.8 b+0.02 | 3 of 16 (end only) / 5 of 16 (mid) | 0 / 5 (8x, 4.5x, 1.75x, 2x pours and mixes) | 16, 1.66, 26.6 / 16, 1.73, 27.6 |
+  | creami | warm 0.5 m0.6 / reference 0.6 m0.8 | 7 of 9 / 7 of 10 | 0 / 1 (1.8x whole pour) | 9, 1.73, 15.6 / 10, 1.67, 16.7 |
+  | meat | natural 0.5 m0.6 / warm 0.5 m0.8 b+0.03 | 2 of 12 / 13 of 14 | 0 / 3 (3x, 1.9x, 1.6x) | 12, 1.53, 18.4 / 14, 1.83, 25.7 |
+  | mercadona | natural 0.5 m0.6 / warm 0.5 m0.6 | 0 of 8 / 2 of 6 | 0 / 0 | 8, 1.13, 9.1 / 6, 1.43, 8.6 |
+  | pastav2 (new won on colour) | warm 0.5 m0.6 / natural 0.6 m0.8 sat 0.95 | | | |
+
+  Neither engine uses transitions (hard cuts only; the edit list has no transition field).
+  Differences that match Kevin's reasons: colour: our grade is the same on every cut (strength
+  0.5, match 0.6, because editor.md wrote `"match": 0.6` into the instruction); the kit matched at
+  0.8, lifted brightness 0.02-0.03 and chose warm, and the one cut that lost on colour (kit
+  pastav2) was natural and desaturated. Flow: the kit plays each action whole and sped up (a
+  13.6 s pour at 8x, a 6.2 s sift at 4.5x); ours cuts 1.3-1.6 s real-speed slices of almost
+  every shot, so the shot lengths are near uniform and no action completes; our meat cut is 7 s
+  shorter. Zoom-ins: the kit tightens the framing mid-Reel (zoom 1.2-1.4 on process shots, "tighter
+  framing than previous shot") and picks a hook take where the camera pushes in; ours zooms the
+  payoff only (creami excepted, where both zoom). Changes (prompt only, tested): grade
+  `strength 0.6, match 0.8`, warm over natural, brightness 0.02-0.03 when dim, saturation never
+  below 1; "Show each action whole" (sped 2-8x); "Vary the rhythm"; "Move in on the food" (zoom
+  1.2-1.4, push-in hook). Harness: a one-sided REDO now reads the files the kept arm read and a
+  run never rewrites a kept row's files (W1 closed, two tests). Budget: `budget_usd` 20.0.
 - BLOCKED: round 2 blind picks (13 Oct, eval/results/2026-10-12/ab.json) gave old 4, new 1, tie 0
   (cookies, creami, meat, mercadona old; pastav2 new). `scripts/gates/step04.py --local`: `GATE
   step04 FAIL (1 of 11 checks failed)`, only `A/B picks: new engine picked or tied in >= 3 of 5`.
