@@ -2,6 +2,8 @@
 
 - Uploads: the browser PUTs straight to a resumable session this adapter creates, bound to the
   website's origin and capped at the declared size (F32, F33); Cloud Run never carries the bytes.
+  One live session per stored name (the Storage contract): the session URL is kept in a small
+  object under work/, and asking again cancels the older session with a DELETE (F89).
 - Downloads: V4 signed URLs with `Content-Disposition: attachment`, signed without a key file
   through IAM signBlob, which needs roles/iam.serviceAccountTokenCreator on reel-api (F34).
 - Every bucket call has a timeout and the bounded retry from config/cloud.toml, and logs its
@@ -16,6 +18,7 @@ from pathlib import Path, PurePosixPath
 from typing import Protocol
 
 import google.auth
+import httpx
 from google.api_core.exceptions import GoogleAPIError, NotFound
 from google.api_core.retry import Retry
 from google.auth.exceptions import GoogleAuthError
@@ -27,6 +30,7 @@ from google.cloud.storage.retry import DEFAULT_RETRY  # type: ignore[import-unty
 from reel_studio.core import config, ports
 from reel_studio.core.constants import GOOGLE_CLOUD_PLATFORM_SCOPE
 from reel_studio.core.errors import CloudUnavailable
+from reel_studio.core.file_names import check_file_name
 from reel_studio.core.logging import get_logger, latency_ms
 
 log = get_logger(__name__)
@@ -38,6 +42,11 @@ WORK_PREFIX = "work"
 OUTPUT_PREFIX = "out"
 ORDER_PREFIXES = (INPUT_PREFIX, WORK_PREFIX, OUTPUT_PREFIX)
 SIGNED_URL_VERSION = "v4"  # the default is v2 (doc ledger: google-cloud-storage)
+SESSIONS_FOLDER = "upload-sessions"  # work/{order}/upload-sessions/{name}: the live session URL
+SESSION_TYPE = "text/plain"
+# A cancelled JSON-API session answers 499; one already finished or gone answers another 4xx,
+# which also means it takes no more bytes (F89).
+SESSION_CLOSED = frozenset({499, httpx.codes.NOT_FOUND, httpx.codes.GONE})
 
 
 class Blob(Protocol):
@@ -52,6 +61,10 @@ class Blob(Protocol):
     ) -> str: ...
     def generate_signed_url(self, **options: object) -> str: ...
     def download_to_filename(self, filename: str, *, timeout: float, retry: object) -> None: ...
+    def download_as_text(self, *, timeout: float, retry: object) -> str: ...
+    def upload_from_string(
+        self, data: str, *, content_type: str, timeout: float, retry: object
+    ) -> None: ...
     def upload_from_filename(
         self, filename: str, *, content_type: str, timeout: float, retry: object
     ) -> None: ...
@@ -70,6 +83,7 @@ class SigningIdentity:
 
 
 IdentitySource = Callable[[], SigningIdentity]
+CancelSession = Callable[[str], None]
 
 
 @dataclass(frozen=True)
@@ -108,43 +122,96 @@ class AdcIdentity:
         return SigningIdentity(email=email, token=str(self._credentials.token))
 
 
-def input_key(order_id: str, name: str) -> str:
-    if not name or PurePosixPath(name).name != name or name in {".", ".."}:
-        raise ValueError(f"file name {name!r} must be a plain name without folders")
-    return f"{INPUT_PREFIX}/{order_id}/{name}"
+class SessionCanceller:
+    """Cancels a resumable upload session: DELETE on its URL with no body (F89). The session
+    URL is its own credential, so the request carries no Google token."""
+
+    def __init__(self, client: httpx.Client) -> None:
+        self._client = client  # timeout set on the client by the composition root
+
+    def __call__(self, url: str) -> None:
+        started = time.monotonic()
+        fields: dict[str, object] = {"stage": "storage", "event": "cancel_session"}
+        try:
+            response = self._client.delete(url, headers={"Content-Length": "0"})
+        except httpx.HTTPError as exc:
+            log.error(
+                "upload session not cancelled error=%s",
+                type(exc).__name__,
+                extra={**fields, "latency_ms": latency_ms(started), "outcome": "error"},
+            )
+            raise CloudUnavailable(f"cloud storage cancel failed: {type(exc).__name__}") from exc
+        closed = response.status_code in SESSION_CLOSED or response.is_success
+        outcome = "ok" if closed else "error"
+        log.info(
+            "upload session cancel status=%s",
+            response.status_code,
+            extra={**fields, "latency_ms": latency_ms(started), "outcome": outcome},
+        )
+        if not closed:
+            raise CloudUnavailable(f"cloud storage cancel failed: HTTP {response.status_code}")
 
 
 class GcpStorage:
-    def __init__(self, bucket: Bucket, identity: IdentitySource, cfg: StorageConfig) -> None:
+    def __init__(
+        self,
+        bucket: Bucket,
+        identity: IdentitySource,
+        cfg: StorageConfig,
+        *,
+        cancel: CancelSession,
+    ) -> None:
         self._bucket = bucket
         self._identity = identity
         self._cfg = cfg
+        self._cancel = cancel
 
     def create_upload_session(self, order_id: str, file: ports.Record) -> ports.UploadTarget:
-        key = input_key(order_id, str(file["name"]))
+        """A new session for the name, then the older one is cancelled, so at most one of
+        them can finish the object (asking again cannot add uploads beyond the reservation)."""
+        name = check_file_name(str(file["name"]))
         size = file["size"]
         if not isinstance(size, int):
             raise ValueError(f"file size must be an int, not {size!r}")
+        marker = self._bucket.blob(f"{WORK_PREFIX}/{order_id}/{SESSIONS_FOLDER}/{name}")
         with _Logged("upload_session", order_id):
-            url = self._bucket.blob(key).create_resumable_upload_session(
-                content_type=str(file["content_type"]),
+            older = self._read(marker)
+            url = self._bucket.blob(
+                f"{INPUT_PREFIX}/{order_id}/{name}"
+            ).create_resumable_upload_session(
+                content_type=str(file["type"]),
                 size=size,
                 origin=self._cfg.origin,
                 timeout=self._cfg.timeout_s,
                 retry=self._cfg.retry,
             )
-        return {"key": key, "url": url}
+            marker.upload_from_string(
+                url, content_type=SESSION_TYPE, timeout=self._cfg.timeout_s, retry=self._cfg.retry
+            )
+        if older is not None:
+            self._cancel(older)
+        return {"name": name, "upload_url": url}
+
+    def _read(self, marker: Blob) -> str | None:
+        try:
+            return marker.download_as_text(timeout=self._cfg.timeout_s, retry=self._cfg.retry)
+        except NotFound:
+            return None  # the first session for this name
 
     def list_inputs(self, order_id: str) -> list[ports.Record]:
         with _Logged("list_inputs", order_id):
             blobs = list(self._list(f"{INPUT_PREFIX}/{order_id}/"))
-        return [{"key": b.name, "size": b.size, "content_type": b.content_type} for b in blobs]
+        found = [{"name": PurePosixPath(b.name).name, "size": b.size, "key": b.name} for b in blobs]
+        return sorted(found, key=lambda item: str(item["name"]))
 
     def download(self, key: str, path: Path) -> None:
         with _Logged("download", None):
-            self._bucket.blob(key).download_to_filename(
-                str(path), timeout=self._cfg.timeout_s, retry=self._cfg.retry
-            )
+            try:
+                self._bucket.blob(key).download_to_filename(
+                    str(path), timeout=self._cfg.timeout_s, retry=self._cfg.retry
+                )
+            except NotFound:
+                raise FileNotFoundError(key) from None  # the port's answer for a missing key
 
     def upload(self, path: Path, key: str, content_type: str) -> None:
         with _Logged("upload", None):
