@@ -528,6 +528,36 @@ def test_redo_of_one_side_keeps_the_other_sides_cut_and_pays_nothing_for_it(
     assert row["new"]["error"] is None
 
 
+def test_redo_of_one_side_reads_the_files_the_kept_side_read(tmp_path: Path) -> None:
+    """13 Oct: a one-sided rerun took today's file choice while the kept kit cut had another."""
+    _harness(tmp_path, FakeKit(), FakeJudge())
+    first = _json(_harness(tmp_path, FakeKit(), FakeJudge()).run())["fixtures"][0]
+    _touch(tmp_path / "fixtures" / AB.fixtures[0], "IMG_0.mov")  # today's choice would differ
+    again = _harness(tmp_path, FakeKit(), FakeJudge(), script=[edl_turn("e1"), critic_turn(5)])
+    again.redo = (f"{AB.fixtures[0]}:new",)
+    seen: list[list[str]] = []
+    steps_for = again.steps_for
+    again.steps_for = lambda folder: (
+        seen.append(sorted(p.name for p in folder.iterdir())),
+        steps_for(folder),
+    )[1]
+
+    row = _json(again.run())["fixtures"][0]
+
+    assert seen == [first["files"]] == [["IMG_1.mov", "IMG_2.mov"]]
+    assert row["files"] == first["files"]
+
+
+def test_a_run_that_reruns_nothing_keeps_every_rows_files(tmp_path: Path) -> None:
+    before = _json(_harness(tmp_path, FakeKit(), FakeJudge()).run())["fixtures"]
+    for name in AB.fixtures:
+        _touch(tmp_path / "fixtures" / name, "IMG_0.mov")
+
+    after = _json(_harness(tmp_path, FakeKit(), FakeJudge(), script=[]).run())["fixtures"]
+
+    assert [r["files"] for r in after] == [r["files"] for r in before]
+
+
 def test_redo_names_a_side_that_exists() -> None:
     assert ab.parse_redo("cookies:new,meat") == (("cookies", ("new",)), ("meat", ab.SIDES))
     with pytest.raises(ab.PreflightError, match="side"):
