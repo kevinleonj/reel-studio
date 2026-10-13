@@ -85,6 +85,10 @@ def select_inputs(folder: Path, max_files: int) -> list[Path]:
 def stage(files: list[Path], folder: Path) -> Path:
     """A folder of links to `files`, so `make` reads exactly them and the fixture stays as it is."""
     folder.mkdir(parents=True, exist_ok=True)
+    wanted = {f.name for f in files}
+    for stale in folder.iterdir():  # a pass with other files left these, and `make` reads them all
+        if stale.is_symlink() and stale.name not in wanted:
+            stale.unlink()
     for f in files:
         link = folder / f.name
         if not link.is_symlink() and not link.exists():
