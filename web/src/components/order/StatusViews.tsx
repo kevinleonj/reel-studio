@@ -16,8 +16,10 @@ const RETRY: Record<FailureCode, Retry> = {
   cost_cap: "fewerClips",
   output_too_long: "startAgain",
   provider_unavailable: "startAgain",
+  provider_rejected: "startAgain",
   render_error: "startAgain",
   job_killed: "startAgain",
+  cloud_unavailable: "startAgain",
 }
 
 export function Message({ text, action }: { text: string; action?: boolean }) {

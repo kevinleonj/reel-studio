@@ -4,16 +4,16 @@ The main checkout's log and the status of every lane. Lanes write their own file
 Newest entry on top.
 
 ## Status board
-READY TO MERGE: PR #9 (queued with `gh pr merge 9 --auto --squash`; GitHub merges once `ci` passes)
+MAIN-NEXT in progress (13 Oct 2026): task 1 is PR #17 (branch `parked-docs`)
 - Done: starter kit v1.1; STEP-01 (#1), STEP-02 (#2), STEP-03 (#5), STEP-08 short of the real project
-  (#3), STEP-06 except task 8 (#4, #8), `httpx2` and laptop `WebSettings` (#6), auto-merge guardrail
-  (#7), all merged
-- Partly: STEP-00 on the Mac (ffmpeg-full and node@24 not on PATH, see Needs Kevin); PR #9 gives
-  STEP-07 its Stripe settings and adds `.dockerignore`
+  (#3), STEP-06 except task 8 (#4, #8), STEP-07 (#11, #13, #14), `httpx2` and laptop `WebSettings`
+  (#6), auto-merge guardrail (#7), Stripe ids (#9), cloud cost cap (#15, #16), all merged
+- Partly: STEP-00 on the Mac (see Needs Kevin); STEP-04 (#10 open) and STEP-05 (#12 open, partial)
+  in lane engine; MAIN-NEXT tasks 1-3
 - Blocked: —
-- Not started: STEP-04, STEP-05, STEP-07 (web lane, waits on #9), STEP-09
-- Next: #9 merges by itself; lane web then wires `stripe_price_id`/`stripe_coupon_id` into the Stripe
-  adapter and `reelctl codes create`
+- Not started: STEP-09
+- Next: MAIN-NEXT task 2 (cloud composition), then task 3. Task 3's claim follows ARCHITECTURE §4
+  (`queue.claimed_token`), not the `queue.started_at` wording in MAIN-NEXT.md and cloud.md
 
 ## Lanes
 | Lane | Worktree | Steps | File |
@@ -24,7 +24,9 @@ READY TO MERGE: PR #9 (queued with `gh pr merge 9 --auto --squash`; GitHub merge
 | cloud | `~/projects/reel/reel-studio-cloud` | 08 | `docs/handoff/cloud.md` |
 
 ## Needs Kevin
-- Merge PR #1 (STEP-01). The three lanes wait for it.
+- D35 in the decisions file still says `write_edl` is strict; since 11 Oct it is not (F211, engine.md
+  Needs Kevin 20). The file is locked (a hook blocks edits), so that line is yours; EDITOR.md §4 now
+  says so.
 - Two more footage folders in `REEL_FIXTURES_DIR` before STEP-04 (5 needed, 3 present).
 - STEP-00 leftovers on the Mac, needed from STEP-02 (ffmpeg) and STEP-06 (node): `command -v ffmpeg` is
   `/opt/homebrew/bin/ffmpeg` (plain, no zscale), and `node` is Homebrew Node 26, which fails to start
@@ -39,6 +41,33 @@ READY TO MERGE: PR #9 (queued with `gh pr merge 9 --auto --squash`; GitHub merge
   (one class per consumer; a test keeps the two in step). A lane that needs a new variable asks here.
 
 ## Log
+### 13 Oct 2026 — MAIN-NEXT task 1: the parked docs and config (PR #17, branch `parked-docs`)
+- Before: the lanes' "For MAIN" doc edits waited (INFRA §1, §2, §5 from cloud.md; ARCHITECTURE §3, §4,
+  §5 and INFRA §4 behind the code; EDITOR §2 and §4 behind the brief and `write_edl`); `.gitignore`
+  matched `.claude/state/` only at the root (L305) and missed `*.tfvars`, `tfplan.json`, `crash.log`;
+  `provider_rejected` and `cloud_unavailable` had no message, so the order page showed the generic
+  cutting failure; `gcp_storage.py` carried a local `type: ignore[import-untyped]`.
+- After: INFRA §1 first-deploy order with `make spend-cap` and `make github-env`; §2 the sampled request
+  log exclusion (F415) and the registry's scanning off (F416); §4 two approvals (plan and apply both in
+  `beta`, F411) and how smoke reads; §5 the Cloud Run spend cap (F414). ARCHITECTURE §3 the launcher is
+  at most once and reads `queue.run_token`; §4 the worker claims the run by recording its token as
+  `queue.claimed_token` in a transaction (`take_slot` already writes `started_at`, and a
+  timestamp would survive a pause and resume); §5 the conditional projectIamAdmin (F410), the `beta`
+  environment, `serviceAccountUser` granted by the main root. EDITOR §2 brightness, length ranges and
+  reading time; §4 `write_edl` not strict; §10 rows for `ProviderRejected` and `CloudUnavailable`.
+  `en.json`, `types.ts` and `StatusViews.tsx` carry both codes (Start again). mypy override for
+  `google.cloud.storage.*` (F88: 3.17.0 has no `py.typed`; mypy fails without the override).
+  `.dockerignore` already existed (#9).
+- Tests first: `tests/contract/test_web_copy.py` (both codes in `FAILED_CODES`) and
+  `tests/unit/test_gitignore.py` (`git check-ignore --no-index` on nested state and Terraform files)
+  failed, then passed.
+- Decided by standing orders: `roles/iam.serviceAccountUser` stays in `infra/main/iam.tf`, where the
+  accounts are created, and ARCHITECTURE §5 now says so (cloud.md "your call"). Why: nothing is applied
+  yet, and moving the accounts to bootstrap would put every account change behind Kevin's manual apply.
+  Undo: move the three accounts and the grant into `infra/bootstrap/` and revert the §5 row.
+- Not done here: cloud.md's hook items (`chore(auto)`, `gate-hardcode.sh`) are Kevin's global hooks;
+  the review-verdict path in `.claude/lanes.json` is protected.
+
 ### 11 Oct 2026 — step07-settings (PR #9): Stripe ids and .dockerignore
 - Before: `WebSettings` had no Stripe price or coupon id (web.md "For MAIN (STEP-07)"); no
   `.dockerignore`, so every build context carried the dotenv file (web.md "For MAIN").

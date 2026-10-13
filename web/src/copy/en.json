@@ -142,6 +142,8 @@
         "cost_cap": "This one needed more editing than our $5 limit allows. Try again with fewer or shorter clips.",
         "output_too_long": "Something broke while planning. Kevin has been notified.",
         "provider_unavailable": "A service we use was down. Try again with the same code.",
+        "provider_rejected": "Something broke while planning. Kevin has been notified.",
+        "cloud_unavailable": "A service we use was down. Try again with the same code.",
         "render_error": "Something broke while cutting. Kevin has been notified.",
         "job_killed": "Something broke while cutting. Kevin has been notified."
       }
