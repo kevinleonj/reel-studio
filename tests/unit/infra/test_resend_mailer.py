@@ -106,7 +106,7 @@ def test_transient_failure_is_retried_with_backoff(transient: httpx.Response | E
     assert len({r.headers["Idempotency-Key"] for r in recorder.requests}) == 1
 
 
-def test_retries_are_bounded_then_cloud_unavailable() -> None:
+def test_retries_are_bounded_then_delivery_failed() -> None:
     recorder = Recorder(*[httpx.Response(503, json={})] * (RETRIES + 1))
     sleeps: list[float] = []
 

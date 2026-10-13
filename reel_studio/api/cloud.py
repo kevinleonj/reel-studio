@@ -66,7 +66,7 @@ def google_clients(
     """The real clients; imported here so the laptop never loads the Google client libraries.
     reel-api passes Resend's request-path timeout, the editor job its own (config/cloud.toml)."""
     from google.cloud import run_v2  # noqa: PLC0415 (api extra, Cloud Run only)
-    from google.cloud.storage import Client  # type: ignore[import-untyped]  # noqa: PLC0415
+    from google.cloud.storage import Client  # noqa: PLC0415 (F88: untyped, overridden)
 
     values = runtime.cloud()
     return CloudClients(

@@ -32,7 +32,8 @@ class ErrorCode(StrEnum):
     BAD_TYPE = "bad_type"
     NO_FILES = "no_files"
     NAME_TOO_LONG = "name_too_long"
-    # cloud adapters (STEP-08): Cloud Storage, Cloud Run, Resend after our retries
+    # cloud adapters (STEP-08): Cloud Storage and Cloud Run after our retries (Resend raises
+    # DeliveryFailed, which callers log)
     CLOUD_UNAVAILABLE = "cloud_unavailable"
 
 
@@ -66,7 +67,7 @@ class ApiError(ReelError):
 
 
 class CloudError(ReelError):
-    """A Google Cloud or Resend call failed after our retries (storage, launcher, mailer)."""
+    """A Google Cloud call failed after our retries (storage, launcher)."""
 
 
 BOUNDARIES: tuple[type[ReelError], ...] = (

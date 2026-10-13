@@ -3,8 +3,7 @@
 Written by the web lane only. Newest entry on top.
 
 ## Status board
-Everything left in this lane needs Kevin's hands:
-1. **iPhone upload (STEP-06 task 8):** from the phone on the same Wi-Fi, `http://<laptop-ip>:8080`, a 300 MB HEVC clip; then the line `iPhone upload: <result>`.
+Nothing in this lane waits for Kevin's hands. Decisions still open are under Needs Kevin; the `.gitignore` change is under For MAIN.
 
 ## Done — STEP-07 tasks 8-9 on the laptop (branch `step-07-e2e`)
 - Done: `reelctl dotenv-set` writes through `./.env` when it is a symlink (a worktree's link to the shared file stays a link); `make stripe-laptop` finds or creates the €19 price (lookup key `reel-eur-1900`, the same as STEP-08's `make stripe-setup`) and the 100%-off, duration-once coupon `reel-beta-free`, then writes `STRIPE_PRICE_ID`, `STRIPE_COUPON_ID`, `PAYMENTS=stripe` (test keys only, no gcloud; run twice: created, then found); `make stripe-listen` needs no `stripe login`: the pinned Stripe CLI image gets the key on stdin and its output is masked; `make dispatch-real` runs the real editor on the host against the compose stack.
@@ -86,7 +85,7 @@ mask `whsec_\S+`)
 
 ## Done — STEP-06 task 6 (PR #8, merged 11 Oct 2026)
 - Done: task 6. `make up` builds `docker/api.Dockerfile` (web build stage + api), starts api (serves the site), dispatcher (fake editor), Firestore emulator and Mailpit from `compose.yaml`, and waits until the api is healthy; `make down` stops everything; uploads and results in `./data/`. Composition root `reel_studio/api/main.py` (`create` for uvicorn, `dispatch` for the dispatcher), tested with fakes.
-- Partly: the step06 gate — it also needs `iPhone upload:` (task 8, Kevin) and analytics off on the laptop (below).
+- Done since: task 8 (Kevin's iPhone upload, 13 Oct 2026, Evidence lines) and analytics off on the laptop (12 Oct 2026).
 - Blocked: nothing else.
 - Next: STEP-07 (above).
 
@@ -134,9 +133,16 @@ mask `whsec_\S+`)
 - Kevin's global hook commits every edit as `chore(auto)`; the branch was rebuilt into logical commits on top of `origin/main` before the push (TONIGHT.md rule).
 
 ## Evidence lines (the gates read these)
+iPhone upload: 345 MiB HEVC .mov from Photos, Safari, home Wi-Fi, complete in 9 min 4 s (0.66 MB/s; server side measured fast, likely the phone's Wi-Fi) (Kevin, 13 Oct 2026)
 Stripe e2e order: c86d1bf26052af262931df7ab248a8c5, $0.3587172 (12 Oct 2026, Stripe test mode, a friend code, €0 checkout, six clips, real editor, critic 20, render 2)
 
 ## Log
+
+### 13 Oct 2026 — STEP-06 task 8: the iPhone upload (Kevin)
+
+- Before: the Status board's only item. After: done by Kevin, with the line above. A 345 MiB
+  HEVC clip from Photos in Safari over home Wi-Fi completed in 9 min 4 s (0.66 MB/s). He found
+  the server side fast, so the limit is likely the phone's Wi-Fi link. No resume was needed.
 
 ### 12 Oct 2026 — STEP-07 tasks 8-9 on the laptop (branch `step-07-e2e`)
 

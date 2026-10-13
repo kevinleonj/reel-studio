@@ -4,16 +4,18 @@ The main checkout's log and the status of every lane. Lanes write their own file
 Newest entry on top.
 
 ## Status board
-READY TO MERGE: PR #9 (queued with `gh pr merge 9 --auto --squash`; GitHub merges once `ci` passes)
+MAIN-NEXT in progress (13 Oct 2026): task 1 merged (#17); task 2 on branch `cloud-wiring`
 - Done: starter kit v1.1; STEP-01 (#1), STEP-02 (#2), STEP-03 (#5), STEP-08 short of the real project
-  (#3), STEP-06 except task 8 (#4, #8), `httpx2` and laptop `WebSettings` (#6), auto-merge guardrail
-  (#7), all merged
-- Partly: STEP-00 on the Mac (ffmpeg-full and node@24 not on PATH, see Needs Kevin); PR #9 gives
-  STEP-07 its Stripe settings and adds `.dockerignore`
+  (#3), STEP-06 except task 8 (#4, #8), STEP-07 (#11, #13, #14), `httpx2` and laptop `WebSettings`
+  (#6), auto-merge guardrail (#7), Stripe ids (#9), cloud cost cap (#15, #16), MAIN-NEXT task 1
+  (#17), all merged
+- Partly: STEP-00 on the Mac (see Needs Kevin); STEP-04 (#10 open) and STEP-05 (#12 open, partial)
+  in lane engine; MAIN-NEXT tasks 2-3
 - Blocked: —
-- Not started: STEP-04, STEP-05, STEP-07 (web lane, waits on #9), STEP-09
-- Next: #9 merges by itself; lane web then wires `stripe_price_id`/`stripe_coupon_id` into the Stripe
-  adapter and `reelctl codes create`
+- Not started: STEP-09
+- Next: MAIN-NEXT task 3 (`reel job`, branch `editor-job`) after task 2 merges. Task 3's claim
+  follows ARCHITECTURE §4 (`queue.claimed_token`), not the `queue.started_at` wording in
+  MAIN-NEXT.md and cloud.md
 
 ## Lanes
 | Lane | Worktree | Steps | File |
@@ -24,7 +26,15 @@ READY TO MERGE: PR #9 (queued with `gh pr merge 9 --auto --squash`; GitHub merge
 | cloud | `~/projects/reel/reel-studio-cloud` | 08 | `docs/handoff/cloud.md` |
 
 ## Needs Kevin
-- Merge PR #1 (STEP-01). The three lanes wait for it.
+- Before the first deploy: set the repository variables `STRIPE_PRICE_ID` and `STRIPE_COUPON_ID`
+  (deploy.yml passes them to Terraform since task 2).
+- Doc gate: `~/.claude/hooks/gate-docs.sh` refuses Write and Edit on files importing `fastapi`,
+  `httpx` or `google` because `.claude/doc-ledger.json` (protected) lists none of them; those test
+  files were written through the shell. Their docs are cited in FACTS (F89-F91) and the cloud
+  lane's `infra/doc-ledger.pending.json`.
+- D35 in the decisions file still says `write_edl` is strict; since 11 Oct it is not (F211, engine.md
+  Needs Kevin 20). The file is locked (a hook blocks edits), so that line is yours; EDITOR.md §4 now
+  says so.
 - Two more footage folders in `REEL_FIXTURES_DIR` before STEP-04 (5 needed, 3 present).
 - STEP-00 leftovers on the Mac, needed from STEP-02 (ffmpeg) and STEP-06 (node): `command -v ffmpeg` is
   `/opt/homebrew/bin/ffmpeg` (plain, no zscale), and `node` is Homebrew Node 26, which fails to start
@@ -39,6 +49,77 @@ READY TO MERGE: PR #9 (queued with `gh pr merge 9 --auto --squash`; GitHub merge
   (one class per consumer; a test keeps the two in step). A lane that needs a new variable asks here.
 
 ## Log
+### 13 Oct 2026 — MAIN-NEXT task 2: reel-api composed for Cloud Run (branch `cloud-wiring`)
+- Before: nothing in `reel_studio/` imported `gcp_storage`, `gcp_launcher` or `resend_mailer`;
+  settings had no bucket or editor-job value although Terraform set `GCS_BUCKET` and `EDITOR_JOB`;
+  on Cloud Run `WebSettings` would have refused to start (Terraform set none of its laptop values);
+  `create()` built LocalStorage and SMTP only; nothing would have launched a queued order in the
+  cloud; GcpStorage answered `{key, url}` and read `content_type` (web.md "For CLOUD"); the link
+  email could take 4 x 15 s inside a 30 s request (cloud.md W7).
+- After: `RuntimeSettings` (split out of `WebSettings`: where orders live and how mail leaves) with
+  `TIER=laptop|cloud`, each tier requiring only its own values; Terraform sets `TIER`,
+  `FIRESTORE_PROJECT`, `EDITOR_JOB` (full resource name), the Stripe ids (new variables, repository
+  variables `STRIPE_PRICE_ID`, `STRIPE_COUPON_ID` in deploy.yml), voice and the site folder;
+  `tests/unit/infra/test_env_contract.py` builds each workload's settings from `locals.tf`.
+  `reel_studio/api/cloud.py` builds GcpStorage, Resend and GcpLauncher; `create()` picks by `TIER`;
+  Start launches waiting orders through `core/dispatch.launch_waiting` (the dispatcher's rule, now
+  shared); `CloudUnavailable` answers 503 `cloud_unavailable`. GcpStorage passes the same contract
+  suite as the fake and the filesystem adapter (`gcs` in `tests/contract/storage_adapters.py`).
+- Tests first: the contract suite's `gcs` cases, the TIER and env-contract tests, the cloud
+  composition tests (module missing) and the Resend budget test failed before the code.
+- Decided by standing orders (each undone by reverting its commit on the branch):
+  - The switch is `TIER` in `RuntimeSettings`, set by Terraform, never guessed from the
+    environment. `RuntimeSettings` exists because the editor job needs site, mail and Firestore
+    values but must not read `WebSettings`, which with `PAYMENTS=stripe` requires Stripe secrets.
+  - The runtimes read Resend's sending-only key as `RESEND_SENDING_KEY`; `RESEND_API_KEY` stays the
+    laptop's full-access key for `make dns` (one variable, one class).
+  - Link email "with one retry": 2 attempts of 8 s plus 1 s of backoff (`[resend] request_*`),
+    tested against the 30 s request timeout read from `locals.tf`. Sending after the response was
+    rejected: Cloud Run gives no CPU after it with request-based billing (F90).
+  - A launch that fails fails the order at once and frees its slot (`launch_waiting`, as the
+    laptop dispatcher already did), instead of leaving it running for the sweep: the sweep cannot
+    authenticate the scheduler yet, and an execution a lost response started exits at its claim.
+  - One live upload session per name: the session URL is kept in
+    `work/<order>/upload-sessions/<name>` and the older session is cancelled with a DELETE (F89).
+    Cost: one read and one write per file per batch on top of the session itself.
+  - Main-lane pull requests outside a step are queued on green CI and a senior PASS, as #9 was:
+    `step01.py` fails on ".github/workflows/ holds exactly ci.yml: found ci.yml, deploy.yml" since
+    STEP-08 added deploy.yml, and `step08.py` needs a live deploy (gates are Kevin's).
+- Follow-ups before the first deploy: the sweep endpoint still refuses every caller
+  (`refuse_all`): it needs the scheduler's OIDC check, or the scheduler gets 401 every 10 minutes
+  and no lease is swept; `FORWARDED_ALLOW_IPS` on the service (web.md); `--build-arg SITE_URL` in
+  deploy.yml (web.md); set the repository variables `STRIPE_PRICE_ID` and `STRIPE_COUPON_ID`;
+  measure the uploads call with 40 files (three bucket calls each).
+- Not run: anything against Google Cloud or Resend; the Firestore emulator cases (only lane web
+  starts containers).
+
+### 13 Oct 2026 — MAIN-NEXT task 1: the parked docs and config (PR #17, branch `parked-docs`)
+- Before: the lanes' "For MAIN" doc edits waited (INFRA §1, §2, §5 from cloud.md; ARCHITECTURE §3, §4,
+  §5 and INFRA §4 behind the code; EDITOR §2 and §4 behind the brief and `write_edl`); `.gitignore`
+  matched `.claude/state/` only at the root (L305) and missed `*.tfvars`, `tfplan.json`, `crash.log`;
+  `provider_rejected` and `cloud_unavailable` had no message, so the order page showed the generic
+  cutting failure; `gcp_storage.py` carried a local `type: ignore[import-untyped]`.
+- After: INFRA §1 first-deploy order with `make spend-cap` and `make github-env`; §2 the sampled request
+  log exclusion (F415) and the registry's scanning off (F416); §4 two approvals (plan and apply both in
+  `beta`, F411) and how smoke reads; §5 the Cloud Run spend cap (F414). ARCHITECTURE §3 the launcher is
+  at most once and reads `queue.run_token`; §4 the worker claims the run by recording its token as
+  `queue.claimed_token` in a transaction (`take_slot` already writes `started_at`, and a
+  timestamp would survive a pause and resume); §5 the conditional projectIamAdmin (F410), the `beta`
+  environment, `serviceAccountUser` granted by the main root. EDITOR §2 brightness, length ranges and
+  reading time; §4 `write_edl` not strict; §10 rows for `ProviderRejected` and `CloudUnavailable`.
+  `en.json`, `types.ts` and `StatusViews.tsx` carry both codes (Start again). mypy override for
+  `google.cloud.storage.*` (F88: 3.17.0 has no `py.typed`; mypy fails without the override).
+  `.dockerignore` already existed (#9).
+- Tests first: `tests/contract/test_web_copy.py` (both codes in `FAILED_CODES`) and
+  `tests/unit/test_gitignore.py` (`git check-ignore --no-index` on nested state and Terraform files)
+  failed, then passed.
+- Decided by standing orders: `roles/iam.serviceAccountUser` stays in `infra/main/iam.tf`, where the
+  accounts are created, and ARCHITECTURE §5 now says so (cloud.md "your call"). Why: nothing is applied
+  yet, and moving the accounts to bootstrap would put every account change behind Kevin's manual apply.
+  Undo: move the three accounts and the grant into `infra/bootstrap/` and revert the §5 row.
+- Not done here: cloud.md's hook items (`chore(auto)`, `gate-hardcode.sh`) are Kevin's global hooks;
+  the review-verdict path in `.claude/lanes.json` is protected.
+
 ### 11 Oct 2026 — step07-settings (PR #9): Stripe ids and .dockerignore
 - Before: `WebSettings` had no Stripe price or coupon id (web.md "For MAIN (STEP-07)"); no
   `.dockerignore`, so every build context carried the dotenv file (web.md "For MAIN").

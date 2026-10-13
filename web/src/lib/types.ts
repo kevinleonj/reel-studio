@@ -72,8 +72,10 @@ export type FailureCode =
   | "cost_cap"
   | "output_too_long"
   | "provider_unavailable"
+  | "provider_rejected"
   | "render_error"
   | "job_killed"
+  | "cloud_unavailable"
 
 export interface ReelVersion {
   kind: "text" | "clean"
