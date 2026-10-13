@@ -25,9 +25,8 @@ Written by the engine lane only. Newest entry on top.
   twice keeps only the last entry; the prompt tests pin phrases, not whole rules; the cross-day
   side-only redo has no saved test. meat and pastav2 rows keep their first-15 files; a later
   REDO on them would pick the spread files, so rerun both sides there, never one.
-- Needs Kevin's hands: round 2 blind picks. Cookies still cannot show its finished tray unless
-  you approve a new file choice and a kit rerun (about $1.9, it fits the $15). For the picks, in
-  a terminal: `cd ~/projects/reel/reel-studio-engine
+- Needs Kevin's hands: round 2 blind picks (cookies is now the spread-file pair, finished tray
+  shown). For the picks, in a terminal: `cd ~/projects/reel/reel-studio-engine
   && make ab-pick`, open the page it prints, type x, y or tie and a reason for each of the 5
   fixtures (mercadona and pastav2 are the round 1 pairs again). Read eval/AB-RESULT.md only after.
   PR #10 waits for the picks: the step04 gate reads the newest ab.json.
