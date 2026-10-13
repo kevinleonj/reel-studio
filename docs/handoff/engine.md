@@ -29,7 +29,12 @@ Written by the engine lane only. Newest entry on top.
   spread file choice fixes that (3d5f3da, both engines rerun 12 Oct, $1.95). 13 Oct: Kevin
   approved the spread-file pair, so f879cac is reverted and the cookies row points at the paid
   12 Oct runs (`out/ab/2026-10-12/cookies/new-210614`, `old-211403`; critic 22 and 23), no new
-  paid run. Ledger $12.90 of $15; a fixture's new cost in the report includes every same-day pass.
+  paid run. The pair is not like for like: the review found our arm read 21 files (the 15 in the
+  row plus IMG_0473, 0475, 0478, 0480, 0482, 0485, links the first-15 passes left in the shared
+  `inputs/` folder; its cut uses 0473, 0475, 0482, 0485), while the kit read the 15. The row's
+  `inputs_note` says so; AB-RESULT.md's "same files" header is wrong for cookies. `stage()` now
+  removes stale links (tested). Cookies still went to old; a clean rerun of our arm is Kevin's
+  call. Ledger $12.90 of $15; a fixture's new cost in the report includes every same-day pass.
 - Open from the round 2 review (not done): "at most four process steps" and "photo at most 1.2 s" pull against the recipe structure
   and the craft reference, and the critic does not know the new rules; REDO with the same name
   twice keeps only the last entry; the prompt tests pin phrases, not whole rules; the cross-day
