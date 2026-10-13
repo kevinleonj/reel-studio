@@ -31,7 +31,8 @@
     },
     "cost_usd": 1.1426696,
     "wall_s": 469.1,
-    "error": null
+    "error": null,
+    "inputs_note": "read 21 files: the 15 in files plus IMG_0473, 0475, 0478, 0480, 0482, 0485 left in the shared inputs/ folder by the first-15 passes; the kit read the 15 (fixed in stage())"
    },
    "old": {
     "critic_total": 23,
