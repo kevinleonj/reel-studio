@@ -73,17 +73,15 @@ Written by the engine lane only. Newest entry on top.
   `inputs_note` says so; AB-RESULT.md's "same files" header is wrong for cookies. `stage()` now
   removes stale links (tested). Cookies still went to old; a clean rerun of our arm is Kevin's
   call. Ledger $12.90 of $15; a fixture's new cost in the report includes every same-day pass.
-- Open from the round 2 review (not done): "at most four process steps" and "photo at most 1.2 s" pull against the recipe structure
-  and the craft reference, and the critic does not know the new rules; REDO with the same name
-  twice keeps only the last entry; the prompt tests pin phrases, not whole rules; the cross-day
-  side-only redo has no saved test. meat and pastav2 rows keep their first-15 files; a later
-  REDO on them would pick the spread files, so rerun both sides there, never one. From the 13 Oct
-  review: `run()` rewrites `row["files"]` for every fixture it visits, even ones it does not rerun
-  (a `REDO=creami:new` changes meat's recorded files), so it should set them only when an arm runs
-  and refuse a one-sided REDO whose files differ; the cross-day `superseded_paid_usd` pop has no
-  test; `max_files` 1 divides by zero in `select_inputs`; `limits.toml:56` still says "videos
-  first" (Kevin's file).
-- Needs Kevin: the round 3 decision in the BLOCKED line above. PR #10 stays open until the
+- Open (not done): "at most four process steps" and "photo at most 1.2 s" pull against the
+  recipe structure, and "photo at most 1.2 s" against "payoff holds 2-3 s" when the only finished
+  shot is a photo; the critic does not know the new rules; REDO with the same name twice keeps
+  only the last entry; the cross-day `superseded_paid_usd` pop has no test; `max_files` 1 divides
+  by zero in `select_inputs`; `read_grade_preview` renders at `default_match` 0.6, so the editor
+  never sees match 0.8 before choosing it; `files` is recorded per row, not per arm.
+- For MAIN: `docs/build/STEP-04.md:8,54` and `docs/build/README.md:14` still say the paid budget
+  is $15 ("STOP if the paid budget would pass $15"); Kevin raised it to $20 on 13 Oct (round 3).
+- Needs Kevin: round 3 blind picks after the rerun (`make ab-pick`). PR #10 stays open until the
   step04 gate passes.
 - Waits on #10 and Kevin: STEP-05 on PR #12 (see that branch's handoff: film the speech
   fixtures; main adds google-genai to the doc ledger)
