@@ -40,6 +40,32 @@ MAIN-NEXT in progress (13 Oct 2026): task 1, the parked docs and config (branch 
   (one class per consumer; a test keeps the two in step). A lane that needs a new variable asks here.
 
 ## Log
+### 13 Oct 2026 — MAIN-NEXT task 1: the parked docs and config (branch `main-parked`)
+- Before: the lanes' "For MAIN" doc edits waited (INFRA §1, §2, §5 from cloud.md; ARCHITECTURE §3, §4,
+  §5 and INFRA §4 behind the code; EDITOR §2 and §4 behind the brief and `write_edl`); `.gitignore`
+  matched `.claude/state/` only at the root (L305) and missed `*.tfvars`, `tfplan.json`, `crash.log`;
+  `provider_rejected` and `cloud_unavailable` had no message, so the order page showed the generic
+  cutting failure; `gcp_storage.py` carried a local `type: ignore[import-untyped]`.
+- After: INFRA §1 first-deploy order with `make spend-cap` and `make github-env`; §2 the sampled request
+  log exclusion (F415) and the registry's scanning off (F416); §4 two approvals (plan and apply both in
+  `beta`, F411) and how smoke reads; §5 the Cloud Run spend cap (F414). ARCHITECTURE §3 the launcher is
+  at most once and reads `queue.run_token`; §4 the worker claims the token by setting
+  `queue.started_at` in a transaction; §5 the conditional projectIamAdmin (F410), the `beta`
+  environment, `serviceAccountUser` granted by the main root. EDITOR §2 brightness, length ranges and
+  reading time; §4 `write_edl` not strict; §10 rows for `ProviderRejected` and `CloudUnavailable`.
+  `en.json`, `types.ts` and `StatusViews.tsx` carry both codes (Start again). mypy override for
+  `google.cloud.storage.*` (F88: 3.17.0 has no `py.typed`; mypy fails without the override).
+  `.dockerignore` already existed (#9).
+- Tests first: `tests/contract/test_web_copy.py` (both codes in `FAILED_CODES`) and
+  `tests/unit/test_gitignore.py` (`git check-ignore --no-index` on nested state and Terraform files)
+  failed, then passed.
+- Decided by standing orders: `roles/iam.serviceAccountUser` stays in `infra/main/iam.tf`, where the
+  accounts are created, and ARCHITECTURE §5 now says so (cloud.md "your call"). Why: nothing is applied
+  yet, and moving the accounts to bootstrap would put every account change behind Kevin's manual apply.
+  Undo: move the three accounts and the grant into `infra/bootstrap/` and revert the §5 row.
+- Not done here: cloud.md's hook items (`chore(auto)`, `gate-hardcode.sh`) are Kevin's global hooks;
+  the review-verdict path in `.claude/lanes.json` is protected.
+
 ### 11 Oct 2026 — step07-settings (PR #9): Stripe ids and .dockerignore
 - Before: `WebSettings` had no Stripe price or coupon id (web.md "For MAIN (STEP-07)"); no
   `.dockerignore`, so every build context carried the dotenv file (web.md "For MAIN").
