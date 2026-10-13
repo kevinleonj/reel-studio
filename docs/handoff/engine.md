@@ -3,8 +3,14 @@
 Written by the engine lane only. Newest entry on top.
 
 ## Status board
-- Kevin: run `make ab-pick` before reading the round 3 entry below; it names the engines and
-  their scores, which would anchor the blind picks.
+- BLOCKED: round 3 blind picks (13 Oct, eval/results/2026-10-13/ab.json) gave old 4, new 1, tie
+  0, the same as round 2. The step04 gate (`--local`, HEAD 8fbbeb9): `GATE step04 FAIL (1 of 11
+  checks failed)`, only `A/B picks: new engine picked or tied in >= 3 of 5`; critic, gates, cost
+  and budget checks pass. Not model-judged, so standing-order rule 5 does not apply; PR #10 is
+  not queued. Kevin's reasons: cookies old "Smarter selection of snippets"; creami old "Better
+  flow"; meat old "No weird horizontal image out of nowhere" (our cut shows a landscape shot);
+  mercadona old "way too short and pointless" (our 4.9 s cut); pastav2 new "Color is better"
+  (round 1 cut, carried). Next is Kevin's call. Ledger $14.51 of $20.
 - Round 3 (13 Oct, Kevin: budget $20, compare the edit lists, tune, rerun only our arm on
   cookies, creami, meat, mercadona). Comparison of the kept cuts (`edl.json` in
   `out/ab/<day>/<fixture>/new-*` against the kit's `work/<job>/edl.json`):
