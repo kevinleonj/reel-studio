@@ -15,32 +15,42 @@ Written by the engine lane only. Newest entry on top.
   | mercadona | natural 0.5 m0.6 / warm 0.5 m0.6 | 0 of 8 / 2 of 6 | 0 / 0 | 8, 1.13, 9.1 / 6, 1.43, 8.6 |
   | pastav2 (new won on colour) | warm 0.5 m0.6 / natural 0.6 m0.8 sat 0.95 | | | |
 
+  Counted from the resolved edit lists: zoomed = zoom > 1 after defaults; speed-up = speed > 1.
   Neither engine uses transitions (hard cuts only; the edit list has no transition field).
-  Differences that match Kevin's reasons: colour: our grade is the same on every cut (strength
-  0.5, match 0.6, because editor.md wrote `"match": 0.6` into the instruction); the kit matched at
-  0.8, lifted brightness 0.02-0.03 and chose warm, and the one cut that lost on colour (kit
-  pastav2) was natural and desaturated. Flow: the kit plays each action whole and sped up (a
-  13.6 s pour at 8x, a 6.2 s sift at 4.5x); ours cuts 1.3-1.6 s real-speed slices of almost
-  every shot, so the shot lengths are near uniform and no action completes; our meat cut is 7 s
-  shorter. Zoom-ins: the kit tightens the framing mid-Reel (zoom 1.2-1.4 on process shots, "tighter
-  framing than previous shot") and picks a hook take where the camera pushes in; ours zooms the
-  payoff only (creami excepted, where both zoom). Changes (prompt only, tested): grade
-  `strength 0.6, match 0.8`, warm over natural, brightness 0.02-0.03 when dim, saturation never
-  below 1; "Show each action whole" (sped 2-8x); "Vary the rhythm"; "Move in on the food" (zoom
-  1.2-1.4, push-in hook). Harness: a one-sided REDO now reads the files the kept arm read and a
-  run never rewrites a kept row's files (W1 closed, two tests). Budget: `budget_usd` 20.0.
-- BLOCKED: round 2 blind picks (13 Oct, eval/results/2026-10-12/ab.json) gave old 4, new 1, tie 0
-  (cookies, creami, meat, mercadona old; pastav2 new). `scripts/gates/step04.py --local`: `GATE
-  step04 FAIL (1 of 11 checks failed)`, only `A/B picks: new engine picked or tied in >= 3 of 5`.
-  The picks are Kevin's, not model-judged, so standing-order rule 5 does not apply; PR #10 is not
-  queued. Kevin's reasons: better colours (cookies), flow (cookies, creami), the zoom in (creami);
-  pastav2 new won on colours. Next is Kevin's call: a round 3 tune (colour grade, flow, zoom) or a
-  STEP-04 decision. A round 3 `make ab REDO=...` cannot start at today's limits: the guard needs
-  ledger + the arm's cap + `judge_reserve_usd` <= budget, and 12.900319 + 2.50 + 0.15 = 15.550319
-  > 15.00 for either side. It needs `[eval.ab] budget_usd` >= 15.56, or both `[eval] run_cap_usd`
-  (our arm) and `[eval.ab] kit_run_cap_usd` (the kit) <= 1.94 (`config/limits.toml`, Kevin's
-  file). Until `run()` stops rewriting other rows' `files` (follow-up below, fix it first in round
-  3), run only `make ab ONLY=<name> REDO=<name>:<side>`, never a plain `make ab`.
+  Kevin named reasons on two losses (cookies: colours, flow; creami: zoom in, flow); meat and
+  mercadona say only "y", so tying them to the same causes is our inference. Colour: our grade
+  is the same on every cut (strength 0.5, match 0.6: editor.md wrote `"match": 0.6` into the
+  instruction and the schema example showed it); the kit matched at 0.8 on 4 of 5 (its notes:
+  each raised 0.6 to 0.8 after its critic saw colour jumps), lifted brightness on 2 and chose
+  warm or reference; the one cut that lost on colour (kit pastav2) was natural, saturation 0.95.
+  Flow: the kit plays some actions whole and sped up (cookies: a 13.6 s pour at 8x, a 6.2 s sift
+  at 4.5x; meat 3 speed-ups) and keeps the rest at real speed; ours sped no action on 4 of 5,
+  although craft.md already said to, because craft, montage, recipe and formats also asked for
+  even shot lengths and real-speed slices cut mid-action. Our meat cut is 7 s shorter and our
+  hooks shorter (1.4-2.25 s against 2.1-2.5 s). Shot-length spread is not a clear gap. Zoom-ins:
+  the kit zooms more mid-Reel on cookies, meat and mercadona ("tighter framing than previous
+  shot") and picks a hook take where the camera pushes in. Creami shows no zoom or flow gap in
+  the numbers, so these rules may not move it.
+  Changes (prompt only, tested): grade `strength 0.6, match 0.8`, warm over natural for baked,
+  fried, roasted and cooked food (clean for ice cream, reference with style photos), brightness
+  0.02-0.03 when dim, no lower saturation unless neon; "Show each action whole" (sped 2-8x; real
+  speed for hook, payoff, sound moments, single motions); "Vary the rhythm"; "Move in on the
+  food" (zoom 1.2-1.4, push-in hook); craft, montage, recipe and formats now agree. The judge
+  reads only qa-rubric and colour, unchanged, so scores stay comparable (its "even rhythm" line
+  stays). Harness: while an arm is kept, the other side reruns on the files that arm read, and a
+  run never rewrites a kept row's files (W1 closed; five tests, each mutant of the condition
+  killed). Budget: `[eval.ab] budget_usd` 20.0; the gate's own A/B budget (kept arms <= $15,
+  protected) stays near $10 after the rerun.
+  Run plan (paid, our arm only): `make ab ONLY=cookies REDO=cookies:new` first; check its
+  `edl.json` moved (match 0.8, speed-ups, zoom, hook >= 2 s); then `make ab
+  ONLY=creami,meat,mercadona REDO=creami:new,meat:new,mercadona:new`. Never repeat an identical
+  REDO after a partial run: it pays finished arms again; narrow ONLY/REDO to the fixtures whose
+  `new` arm in the day's ab-runs.json is still `carried`. Expected about $0.4 per arm, ledger
+  near $14.5-14.8 of $20.
+- Round 2 result (13 Oct, eval/results/2026-10-12/ab.json): old 4, new 1, tie 0 (cookies, creami,
+  meat, mercadona old; pastav2 new). The step04 gate (`--local`): `GATE step04 FAIL (1 of 11
+  checks failed)`, only `A/B picks: new engine picked or tied in >= 3 of 5`. Not model-judged, so
+  standing-order rule 5 does not apply; PR #10 is not queued.
 - Done: STEP-03 merged (PR #5, 11 Oct 19:28 UTC; gate 12 of 13, only the model-judged
   `critic.passed` failed after 3 rounds: 24, 21, 23 of 35, gate 26; $1.4731 of $5). STEP-04 tasks 1,
   2 and 4 built on `step-04-ab`: `make ab` (both engines, same files, our critic judges both, budget
