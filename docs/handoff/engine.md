@@ -21,7 +21,7 @@ Written by the engine lane only. Newest entry on top.
   (eval/results/2026-10-11/ab.json). Round 2 (12 Oct): the editor prompt now follows Kevin's
   reasons (finished food shown and last, photos at most 1.2 s and never two in a row, at most four
   process steps and no hands-filling-frame shots); only our engine reran on cookies, creami and
-  meat (`REDO=<name>:new`); the kit's 11 Oct cuts are kept. A first pass ($1.20) dropped every
+  meat (`REDO=<name>:new`); the kit's 11 Oct cuts are kept (not for cookies, see below). A first pass ($1.20) dropped every
   step label, so the rule now says it limits shots, not labels, and our arm ran again ($1.17):
   4, 4 and 6 labels, no two photos in a row, photos at most 1.2 s, each ends on its payoff.
   Cookies: the first 15 files by name end before the cookies come out of the oven (IMG_0499,
