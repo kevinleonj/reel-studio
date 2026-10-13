@@ -218,6 +218,19 @@ def test_round_2_rules_from_kevins_picks_are_in_every_food_style() -> None:
         assert "hands or arms fill the frame" in words and "at most four process steps" in words
 
 
+def test_round_3_rules_from_kevins_picks_are_in_every_food_style() -> None:
+    """STEP-04 A/B, 13 Oct: the kit won 4 of 5 on colour, zoom-ins and flow. Its cuts graded
+    match 0.8 with a brightness lift (ours always 0.6), played whole actions sped up (ours 1.5 s
+    real-speed slices) and tightened the framing mid-Reel (ours zoomed only the payoff)."""
+    for style in ("montage", "recipe"):
+        words = " ".join(prompt.system_prompt(style, CFG).split())
+        assert '"match": 0.8' in words and '"match": 0.6' not in words
+        assert "brightness 0.02-0.03" in words and "never below 1" in words
+        assert "Show each action whole" in words and "usually 2-8x" in words
+        assert "Vary the rhythm" in words
+        assert "Move in on the food" in words and "zoom 1.2-1.4" in words
+
+
 def test_fewer_steps_limits_shots_not_step_labels() -> None:
     """Round 2 cuts lost every step label (round 1 had 2-4): the rule limits shots only."""
     words = " ".join(prompt.system_prompt("montage", CFG).split())
