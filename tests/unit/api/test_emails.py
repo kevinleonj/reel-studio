@@ -85,3 +85,12 @@ def test_every_email_is_small_and_has_no_tracking(name: str) -> None:
 def test_a_missing_value_fails_loudly() -> None:
     with pytest.raises(Exception, match="hook"):
         render("ready", COMMON)
+
+
+def test_ready_email_points_to_the_first_email_and_carries_no_link() -> None:
+    """The link's token is stored only as a hash (D18), so the editor cannot rebuild it."""
+    mail = render("ready", {**COMMON, "hook": ""})
+    assert mail.subject == "Your Reel is ready"
+    assert "Your Reel Studio link" in mail.text
+    assert LINK not in mail.text and LINK not in html(mail)
+    assert "<a " not in html(mail)

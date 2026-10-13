@@ -26,6 +26,8 @@ TEST_VALUES: dict[str, Any] = {
     "reel_fixtures_dir": "/nonexistent/fixtures",
     "payments": "off",
     "tier": "laptop",
+    "order_id": "0" * 32,
+    "run_token": "test-run-token",
     "site_url": "http://127.0.0.1:8000",
     "mail_from": "reels@example.test",
     "kevin_alert_email": "kevin@example.test",

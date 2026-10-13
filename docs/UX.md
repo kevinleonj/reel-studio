@@ -142,7 +142,7 @@ Plain HTML that works as text, under 100 KB, no tracking pixels.
 | Email | Subject | Body | Sent by |
 |---|---|---|---|
 | Link | Your Reel Studio link | Button **Upload your clips** · "Up to 40 files, 4 GB." · "Keep this email: the link is your access." | reel-api after payment |
-| Ready | Your Reel is ready: "<hook text>" | Button **Watch and download** · "Files are deleted after 30 days." · AI line | reel-editor |
+| Ready | Your Reel is ready: "<hook text>" | "Watch and download it from the link in your first email from us" (no button: the link's token is stored only as a hash, D18) · "Files are deleted after 30 days." · AI line | reel-editor |
 | Failed | Your Reel didn't finish | The plain message · "Your code still works." · **Start again** | reel-editor or sweep |
 | Paused | Your Reel is waiting | The paused message | reel-editor |
 | To Kevin | `[reel-studio] <status> <order_id> at <stage>: <code>` | Plain text with the order link for `reelctl` | reel-editor, sweep |

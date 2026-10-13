@@ -128,6 +128,14 @@ class RuntimeSettings(_Base):
         return CloudRuntime(self.gcs_bucket, self.editor_job, key)
 
 
+class JobSettings(_Base):
+    """One reel-editor execution on Cloud Run: the overrides the launcher sets per execution
+    (ARCHITECTURE §4, gcp_launcher ORDER_ID_ENV and RUN_TOKEN_ENV)."""
+
+    order_id: str
+    run_token: SecretStr  # the run's one-time start credential: never logged
+
+
 class WebSettings(_Base):
     """The website and its API (Tier 1 on the laptop, Tier 2 in the cloud)."""
 
@@ -173,11 +181,14 @@ class CloudSettings(_Base):
     email_domain: str
 
 
-AppSettings = EditorSettings | BuildSettings | RuntimeSettings | WebSettings | CloudSettings
+AppSettings = (
+    EditorSettings | BuildSettings | RuntimeSettings | JobSettings | WebSettings | CloudSettings
+)
 SETTINGS_CLASSES: tuple[type[_Base], ...] = (
     EditorSettings,
     BuildSettings,
     RuntimeSettings,
+    JobSettings,
     WebSettings,
     CloudSettings,
 )

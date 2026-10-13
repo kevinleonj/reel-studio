@@ -45,6 +45,13 @@ class Process:
 
 
 @dataclass(frozen=True)
+class CloudAdapters:
+    storage: GcpStorage
+    mailer: ResendMailer
+    launcher: GcpLauncher
+
+
+@dataclass(frozen=True)
 class CloudClients:
     bucket: Bucket
     identity: IdentitySource
@@ -53,8 +60,11 @@ class CloudClients:
     sessions: httpx.Client  # cancels resumable upload sessions (F89)
 
 
-def google_clients(runtime: RuntimeSettings, cloud: config_models.Cloud) -> CloudClients:
-    """The real clients; imported here so the laptop never loads the Google client libraries."""
+def google_clients(
+    runtime: RuntimeSettings, cloud: config_models.Cloud, *, resend_timeout_s: float
+) -> CloudClients:
+    """The real clients; imported here so the laptop never loads the Google client libraries.
+    reel-api passes Resend's request-path timeout, the editor job its own (config/cloud.toml)."""
     from google.cloud import run_v2  # noqa: PLC0415 (api extra, Cloud Run only)
     from google.cloud.storage import Client  # type: ignore[import-untyped]  # noqa: PLC0415
 
@@ -63,7 +73,7 @@ def google_clients(runtime: RuntimeSettings, cloud: config_models.Cloud) -> Clou
         bucket=Client(project=runtime.firestore_project).bucket(values.gcs_bucket),
         identity=AdcIdentity(),
         jobs=run_v2.JobsClient(),
-        resend=httpx.Client(base_url=RESEND_API_BASE, timeout=cloud.resend.request_timeout_s),
+        resend=httpx.Client(base_url=RESEND_API_BASE, timeout=resend_timeout_s),
         sessions=httpx.Client(timeout=cloud.gcp.call_timeout_s),
     )
 
@@ -87,21 +97,23 @@ def origin(site_url: str) -> str:
     return f"{parts.scheme}://{parts.netloc}"
 
 
-def build_cloud_deps(
-    process: Process,
-    *,
-    orders: OrderStore,
+def cloud_adapters(
+    runtime: RuntimeSettings,
+    cloud: config_models.Cloud,
     clients: CloudClients,
-    payments: PaymentGateway | None,
-) -> ApiDeps:
-    cloud = load_cloud()
-    values = process.runtime.cloud()
+    orders: OrderStore,
+    *,
+    mail_retries: int,
+) -> CloudAdapters:
+    """The Storage, Mailer and Launcher ports over the cloud clients, for reel-api and the
+    editor job alike; only the Resend retries differ (config/cloud.toml [resend])."""
+    values = runtime.cloud()
     gcp = cloud.gcp
     storage = GcpStorage(
         clients.bucket,
         clients.identity,
         StorageConfig(
-            origin=origin(process.runtime.site_url),
+            origin=origin(runtime.site_url),
             timeout_s=gcp.call_timeout_s,
             retry=storage_retry(gcp),
             signed_url_max_minutes=gcp.signed_url_max_minutes,
@@ -110,17 +122,32 @@ def build_cloud_deps(
     )
     mailer = ResendMailer(
         clients.resend,
-        ResendConfig(api_key=values.resend_sending_key, sender=process.runtime.mail_from),
+        ResendConfig(api_key=values.resend_sending_key, sender=runtime.mail_from),
         resend_render,
-        Backoff(
-            retries=cloud.resend.request_retries, base_s=cloud.resend.backoff_s, sleep=time.sleep
-        ),
+        Backoff(retries=mail_retries, base_s=cloud.resend.backoff_s, sleep=time.sleep),
+    )
+    launcher = GcpLauncher(
+        clients.jobs, orders, job=values.editor_job, timeout_s=gcp.call_timeout_s
+    )
+    return CloudAdapters(storage, mailer, launcher)
+
+
+def build_cloud_deps(
+    process: Process,
+    *,
+    orders: OrderStore,
+    clients: CloudClients,
+    payments: PaymentGateway | None,
+) -> ApiDeps:
+    cloud = load_cloud()
+    adapters = cloud_adapters(
+        process.runtime, cloud, clients, orders, mail_retries=cloud.resend.request_retries
     )
     return ApiDeps(
         orders=orders,
-        storage=storage,
+        storage=adapters.storage,
         local_storage=None,  # browsers upload straight to the bucket
-        mailer=mailer,
+        mailer=adapters.mailer,
         payments=payments,
         clock=process.clock,
         config=process.config,
@@ -128,7 +155,5 @@ def build_cloud_deps(
         runtime=process.runtime,
         voice_available=process.settings.voice_available,
         web_dist=process.settings.web_dist,
-        launcher=GcpLauncher(
-            clients.jobs, orders, job=values.editor_job, timeout_s=gcp.call_timeout_s
-        ),
+        launcher=adapters.launcher,
     )

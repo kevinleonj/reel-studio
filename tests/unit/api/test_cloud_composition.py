@@ -181,7 +181,7 @@ def test_create_builds_the_cloud_app_when_tier_is_cloud(
         monkeypatch.setenv(name, value)
     built: list[str] = []
 
-    def fake_clients(runtime: RuntimeSettings, _config: object) -> CloudClients:
+    def fake_clients(runtime: RuntimeSettings, _config: object, **_: object) -> CloudClients:
         built.append(runtime.cloud().gcs_bucket)
         return clients(FakeBucket(), FakeJobsClient(), Sent())
 

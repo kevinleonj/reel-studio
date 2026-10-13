@@ -244,10 +244,11 @@ def create() -> FastAPI:
     orders = firestore_orders(runtime, config, clock)
     if runtime.tier == "laptop":
         return create_app(build_deps(settings, runtime, orders=orders, clock=clock, config=config))
+    cloud = load_cloud()
     deps = build_cloud_deps(
         Process(settings, runtime, config, clock),
         orders=orders,
-        clients=google_clients(runtime, load_cloud()),
+        clients=google_clients(runtime, cloud, resend_timeout_s=cloud.resend.request_timeout_s),
         payments=build_payments(settings, config, clock),
     )
     return create_app(deps)
