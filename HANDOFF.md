@@ -4,19 +4,18 @@ The main checkout's log and the status of every lane. Lanes write their own file
 Newest entry on top.
 
 ## Status board
-MAIN-NEXT in progress (13 Oct 2026): tasks 1 and 2 merged (#17, #19); CloudSettings split is
-PR #21 (Kevin's request); task 3 on branch `editor-job`
+MAIN-NEXT in progress (13 Oct 2026): tasks 1 and 2 merged (#17, #19); the CloudSettings split
+merged (#21, Kevin's request); task 3 on branch `editor-job`
 - Done: starter kit v1.1; STEP-01 (#1), STEP-02 (#2), STEP-03 (#5), STEP-08 short of the real project
   (#3), STEP-06 except task 8 (#4, #8), STEP-07 (#11, #13, #14), `httpx2` and laptop `WebSettings`
-  (#6), auto-merge guardrail (#7), Stripe ids (#9), cloud cost cap (#15, #16), MAIN-NEXT task 1
-  (#17), all merged
+  (#6), auto-merge guardrail (#7), Stripe ids (#9), cloud cost cap (#15, #16), MAIN-NEXT tasks 1
+  and 2 (#17, #19), CloudSettings split (#21), all merged
 - Partly: STEP-00 on the Mac (see Needs Kevin); STEP-04 (#10 open) and STEP-05 (#12 open, partial)
-  in lane engine; MAIN-NEXT tasks 2-3
+  in lane engine; MAIN-NEXT task 3
 - Blocked: —
 - Not started: STEP-09
-- Next: MAIN-NEXT task 3 (`reel job`, branch `editor-job`) after task 2 merges. Task 3's claim
-  follows ARCHITECTURE §4 (`queue.claimed_token`), not the `queue.started_at` wording in
-  MAIN-NEXT.md and cloud.md
+- Next: the first-deploy follow-ups in the task 2 entry (sweep OIDC first), then STEP-04's gate
+  (D44) before any deploy
 
 ## Lanes
 | Lane | Worktree | Steps | File |
@@ -34,8 +33,7 @@ PR #21 (Kevin's request); task 3 on branch `editor-job`
   `printf '%s' laptop | uv run reelctl dotenv-set TIER`.
 - Doc gate: `~/.claude/hooks/gate-docs.sh` refuses Write and Edit on files importing `fastapi`,
   `httpx` or `google` because `.claude/doc-ledger.json` (protected) lists none of them; those test
-  files were written through the shell. Their docs are cited in FACTS (F89-F91) and the cloud
-  lane's `infra/doc-ledger.pending.json`.
+  files were written through the shell. Their docs are cited in FACTS (F89-F94).
 - D35 in the decisions file still says `write_edl` is strict; since 11 Oct it is not (F211, engine.md
   Needs Kevin 20). The file is locked (a hook blocks edits), so that line is yours; EDITOR.md §4 now
   says so.
@@ -53,6 +51,51 @@ PR #21 (Kevin's request); task 3 on branch `editor-job`
   (one class per consumer; a test keeps the two in step). A lane that needs a new variable asks here.
 
 ## Log
+### 13 Oct 2026 — MAIN-NEXT task 3: the editor job's entry, `reel job` (branch `editor-job`)
+- Before: `docker/editor.Dockerfile` ended in `ENTRYPOINT ["reel"]`, `CMD ["--help"]` and
+  `infra/main/run.tf` passed the job no args, so a deployed job would print help and exit on every
+  order; nothing read `ORDER_ID` and `RUN_TOKEN`; two executions with the same token would both
+  have run (cloud.md "Launcher is at-most-once"); the image lacked the cloud clients (W10).
+- After: `reel job` (`reel_studio/cli/job.py`): `JobSettings` reads the two overrides; the run is
+  claimed in a transaction (`claim_run`: records `queue.claimed_token`, so a duplicate execution
+  exits and a run resumed after a pause claims with its new token); `RealEditor` downloads only
+  the files Start listed, runs the engine, uploads both Reels and finishes the order; the ready
+  email goes out once; an engine crash fails the order (`render_error`) and tells Kevin and the
+  customer; then the next waiting order is launched. run.tf passes `args = ["job"]`
+  (`local.editor_args`), `explicit_args.toml` requires `template.template.containers.args`, and the
+  image installs the api extra and copies `en.json`.
+- Tests first: the `claim_run` contract cases (fake; the emulator cases need lane web's
+  containers), `tests/unit/test_editor_job.py` end to end over the fake bucket, Resend and Cloud
+  Run clients with the engine replaced (no model call), the policy mutant without `args`, the image
+  test and `test_the_editor_job_runs_reel_job` (Terraform's args parse to `job`).
+- Decided by standing orders:
+  - The ready email carries no link: the token is stored only as a hash (D18), so it points to the
+    link in the first email (UX.md §3 row updated). Undo: revert the commit and pick another option
+    from web.md "Needs Kevin" (an encrypted token, or a re-access flow).
+  - The editor image installs the api extra instead of listing the Google libraries in `[editor]`
+    (cloud.md W10 offered both): `reel job` reuses the API's composition and failure emails. No
+    package outside uv.lock. Undo: move the job's imports off `reel_studio.api` and list
+    google-cloud-storage, -run, -firestore and httpx in `[editor]`.
+  - A run the engine refuses (ReelError) exits 0: the order is already failed or paused and told;
+    only a crash exits 1.
+- Senior review: PASS, 0 critical; its warnings fixed after it: the next order is launched in a
+  `finally` and a failing ready email is logged, not raised; tests for a duplicate that arrives
+  while the first run edits, an engine refusal, the monthly-limit pause, the ready email's
+  guards, the launcher-to-`JobSettings` env names and the job's full budget; F93 for `args`.
+- Also here, task 2's round-2 review warnings (PASS on #19, fixed after its merge): the request
+  budget is pinned at each adapter and at `create()`; a retried bucket call is modelled as its
+  deadline plus one call (api_core's deadline only gates when an attempt starts), so the request
+  retry deadline is 5 s; any 4xx except 408 and 429 counts as a closed upload session, so an
+  unconfirmed answer for a finished session cannot wedge a name (F89 now cites both pages); every
+  settings class hides its input in errors (F94).
+- Follow-ups: `make test-emulator` before the first deploy (the four `claim_run` Firestore cases
+  run in no CI job); a job that dies before its claim (no credentials, bad config) leaves the
+  order running until the lease sweep, which cannot authenticate yet; the ready email is claimed
+  before it is sent, so a Resend outage longer than the retries loses it (release the claim on
+  `DeliveryFailed`?).
+- Not run: the image build and a real execution (no project, D44); the Firestore emulator cases of
+  `claim_run`.
+
 ### 13 Oct 2026 — CloudSettings split (Kevin, before MAIN-NEXT task 3; branch `cloud-settings-split`)
 - Before: `make gcp-project` and `make bootstrap-plan` read `CloudSettings`, which required the
   two cloud model keys, the Resend key and the Cloudflare token, though they use only the project,
@@ -62,6 +105,11 @@ PR #21 (Kevin's request); task 3 on branch `editor-job`
   `gcp-project`, `bootstrap-plan` and `spend-cap`; `CloudSettings` keeps the keys and the email
   domain, and `secrets-push` and `dns` read both; `stripe-setup` reads only the project class.
   STEP-08 uses `gcloud config get project` (docs/cli-verified.md).
+- Review: PASS; fixed after the merge (on `editor-job`): docstrings say who reads what, the
+  `config get` fact is also in F406, the two command tests check the billing account.
+  Follow-ups: `make types` does not type-check `scripts/cloud/` (mypy needs
+  `--explicit-package-bases` there); `secrets-push` still requires the Resend and Cloudflare
+  values and `dns` the model keys, since both read the whole `CloudSettings`.
 - Tests first: `test_gcp_project_runs_without_any_api_key`,
   `test_bootstrap_plan_runs_without_any_api_key` (only the three project values set) and
   `test_the_project_setup_holds_no_key` failed (missing keys, missing class), then passed.

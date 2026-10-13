@@ -131,6 +131,14 @@ class RuntimeSettings(_Base):
         return CloudRuntime(self.gcs_bucket, self.editor_job, key)
 
 
+class JobSettings(_Base):
+    """One reel-editor execution on Cloud Run: the overrides the launcher sets per execution
+    (ARCHITECTURE §4, gcp_launcher ORDER_ID_ENV and RUN_TOKEN_ENV)."""
+
+    order_id: str
+    run_token: SecretStr  # the run's one-time start credential: never logged
+
+
 class WebSettings(_Base):
     """The website and its API (Tier 1 on the laptop, Tier 2 in the cloud)."""
 
@@ -164,8 +172,10 @@ class WebSettings(_Base):
 
 
 class CloudProjectSettings(_Base):
-    """The Google Cloud project from the laptop (STEP-08): `make gcp-project`,
-    `make bootstrap-plan` and `make spend-cap` need these and no API key."""
+    """The Google Cloud project from the laptop (STEP-08), read with no API key by
+    `make gcp-project`, `make bootstrap-plan` and `make spend-cap` (project, billing account)
+    and by `make stripe-setup` (project, region). The region (D50) is kept here, as asked, though
+    the first two commands do not read it."""
 
     gcp_project: str
     gcp_region: str
@@ -173,8 +183,8 @@ class CloudProjectSettings(_Base):
 
 
 class CloudSettings(_Base):
-    """The keys and domain the laptop's cloud setup pushes or uses (STEP-08): secrets push,
-    DNS, Stripe setup. Each command reads CloudProjectSettings too."""
+    """The keys and domain the laptop's cloud setup pushes or uses (STEP-08): `make
+    secrets-push` and `make dns`, which read CloudProjectSettings too."""
 
     cloud_anthropic_api_key: SecretStr
     cloud_gemini_api_key: SecretStr
@@ -187,6 +197,7 @@ AppSettings = (
     EditorSettings
     | BuildSettings
     | RuntimeSettings
+    | JobSettings
     | WebSettings
     | CloudProjectSettings
     | CloudSettings
@@ -195,6 +206,7 @@ SETTINGS_CLASSES: tuple[type[_Base], ...] = (
     EditorSettings,
     BuildSettings,
     RuntimeSettings,
+    JobSettings,
     WebSettings,
     CloudProjectSettings,
     CloudSettings,

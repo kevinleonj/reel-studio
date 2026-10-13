@@ -3,8 +3,9 @@ address, and Kevin's alert for every failure (EDITOR.md §10). Each is claimed o
 (`claim_email`), so a sweep that runs twice never sends twice. A mail server that is down is
 logged and never stops the caller (the dispatcher, the sweep).
 
-The "ready" email is not sent from here yet: its button needs the order link, and the link's
-token is stored only as a hash (D18), so nothing after checkout can rebuild it (Needs Kevin).
+The "ready" email (`order_ready`, sent by the editor job) carries no link: the link's token is
+stored only as a hash (D18), so nothing after checkout can rebuild it; it points to the link in
+the first email instead (decided by standing orders, HANDOFF.md).
 """
 
 from collections.abc import Callable
@@ -40,6 +41,22 @@ class Notifier:
                     "outcome": "error",
                 },
             )
+
+    def order_ready(self, order_id: str, *, out_days: int) -> None:
+        """The customer's "Your Reel is ready", once. It carries no link: the token is stored
+        only as a hash (D18), so it points to the first email's link instead."""
+        doc = self._orders.get(order_id)
+        if doc is None or doc["status"] != "done":
+            return
+        email = doc.get("email")
+        if not (isinstance(email, str) and email):
+            return
+        result = doc.get("result")
+        caption = result.get("caption") if isinstance(result, dict) else None
+        lines = str(caption).splitlines() if caption else []
+        hook = lines[0] if lines else ""
+        if self._orders.claim_email(order_id, "ready"):
+            self._send("ready", email, {"order_id": order_id, "hook": hook, "out_days": out_days})
 
     def order_failed(self, order_id: str, code: ErrorCode, stage: str) -> None:
         """`stage` names where it broke when the order cannot say (no stage was ever set)."""

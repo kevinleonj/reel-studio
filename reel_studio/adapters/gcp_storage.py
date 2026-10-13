@@ -28,7 +28,7 @@ from google.auth.transport.requests import Request
 from google.cloud.storage.retry import DEFAULT_RETRY
 
 from reel_studio.core import config, ports
-from reel_studio.core.constants import GCS_SESSION_CANCELLED, GOOGLE_CLOUD_PLATFORM_SCOPE
+from reel_studio.core.constants import GOOGLE_CLOUD_PLATFORM_SCOPE
 from reel_studio.core.errors import CloudUnavailable
 from reel_studio.core.file_names import check_file_name
 from reel_studio.core.logging import get_logger, latency_ms
@@ -44,9 +44,10 @@ ORDER_PREFIXES = (INPUT_PREFIX, WORK_PREFIX, OUTPUT_PREFIX)
 SIGNED_URL_VERSION = "v4"  # the default is v2 (doc ledger: google-cloud-storage)
 SESSIONS_FOLDER = "upload-sessions"  # work/{order}/upload-sessions/{name}: the live session URL
 SESSION_TYPE = "text/plain"
-# A cancelled JSON-API session answers 499; one already finished or gone answers another 4xx,
-# which also means it takes no more bytes (F89).
-SESSION_CLOSED = frozenset({GCS_SESSION_CANCELLED, httpx.codes.NOT_FOUND, httpx.codes.GONE})
+# A cancelled JSON-API session answers 499 and later requests to it a 4xx; an expired one 410 or
+# 404 (F89). What a finished session answers is not stated, so any 4xx counts as closed except
+# the two that mean "try again": a wedged marker would refuse that name's uploads for good.
+SESSION_STILL_UNKNOWN = frozenset({httpx.codes.REQUEST_TIMEOUT, httpx.codes.TOO_MANY_REQUESTS})
 
 
 class Blob(Protocol):
@@ -142,7 +143,9 @@ class SessionCanceller:
                 extra={**fields, "latency_ms": latency_ms(started), "outcome": "error"},
             )
             raise CloudUnavailable(f"cloud storage cancel failed: {type(exc).__name__}") from exc
-        closed = response.status_code in SESSION_CLOSED or response.is_success
+        closed = response.is_success or (
+            response.is_client_error and response.status_code not in SESSION_STILL_UNKNOWN
+        )
         outcome = "ok" if closed else "error"
         log.info(
             "upload session cancel status=%s",

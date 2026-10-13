@@ -353,6 +353,19 @@ class FirestoreOrders:
 
         return self._logged("list_orders", None, run)
 
+    def claim_run(self, order_id: str, run_token: str) -> bool:
+        ref = self._order(order_id)
+        now = self._clock.now()
+
+        def body(tx: firestore.Transaction) -> bool:
+            changed = rules.claim_run(self._read(ref, tx), run_token, now)
+            if changed is None:
+                return False
+            tx.set(ref, changed)
+            return True
+
+        return self._transaction("claim_run", order_id, body)
+
     def claim_email(self, order_id: str, kind: str) -> bool:
         ref = self._order(order_id)
         now = self._clock.now()

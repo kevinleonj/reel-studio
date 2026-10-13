@@ -319,6 +319,8 @@ def test_gcp_project_runs_without_any_api_key(monkeypatch: pytest.MonkeyPatch) -
 
     assert gcp_project.main() == 0
     assert any(f"--project={PROJECT}" in c[0] for c in runner.calls)
+    billing = PROJECT_ONLY["GCP_BILLING_ACCOUNT"]
+    assert any(f"--billing-account={billing}" in c[0] for c in runner.calls)
 
 
 def test_bootstrap_plan_runs_without_any_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -335,3 +337,4 @@ def test_bootstrap_plan_runs_without_any_api_key(monkeypatch: pytest.MonkeyPatch
     assert bootstrap_plan.main() == 0
     plan_args = [c[0] for c in runner.calls if c[0][0] == "terraform"][-1]
     assert f"-var=project_id={PROJECT}" in plan_args
+    assert f"-var=billing_account={PROJECT_ONLY['GCP_BILLING_ACCOUNT']}" in plan_args

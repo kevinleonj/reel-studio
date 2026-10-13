@@ -78,6 +78,7 @@ def build_parser() -> argparse.ArgumentParser:
     cfg = config.load()
     order = cfg.limits.order
     languages = [lang.code for lang in cfg.styles.text_languages.items]
+    commands.add_parser("job", help="run one order on Cloud Run (the reel-editor job)")
     cmd = commands.add_parser("make", help="edit a Reel with Claude on your own key")
     cmd.add_argument("folder", type=Path, help="folder of clips and photos; only read")
     cmd.add_argument("--style", required=True, choices=list(cfg.styles.styles))
@@ -197,6 +198,15 @@ def make_command(args: argparse.Namespace, settings: EditorSettings, deps: Deps)
     return OK if all(final.render.qa.hard_checks.model_dump().values()) else FAILED
 
 
+def _job_or_help(command: str | None, parser: argparse.ArgumentParser) -> int:
+    if command == "job":
+        from reel_studio.cli import job  # noqa: PLC0415 (Cloud Run only: the cloud clients)
+
+        return job.main()
+    parser.print_help()
+    return OK
+
+
 def main(
     argv: Sequence[str] | None = None,
     settings: EditorSettings | None = None,
@@ -205,8 +215,7 @@ def main(
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.command not in ("render", "make"):
-        parser.print_help()
-        return OK
+        return _job_or_help(args.command, parser)
     configure()
     settings = settings if settings is not None else EditorSettings()
     try:

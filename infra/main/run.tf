@@ -110,6 +110,7 @@ resource "google_cloud_run_v2_job" "editor" {
 
       containers {
         image = var.editor_image
+        args  = local.editor_args
 
         resources {
           limits = {

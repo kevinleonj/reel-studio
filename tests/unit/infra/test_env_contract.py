@@ -9,7 +9,7 @@ import hcl2
 import pytest
 from pydantic import ValidationError
 
-from reel_studio.settings import RuntimeSettings, WebSettings
+from reel_studio.settings import EditorSettings, RuntimeSettings, WebSettings
 
 LOCALS = Path(__file__).resolve().parents[3] / "infra" / "main" / "locals.tf"
 INTERPOLATION = re.compile(r"\$\{[^}]*\}")
@@ -53,6 +53,23 @@ def test_the_editor_job_gets_every_runtime_value() -> None:
     except ValidationError as error:
         pytest.fail(f"the editor job's settings refuse Terraform's env: {error}")
     assert runtime.tier == "cloud"
+
+
+def test_the_editor_job_runs_reel_job() -> None:
+    """Without args the image's CMD (`--help`) would print help and exit 0 on every order."""
+    from reel_studio.cli import reel  # noqa: PLC0415
+
+    args = [arg.strip('"') for arg in terraform_locals()["editor_args"]]
+    assert reel.build_parser().parse_args(args).command == "job"
+
+
+def test_the_editor_job_gets_every_editor_value() -> None:
+    values = _values("common_env", "editor_secrets")
+    image: dict[str, Any] = {"ffmpeg_path": "/usr/bin/ffmpeg", "ffprobe_path": "/usr/bin/ffprobe"}
+    try:
+        EditorSettings(_env_file=None, **values, **image)
+    except ValidationError as error:
+        pytest.fail(f"the editor job's EditorSettings refuse Terraform's env: {error}")
 
 
 def test_the_editor_job_holds_no_stripe_secret() -> None:

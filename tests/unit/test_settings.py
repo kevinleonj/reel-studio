@@ -236,6 +236,12 @@ CLOUD_VALUES = {
 }
 
 
+@pytest.mark.parametrize("cls", SETTINGS_CLASSES, ids=lambda cls: cls.__name__)
+def test_no_settings_class_prints_its_input_in_an_error(cls: type[AppSettings]) -> None:
+    """WebSettings has a model-level rule too, and holds the Stripe keys (review round 2, W4)."""
+    assert cls.model_config.get("hide_input_in_errors") is True
+
+
 def test_a_settings_error_never_echoes_a_key(make_settings: MakeSettings) -> None:
     """A model-level rule makes pydantic print the input, cut in the middle: the last field,
     the Resend key, kept its tail (task 2 review C1)."""
@@ -292,6 +298,6 @@ def test_the_laptop_view_has_no_optional_values(make_settings: MakeSettings) -> 
     "job", ["reel-editor", "projects/p/jobs/reel-editor", "projects/p/locations/r/jobs/"]
 )
 def test_the_editor_job_is_its_full_resource_name(make_settings: MakeSettings, job: str) -> None:
-    # The launcher passes it to jobs.run as `name` (F30), so a short name fails at the first Start.
+    # The launcher passes it to jobs.run as `name` (F92), so a short name fails at the first Start.
     with pytest.raises(ValidationError, match="editor_job"):
         make_settings(RuntimeSettings, **{**CLOUD_VALUES, "editor_job": job})
