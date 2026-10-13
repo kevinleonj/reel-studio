@@ -52,6 +52,22 @@ class BuildSettings(_Base):
     reel_fixtures_dir: Path
 
 
+class RuntimeSettings(_Base):
+    """Where orders live and how mail leaves: the website and the editor that runs orders both
+    read these, without holding each other's keys (D62)."""
+
+    site_url: str
+    mail_from: str
+    kevin_alert_email: str
+    # Laptop runtime (STEP-06): the Firestore emulator's project id (the client finds the
+    # emulator through FIRESTORE_EMULATOR_HOST itself, F308), Mailpit's SMTP address (F309) and
+    # the filesystem Storage root.
+    firestore_project: str
+    smtp_host: str
+    smtp_port: int
+    data_dir: Path
+
+
 class WebSettings(_Base):
     """The website and its API (Tier 1 on the laptop, Tier 2 in the cloud)."""
 
@@ -62,19 +78,9 @@ class WebSettings(_Base):
     # create` attaches promotion codes to. Ids, not secrets.
     stripe_price_id: str | None = None  # default-because: unused when PAYMENTS=off
     stripe_coupon_id: str | None = None  # default-because: unused when PAYMENTS=off
-    site_url: str
-    mail_from: str
-    kevin_alert_email: str
     ga4_measurement_id: str = ""  # default-because: empty = analytics off (D75)
     google_ads_id: str = ""  # default-because: empty = ads off (D75)
-    # Laptop runtime (STEP-06): the Firestore emulator's project id (the client finds the
-    # emulator through FIRESTORE_EMULATOR_HOST itself, F308), Mailpit's SMTP address (F309),
-    # the filesystem Storage root and the Astro build the API serves.
-    firestore_project: str
-    smtp_host: str
-    smtp_port: int
-    data_dir: Path
-    web_dist: Path
+    web_dist: Path  # the Astro build the API serves
     # D14, D62: this service never holds the Gemini key, so it is told whether voice works.
     voice_available: bool
 
@@ -107,10 +113,11 @@ class CloudSettings(_Base):
     email_domain: str
 
 
-AppSettings = EditorSettings | BuildSettings | WebSettings | CloudSettings
+AppSettings = EditorSettings | BuildSettings | RuntimeSettings | WebSettings | CloudSettings
 SETTINGS_CLASSES: tuple[type[_Base], ...] = (
     EditorSettings,
     BuildSettings,
+    RuntimeSettings,
     WebSettings,
     CloudSettings,
 )

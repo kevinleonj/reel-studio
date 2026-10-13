@@ -10,7 +10,7 @@ from reel_studio.adapters.storage_local import LocalStorage
 from reel_studio.api.ratelimit import InFlight, SlidingWindow
 from reel_studio.core.config import Config
 from reel_studio.core.ports import Clock, Mailer, OrderStore, PaymentGateway, Storage
-from reel_studio.settings import WebSettings
+from reel_studio.settings import RuntimeSettings, WebSettings
 
 
 def refuse_all(_: Request) -> bool:
@@ -28,6 +28,7 @@ class ApiDeps:
     clock: Clock
     config: Config
     settings: WebSettings
+    runtime: RuntimeSettings
     voice_available: bool  # D14: false when this server has no Gemini key
     web_dist: Path | None  # the Astro build; None serves no site (API only)
     sweep_auth: Callable[[Request], bool] = field(default=refuse_all)

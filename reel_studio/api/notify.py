@@ -92,7 +92,7 @@ def send_link(deps: ApiDeps, order_id: str, email: str, path: str) -> None:
             email,
             {
                 "order_id": order_id,
-                "order_url": f"{deps.settings.site_url.rstrip('/')}{path}",
+                "order_url": f"{deps.runtime.site_url.rstrip('/')}{path}",
                 "max_files": limits.order.max_files,
                 "max_total": f"{limits.order.max_total_bytes // BYTES_PER_GB} GB",
                 "out_days": limits.retention.out_days,

@@ -12,6 +12,7 @@ from reel_studio.settings import (
     AppSettings,
     CloudSettings,
     EditorSettings,
+    RuntimeSettings,
     WebSettings,
 )
 from tests.conftest import TEST_VALUES, MakeSettings
@@ -107,38 +108,43 @@ def test_unknown_payments_mode_fails(make_settings: MakeSettings) -> None:
 def test_web_requires_its_laptop_runtime_values() -> None:
     # docs/handoff/web.md, Needs Kevin: the laptop API and dispatcher (STEP-06 task 6).
     with pytest.raises(ValidationError) as caught:
-        WebSettings(
-            _env_file=None,
-            payments="off",
-            site_url=TEST_VALUES["site_url"],
-            mail_from=TEST_VALUES["mail_from"],
-            kevin_alert_email=TEST_VALUES["kevin_alert_email"],
-        )
+        WebSettings(_env_file=None, payments="off")
+
+    missing = {e["loc"][0] for e in caught.value.errors() if e["type"] == "missing"}
+    assert missing == {"web_dist", "voice_available"}
+
+
+def test_runtime_requires_where_orders_live_and_how_mail_leaves() -> None:
+    with pytest.raises(ValidationError) as caught:
+        RuntimeSettings(_env_file=None)
 
     missing = {e["loc"][0] for e in caught.value.errors() if e["type"] == "missing"}
     assert missing == {
+        "site_url",
+        "mail_from",
+        "kevin_alert_email",
         "firestore_project",
         "smtp_host",
         "smtp_port",
         "data_dir",
-        "web_dist",
-        "voice_available",
     }
 
 
 def test_web_runtime_values_are_typed(make_settings: MakeSettings) -> None:
-    built = make_settings(WebSettings, smtp_port="1025", voice_available="false")
+    web = make_settings(WebSettings, voice_available="false")
+    runtime = make_settings(RuntimeSettings, smtp_port="1025")
 
-    assert isinstance(built, WebSettings)
-    assert built.smtp_port == 1025
-    assert built.voice_available is False
-    assert isinstance(built.data_dir, Path)
-    assert isinstance(built.web_dist, Path)
+    assert isinstance(web, WebSettings)
+    assert isinstance(runtime, RuntimeSettings)
+    assert runtime.smtp_port == 1025
+    assert web.voice_available is False
+    assert isinstance(runtime.data_dir, Path)
+    assert isinstance(web.web_dist, Path)
 
 
 def test_smtp_port_must_be_a_number(make_settings: MakeSettings) -> None:
     with pytest.raises(ValidationError, match="smtp_port"):
-        make_settings(WebSettings, smtp_port="mailpit")
+        make_settings(RuntimeSettings, smtp_port="mailpit")
 
 
 def test_one_stripe_key_is_not_enough(make_settings: MakeSettings) -> None:
@@ -153,10 +159,10 @@ def test_fresh_env_example_copy_reports_only_missing_values(
     dotenv = tmp_path / ".env"
     shutil.copy(ENV_EXAMPLE, dotenv)  # what `make setup` gives a new clone
 
-    with pytest.raises(ValidationError) as caught:
-        cls(_env_file=dotenv)
-
-    assert {error["type"] for error in caught.value.errors()} == {"missing"}
+    try:
+        cls(_env_file=dotenv)  # a class whose laptop values the example fills loads as is
+    except ValidationError as caught:
+        assert {error["type"] for error in caught.errors()} == {"missing"}
 
 
 def test_blank_optional_key_is_none(tmp_path: Path) -> None:
