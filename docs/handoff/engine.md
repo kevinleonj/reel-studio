@@ -10,7 +10,7 @@ Written by the engine lane only. Newest entry on top.
   | fixture | grade new / kit | zoomed shots new / kit | speed-ups new / kit | shots, mean s, total s new / kit |
   |---|---|---|---|---|
   | cookies | warm 0.5 m0.6 / warm 0.6 m0.8 b+0.02 | 3 of 16 (end only) / 5 of 16 (mid) | 0 / 5 (8x, 4.5x, 1.75x, 2x pours and mixes) | 16, 1.66, 26.6 / 16, 1.73, 27.6 |
-  | creami | warm 0.5 m0.6 / reference 0.6 m0.8 | 7 of 9 / 7 of 10 | 0 / 1 (1.8x whole pour) | 9, 1.73, 15.6 / 10, 1.67, 16.7 |
+  | creami | warm 0.5 m0.6 / reference 0.6 m0.8 | 7 of 9 / 9 of 10 | 0 / 1 (1.8x whole pour) | 9, 1.73, 15.6 / 10, 1.67, 16.7 |
   | meat | natural 0.5 m0.6 / warm 0.5 m0.8 b+0.03 | 2 of 12 / 13 of 14 | 0 / 3 (3x, 1.9x, 1.6x) | 12, 1.53, 18.4 / 14, 1.83, 25.7 |
   | mercadona | natural 0.5 m0.6 / warm 0.5 m0.6 | 0 of 8 / 2 of 6 | 0 / 0 | 8, 1.13, 9.1 / 6, 1.43, 8.6 |
   | pastav2 (new won on colour) | warm 0.5 m0.6 / natural 0.6 m0.8 sat 0.95 | | | |
