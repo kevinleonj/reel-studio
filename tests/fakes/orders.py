@@ -170,6 +170,12 @@ class FakeOrders:
             counter = self.weeks.get(week)
             return int(counter["count"]) if counter is not None else 0
 
+    def claim_run(self, order_id: str, run_token: str) -> bool:
+        with self._lock:
+            changed = rules.claim_run(self.orders.get(order_id), run_token, self._clock.now())
+            self._write(changed)
+            return changed is not None
+
     def claim_email(self, order_id: str, kind: str) -> bool:
         with self._lock:
             changed = rules.claim_email(self.orders.get(order_id), kind, self._clock.now())

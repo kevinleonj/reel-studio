@@ -393,3 +393,42 @@ def test_uploads_cannot_be_reserved_once_started(orders: tuple[OrderStore, Froze
         store.reserve_uploads(
             f"{2:032x}", files=[{"name": "a.mp4", "size": 1}], max_files=2, max_bytes=10
         )
+
+
+def running(store: OrderStore, order_id: str) -> str:
+    queued(store, order_id)
+    assert store.take_slot(order_id) is True
+    doc = store.get(order_id)
+    assert doc is not None
+    queue = doc["queue"]
+    assert isinstance(queue, dict)
+    return str(queue["run_token"])
+
+
+def test_a_run_is_claimed_once_with_its_token(orders: tuple[OrderStore, FrozenClock]) -> None:
+    """Two executions with the same token both pass the token check; only the first claim wins
+    (docs/ARCHITECTURE.md §4, cloud.md "Launcher is at-most-once")."""
+    store, _ = orders
+    token = running(store, "a" * 32)
+
+    assert store.claim_run("a" * 32, token) is True
+    assert store.claim_run("a" * 32, token) is False
+
+
+def test_a_wrong_token_claims_nothing(orders: tuple[OrderStore, FrozenClock]) -> None:
+    store, _ = orders
+    token = running(store, "a" * 32)
+
+    assert store.claim_run("a" * 32, "not-" + token) is False
+    assert store.claim_run("a" * 32, token) is True  # the wrong one left the run unclaimed
+
+
+def test_only_a_running_order_can_be_claimed(orders: tuple[OrderStore, FrozenClock]) -> None:
+    store, _ = orders
+    paid(store, "a" * 32)
+    token = running(store, "b" * 32)
+    store.fail("b" * 32, code=ErrorCode.JOB_KILLED)
+
+    assert store.claim_run("a" * 32, "any-token") is False
+    assert store.claim_run("b" * 32, token) is False
+    assert store.claim_run("c" * 32, "any-token") is False  # no such order
