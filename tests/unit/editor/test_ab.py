@@ -530,17 +530,18 @@ def test_redo_of_one_side_keeps_the_other_sides_cut_and_pays_nothing_for_it(
 
 def test_redo_of_one_side_reads_the_files_the_kept_side_read(tmp_path: Path) -> None:
     """13 Oct: a one-sided rerun took today's file choice while the kept kit cut had another."""
-    _harness(tmp_path, FakeKit(), FakeJudge())
     first = _json(_harness(tmp_path, FakeKit(), FakeJudge()).run())["fixtures"][0]
     _touch(tmp_path / "fixtures" / AB.fixtures[0], "IMG_0.mov")  # today's choice would differ
     again = _harness(tmp_path, FakeKit(), FakeJudge(), script=[edl_turn("e1"), critic_turn(5)])
     again.redo = (f"{AB.fixtures[0]}:new",)
     seen: list[list[str]] = []
     steps_for = again.steps_for
-    again.steps_for = lambda folder: (
-        seen.append(sorted(p.name for p in folder.iterdir())),
-        steps_for(folder),
-    )[1]
+
+    def recording(folder: Path) -> make.Steps:
+        seen.append(sorted(p.name for p in folder.iterdir()))
+        return steps_for(folder)
+
+    again.steps_for = recording
 
     row = _json(again.run())["fixtures"][0]
 
