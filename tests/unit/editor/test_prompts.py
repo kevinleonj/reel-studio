@@ -219,15 +219,17 @@ def test_round_2_rules_from_kevins_picks_are_in_every_food_style() -> None:
 
 
 def test_round_3_rules_from_kevins_picks_are_in_every_food_style() -> None:
-    """STEP-04 A/B, 13 Oct: the kit won 4 of 5 on colour, zoom-ins and flow. Its cuts graded
-    match 0.8 with a brightness lift (ours always 0.6), played whole actions sped up (ours 1.5 s
-    real-speed slices) and tightened the framing mid-Reel (ours zoomed only the payoff)."""
+    """STEP-04 A/B, 13 Oct: the kit won 4 of 5; Kevin named colour, zoom-ins and flow on two.
+    The kit graded match 0.8 on 4 of 5 (ours 0.6 on all), sped whole actions (ours none on 4 of
+    5) and zoomed more mid-Reel. The editor-only references now agree with the rules."""
     for style in ("montage", "recipe"):
         words = " ".join(prompt.system_prompt(style, CFG).split())
-        assert '"match": 0.8' in words and '"match": 0.6' not in words
-        assert "brightness 0.02-0.03" in words and "never below 1" in words
+        assert '"strength": 0.6, "match": 0.8' in words and '"match": 0.6' not in words
+        assert "choose warm over natural" in words and "keep clean for ice cream" in words
+        assert "brightness 0.02-0.03" in words and "Do not lower saturation" in words
         assert "Show each action whole" in words and "usually 2-8x" in words
-        assert "Vary the rhythm" in words
+        assert "Vary the rhythm" in words and "similar shot lengths" not in words
+        assert "single best moment" not in words and "cut mid-action" not in words
         assert "Move in on the food" in words and "zoom 1.2-1.4" in words
 
 
