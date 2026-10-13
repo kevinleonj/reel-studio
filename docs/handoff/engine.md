@@ -55,7 +55,8 @@ Written by the engine lane only. Newest entry on top.
 - 11 Oct, STEP-04: the A/B fixtures are cookies, creami, meat, mercadona, pastav2 (STEP-04 says
   exactly 5; REEL_FIXTURES_DIR holds 8). Left out: orderinginspanish (speech, STEP-05), pasta (same
   dish as pastav2, half photos), melocotonjuice (one 9 s clip). The kit takes at most 15 files, so
-  both engines get the same first 15 (videos first, by name). Order style montage for all; the kit
+  both engines get the same first 15 (videos first, by name; since 13 Oct, 15 spread across the
+  shoot by name, Kevin's approval). Order style montage for all; the kit
   gets no style. Undo: edit `limits.toml [eval.ab]`.
 - 11 Oct, STEP-04: the harness lives in `reel_studio/editor/ab*.py` (STEP-04 names `eval/ab.py`;
   the package keeps it under mypy, ruff and the unit tests). Undo: move the files.
