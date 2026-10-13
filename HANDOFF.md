@@ -4,14 +4,14 @@ The main checkout's log and the status of every lane. Lanes write their own file
 Newest entry on top.
 
 ## Status board
-MAIN-NEXT in progress (13 Oct 2026): task 1 merged (#17); task 2 is PR #19; task 3 on branch
-`editor-job`, stacked on #19
+MAIN-NEXT in progress (13 Oct 2026): tasks 1 and 2 merged (#17, #19); the CloudSettings split
+merged (#21, Kevin's request); task 3 on branch `editor-job`
 - Done: starter kit v1.1; STEP-01 (#1), STEP-02 (#2), STEP-03 (#5), STEP-08 short of the real project
   (#3), STEP-06 except task 8 (#4, #8), STEP-07 (#11, #13, #14), `httpx2` and laptop `WebSettings`
-  (#6), auto-merge guardrail (#7), Stripe ids (#9), cloud cost cap (#15, #16), MAIN-NEXT task 1
-  (#17), all merged
+  (#6), auto-merge guardrail (#7), Stripe ids (#9), cloud cost cap (#15, #16), MAIN-NEXT tasks 1
+  and 2 (#17, #19), CloudSettings split (#21), all merged
 - Partly: STEP-00 on the Mac (see Needs Kevin); STEP-04 (#10 open) and STEP-05 (#12 open, partial)
-  in lane engine; MAIN-NEXT tasks 2-3
+  in lane engine; MAIN-NEXT task 3
 - Blocked: —
 - Not started: STEP-09
 - Next: the first-deploy follow-ups in the task 2 entry (sweep OIDC first), then STEP-04's gate
@@ -95,6 +95,19 @@ MAIN-NEXT in progress (13 Oct 2026): task 1 merged (#17); task 2 is PR #19; task
   `DeliveryFailed`?).
 - Not run: the image build and a real execution (no project, D44); the Firestore emulator cases of
   `claim_run`.
+
+### 13 Oct 2026 — CloudSettings split (Kevin, before MAIN-NEXT task 3; branch `cloud-settings-split`)
+- Before: `make gcp-project` and `make bootstrap-plan` read `CloudSettings`, which required the
+  two cloud model keys, the Resend key and the Cloudflare token, though they use only the project,
+  billing account and region (the GitHub ids come from `gh`); STEP-08 said `gcloud config
+  get-value project`.
+- After: `CloudProjectSettings` (`GCP_PROJECT`, `GCP_REGION`, `GCP_BILLING_ACCOUNT`) for
+  `gcp-project`, `bootstrap-plan` and `spend-cap`; `CloudSettings` keeps the keys and the email
+  domain, and `secrets-push` and `dns` read both; `stripe-setup` reads only the project class.
+  STEP-08 uses `gcloud config get project` (docs/cli-verified.md).
+- Tests first: `test_gcp_project_runs_without_any_api_key`,
+  `test_bootstrap_plan_runs_without_any_api_key` (only the three project values set) and
+  `test_the_project_setup_holds_no_key` failed (missing keys, missing class), then passed.
 
 ### 13 Oct 2026 — MAIN-NEXT task 2: reel-api composed for Cloud Run (branch `cloud-wiring`)
 - Before: nothing in `reel_studio/` imported `gcp_storage`, `gcp_launcher` or `resend_mailer`;
