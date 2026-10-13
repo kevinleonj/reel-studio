@@ -105,6 +105,11 @@ merged (#21, Kevin's request); task 3 on branch `editor-job`
   `gcp-project`, `bootstrap-plan` and `spend-cap`; `CloudSettings` keeps the keys and the email
   domain, and `secrets-push` and `dns` read both; `stripe-setup` reads only the project class.
   STEP-08 uses `gcloud config get project` (docs/cli-verified.md).
+- Review: PASS; fixed after the merge (on `editor-job`): docstrings say who reads what, the
+  `config get` fact is also in F406, the two command tests check the billing account.
+  Follow-ups: `make types` does not type-check `scripts/cloud/` (mypy needs
+  `--explicit-package-bases` there); `secrets-push` still requires the Resend and Cloudflare
+  values and `dns` the model keys, since both read the whole `CloudSettings`.
 - Tests first: `test_gcp_project_runs_without_any_api_key`,
   `test_bootstrap_plan_runs_without_any_api_key` (only the three project values set) and
   `test_the_project_setup_holds_no_key` failed (missing keys, missing class), then passed.
