@@ -16,7 +16,7 @@ from pydantic import ValidationError
 
 from reel_studio.adapters.clock import SystemClock
 from reel_studio.adapters.launcher_real import MakeReel, RealEditor
-from reel_studio.api.cloud import CloudAdapters, cloud_adapters, google_clients
+from reel_studio.api.cloud import Budget, CloudAdapters, cloud_adapters, google_clients
 from reel_studio.api.main import engine_make_reel, firestore_orders, settings_problem
 from reel_studio.api.notify import Notifier
 from reel_studio.core import logging as reel_logging
@@ -113,7 +113,8 @@ def main() -> int:
         raise SystemExit("reel job runs on Cloud Run only (TIER=cloud); use reel make on a laptop")
     config, cloud, clock = load(), load_cloud(), SystemClock()
     orders = firestore_orders(runtime, config, clock)
-    clients = google_clients(runtime, cloud, resend_timeout_s=cloud.resend.timeout_s)
-    adapters = cloud_adapters(runtime, cloud, clients, orders, mail_retries=cloud.resend.retries)
+    budget = Budget.job(cloud)  # an hour per run: the full call and mail budget
+    clients = google_clients(runtime, budget)
+    adapters = cloud_adapters(runtime, cloud, clients, orders, budget)
     make_reel = engine_make_reel(config)  # validates EditorSettings, names a missing key
     return run_job(job, JobPorts.of(adapters, orders, runtime, config), make_reel)

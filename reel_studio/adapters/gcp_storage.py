@@ -94,9 +94,10 @@ class StorageConfig:
     signed_url_max_minutes: int
 
 
-def storage_retry(gcp: config.Gcp) -> Retry:
-    """The library's retry policy with our deadline and backoff (doc ledger: google)."""
-    retry: Retry = DEFAULT_RETRY.with_timeout(gcp.retry_deadline_s).with_delay(
+def storage_retry(gcp: config.Gcp, deadline_s: float) -> Retry:
+    """The library's retry policy with the caller's deadline (a request's budget is shorter
+    than the editor job's) and our backoff (doc ledger: google)."""
+    retry: Retry = DEFAULT_RETRY.with_timeout(deadline_s).with_delay(
         initial=gcp.retry_initial_s, multiplier=gcp.retry_multiplier, maximum=gcp.retry_max_s
     )
     return retry
@@ -167,8 +168,11 @@ class GcpStorage:
         self._cancel = cancel
 
     def create_upload_session(self, order_id: str, file: ports.Record) -> ports.UploadTarget:
-        """A new session for the name, then the older one is cancelled, so at most one of
-        them can finish the object (asking again cannot add uploads beyond the reservation)."""
+        """A new session for the name, then the older one is cancelled, then the new one is
+        recorded, so at most one of them can finish the object (asking again cannot add uploads
+        beyond the reservation). Recording last keeps a failed cancel retryable: the marker still
+        names the older session. Two requests for one name at the same moment can both stay
+        open; the reservation still caps the object's size (follow-up: a generation check)."""
         name = check_file_name(str(file["name"]))
         size = file["size"]
         if not isinstance(size, int):
@@ -185,11 +189,12 @@ class GcpStorage:
                 timeout=self._cfg.timeout_s,
                 retry=self._cfg.retry,
             )
+        if older is not None:
+            self._cancel(older)
+        with _Logged("upload_session_record", order_id):
             marker.upload_from_string(
                 url, content_type=SESSION_TYPE, timeout=self._cfg.timeout_s, retry=self._cfg.retry
             )
-        if older is not None:
-            self._cancel(older)
         return {"name": name, "upload_url": url}
 
     def _read(self, marker: Blob) -> str | None:

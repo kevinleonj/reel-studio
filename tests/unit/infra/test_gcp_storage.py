@@ -58,6 +58,34 @@ def test_upload_session_is_bound_to_origin_and_size() -> None:
     assert bucket.contents["work/o1/upload-sessions/clip.mov"].decode() == target["upload_url"]
 
 
+def test_a_failed_cancel_keeps_the_older_session_recorded_for_the_retry() -> None:
+    """Open, cancel, then record (review W3): if the cancel fails, the marker still names the
+    older live session, so the browser's retry cancels it."""
+    bucket = FakeBucket()
+    calls = {"n": 0}
+
+    def cancel_fails_once(url: str) -> None:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise CloudUnavailable("cloud storage cancel failed: HTTP 503")
+        bucket.cancel(url)
+
+    cfg = StorageConfig(
+        origin=ORIGIN, timeout_s=TIMEOUT_S, retry=RETRY, signed_url_max_minutes=MAX_MINUTES
+    )
+    storage = GcpStorage(bucket, lambda: IDENTITY, cfg, cancel=cancel_fails_once)
+    meta = {"name": "clip.mov", "size": 3, "type": "video/quicktime"}
+    first = storage.create_upload_session("o1", meta)
+
+    with pytest.raises(CloudUnavailable):
+        storage.create_upload_session("o1", meta)
+    assert bucket.contents["work/o1/upload-sessions/clip.mov"].decode() == first["upload_url"]
+    third = storage.create_upload_session("o1", meta)
+
+    assert first["upload_url"] not in bucket.sessions
+    assert bucket.contents["work/o1/upload-sessions/clip.mov"].decode() == third["upload_url"]
+
+
 def test_asking_again_cancels_the_older_session_after_opening_the_new() -> None:
     bucket = FakeBucket()
     storage = make(bucket)
@@ -180,13 +208,16 @@ def test_signed_url_and_token_never_reach_the_log(caplog: pytest.LogCaptureFixtu
     assert IDENTITY.token not in text.replace("token=", "")
 
 
+DEADLINE_S = 10.0
+
+
 def test_storage_retry_follows_cloud_toml() -> None:
     gcp = config.load_cloud().gcp
 
-    retry = storage_retry(gcp)
+    retry = storage_retry(gcp, DEADLINE_S)
 
     # api_core's Retry keeps its settings in private attributes and offers no getter.
-    assert retry._timeout == gcp.retry_deadline_s
+    assert retry._timeout == DEADLINE_S
     assert retry._initial == gcp.retry_initial_s
     assert retry._multiplier == gcp.retry_multiplier
     assert retry._maximum == gcp.retry_max_s

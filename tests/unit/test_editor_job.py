@@ -12,7 +12,7 @@ import pytest
 from pydantic import SecretStr
 
 from reel_studio.adapters.launcher_real import MadeReel
-from reel_studio.api.cloud import CloudClients, cloud_adapters
+from reel_studio.api.cloud import Budget, CloudClients, cloud_adapters
 from reel_studio.cli import job
 from reel_studio.core.config import load, load_cloud
 from reel_studio.core.ports import NewOrder
@@ -46,9 +46,7 @@ class World:
             sessions=httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(499))),
         )
         cloud = load_cloud()
-        adapters = cloud_adapters(
-            runtime, cloud, clients, self.orders, mail_retries=cloud.resend.retries
-        )
+        adapters = cloud_adapters(runtime, cloud, clients, self.orders, Budget.job(cloud))
         self.ports = job.JobPorts.of(adapters, self.orders, runtime, load())
 
     def order(self, order_id: str, *, files: tuple[str, ...] = ("a.mp4",)) -> None:

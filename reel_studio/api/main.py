@@ -33,9 +33,9 @@ from reel_studio.adapters.payments_stripe import StripePayments, StripeSetup, bu
 from reel_studio.adapters.storage_local import LocalStorage
 from reel_studio.api import payments
 from reel_studio.api.app import create_app
-from reel_studio.api.cloud import Process, build_cloud_deps, google_clients
+from reel_studio.api.cloud import Budget, Process, build_cloud_deps, google_clients
 from reel_studio.api.deps import ApiDeps
-from reel_studio.api.notify import Notifier
+from reel_studio.api.notify import notifier as notifier_of
 from reel_studio.api.routes_local import DOWNLOAD_PATH, UPLOAD_PATH
 from reel_studio.core import logging as reel_logging
 from reel_studio.core.config import Config, load, load_cloud
@@ -133,9 +133,7 @@ def build_dispatcher(deps: ApiDeps, *, make_reel: MakeReel | None = None) -> Dis
     it asks Stripe about missed checkouts here too."""
     orders, clock = deps.orders, deps.clock
     times = deps.config.limits.dispatcher
-    notifier = Notifier(
-        orders, deps.mailer, site_url=deps.runtime.site_url, kevin=deps.runtime.kevin_alert_email
-    )
+    notifier = notifier_of(deps)
     editor: Editor = (
         FakeEditor(orders, deps.storage, stage_seconds=times.fake_stage_seconds)
         if make_reel is None
@@ -244,11 +242,10 @@ def create() -> FastAPI:
     orders = firestore_orders(runtime, config, clock)
     if runtime.tier == "laptop":
         return create_app(build_deps(settings, runtime, orders=orders, clock=clock, config=config))
-    cloud = load_cloud()
     deps = build_cloud_deps(
         Process(settings, runtime, config, clock),
         orders=orders,
-        clients=google_clients(runtime, cloud, resend_timeout_s=cloud.resend.request_timeout_s),
+        clients=google_clients(runtime, Budget.request(load_cloud())),
         payments=build_payments(settings, config, clock),
     )
     return create_app(deps)

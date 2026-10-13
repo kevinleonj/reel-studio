@@ -2,10 +2,11 @@
 order store, the reel-editor job and Resend behind the same routes as the laptop.
 
 `google_clients` builds the real Google and Resend clients from Application Default Credentials
-(the service's own account on Cloud Run); `build_cloud_deps` wires them into the adapters, so
-tests hand it fakes. Client arguments not set here stay at the library defaults: ADC
-credentials, the global endpoints (the job's full name carries its region) and gRPC for Cloud
-Run (doc ledger: google-cloud-storage 3.17.0, google-cloud-run 0.16.2).
+(the service's own account on Cloud Run); `cloud_adapters` wires them into the ports, so tests
+hand it fakes. Client arguments not set here stay at the library defaults: ADC credentials, the
+global endpoints (the job's full name carries its region) and gRPC for Cloud Run (doc ledger:
+google-cloud-storage 3.17.0, google-cloud-run 0.16.2). The Google client libraries load with
+this module, so only the TIER=cloud paths import it at runtime.
 """
 
 import time
@@ -45,6 +46,42 @@ class Process:
 
 
 @dataclass(frozen=True)
+class Budget:
+    """How long one outside call may take. reel-api answers inside Cloud Run's 30 s request
+    timeout with no CPU after the response (F90), so it gets the request budget; the editor job
+    has an hour and gets the full one (config/cloud.toml)."""
+
+    call_timeout_s: float  # one Cloud Storage, Cloud Run or session-cancel call
+    retry_deadline_s: float  # Cloud Storage's retries, all attempts together
+    resend_timeout_s: float
+    resend_retries: int
+    resend_backoff_s: float
+
+    @classmethod
+    def request(cls, cloud: config_models.Cloud) -> "Budget":
+        return cls(
+            cloud.gcp.request_timeout_s,
+            cloud.gcp.request_retry_deadline_s,
+            cloud.resend.request_timeout_s,
+            cloud.resend.request_retries,
+            cloud.resend.backoff_s,
+        )
+
+    @classmethod
+    def job(cls, cloud: config_models.Cloud) -> "Budget":
+        return cls(
+            cloud.gcp.call_timeout_s,
+            cloud.gcp.retry_deadline_s,
+            cloud.resend.timeout_s,
+            cloud.resend.retries,
+            cloud.resend.backoff_s,
+        )
+
+    def backoff(self) -> Backoff:
+        return Backoff(retries=self.resend_retries, base_s=self.resend_backoff_s, sleep=time.sleep)
+
+
+@dataclass(frozen=True)
 class CloudAdapters:
     storage: GcpStorage
     mailer: ResendMailer
@@ -60,11 +97,9 @@ class CloudClients:
     sessions: httpx.Client  # cancels resumable upload sessions (F89)
 
 
-def google_clients(
-    runtime: RuntimeSettings, cloud: config_models.Cloud, *, resend_timeout_s: float
-) -> CloudClients:
-    """The real clients; imported here so the laptop never loads the Google client libraries.
-    reel-api passes Resend's request-path timeout, the editor job its own (config/cloud.toml)."""
+def google_clients(runtime: RuntimeSettings, budget: Budget) -> CloudClients:
+    """The real clients; imported here so building them needs the cloud's credentials only
+    when TIER=cloud."""
     from google.cloud import run_v2  # noqa: PLC0415 (api extra, Cloud Run only)
     from google.cloud.storage import Client  # noqa: PLC0415 (F88: untyped, overridden)
 
@@ -73,8 +108,8 @@ def google_clients(
         bucket=Client(project=runtime.firestore_project).bucket(values.gcs_bucket),
         identity=AdcIdentity(),
         jobs=run_v2.JobsClient(),
-        resend=httpx.Client(base_url=RESEND_API_BASE, timeout=resend_timeout_s),
-        sessions=httpx.Client(timeout=cloud.gcp.call_timeout_s),
+        resend=httpx.Client(base_url=RESEND_API_BASE, timeout=budget.resend_timeout_s),
+        sessions=httpx.Client(timeout=budget.call_timeout_s),
     )
 
 
@@ -84,11 +119,10 @@ def resend_render(template: str, data: Record) -> Email:
     return Email(subject=mail.subject, html=mail.html, text=mail.text)
 
 
-def link_email_worst_case_s(resend: config_models.Resend) -> float:
-    """Every attempt timing out, plus the waits between them (resend_mailer.Backoff)."""
-    attempts = resend.request_retries + 1
-    waits = sum(resend.backoff_s * 2.0 ** (n - 1) for n in range(1, attempts))
-    return attempts * resend.request_timeout_s + waits
+def link_email_worst_case_s(budget: Budget) -> float:
+    """Every attempt timing out, plus the waits between them."""
+    attempts = budget.resend_retries + 1
+    return attempts * budget.resend_timeout_s + budget.backoff().total_wait_s()
 
 
 def origin(site_url: str) -> str:
@@ -102,21 +136,19 @@ def cloud_adapters(
     cloud: config_models.Cloud,
     clients: CloudClients,
     orders: OrderStore,
-    *,
-    mail_retries: int,
+    budget: Budget,
 ) -> CloudAdapters:
     """The Storage, Mailer and Launcher ports over the cloud clients, for reel-api and the
-    editor job alike; only the Resend retries differ (config/cloud.toml [resend])."""
+    editor job alike; only the budget differs."""
     values = runtime.cloud()
-    gcp = cloud.gcp
     storage = GcpStorage(
         clients.bucket,
         clients.identity,
         StorageConfig(
             origin=origin(runtime.site_url),
-            timeout_s=gcp.call_timeout_s,
-            retry=storage_retry(gcp),
-            signed_url_max_minutes=gcp.signed_url_max_minutes,
+            timeout_s=budget.call_timeout_s,
+            retry=storage_retry(cloud.gcp, budget.retry_deadline_s),
+            signed_url_max_minutes=cloud.gcp.signed_url_max_minutes,
         ),
         cancel=SessionCanceller(clients.sessions),
     )
@@ -124,10 +156,10 @@ def cloud_adapters(
         clients.resend,
         ResendConfig(api_key=values.resend_sending_key, sender=runtime.mail_from),
         resend_render,
-        Backoff(retries=mail_retries, base_s=cloud.resend.backoff_s, sleep=time.sleep),
+        budget.backoff(),
     )
     launcher = GcpLauncher(
-        clients.jobs, orders, job=values.editor_job, timeout_s=gcp.call_timeout_s
+        clients.jobs, orders, job=values.editor_job, timeout_s=budget.call_timeout_s
     )
     return CloudAdapters(storage, mailer, launcher)
 
@@ -140,9 +172,7 @@ def build_cloud_deps(
     payments: PaymentGateway | None,
 ) -> ApiDeps:
     cloud = load_cloud()
-    adapters = cloud_adapters(
-        process.runtime, cloud, clients, orders, mail_retries=cloud.resend.request_retries
-    )
+    adapters = cloud_adapters(process.runtime, cloud, clients, orders, Budget.request(cloud))
     return ApiDeps(
         orders=orders,
         storage=adapters.storage,

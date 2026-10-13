@@ -52,7 +52,14 @@ class Backoff:
 
     def wait(self, attempt: int) -> None:
         if attempt:
-            self.sleep(self.base_s * 2 ** (attempt - 1))
+            self.sleep(self._delay(attempt))
+
+    def total_wait_s(self) -> float:
+        """Every wait of a send that uses all its attempts."""
+        return sum(self._delay(attempt) for attempt in range(1, self.retries + 1))
+
+    def _delay(self, attempt: int) -> float:
+        return self.base_s * 2.0 ** (attempt - 1)
 
 
 Render = Callable[[str, ports.Record], Email]

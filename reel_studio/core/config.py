@@ -267,6 +267,9 @@ class _ClaudeFile(_Strict):
 class Gcp(_Strict):
     call_timeout_s: float
     retry_deadline_s: float
+    # reel-api's calls inside one request (reel_studio.api.cloud.Budget.request).
+    request_timeout_s: float
+    request_retry_deadline_s: float
     retry_initial_s: float
     retry_multiplier: float
     retry_max_s: float

@@ -180,11 +180,20 @@ def files(order: Authorised) -> dict[str, object]:
 STARTED = {"queued", "running", "done"}
 
 
+def _launch_waiting(deps: ApiDeps) -> None:
+    """TIER=cloud: no dispatcher polls the queue, so Start launches (ARCHITECTURE §7)."""
+    if deps.launcher is not None:
+        launch_waiting(deps.orders, deps.launcher, launch_failed(deps), stage="start")
+
+
 @router.post("/start")
 def start(order: Exclusive) -> None:
     """Write the manifest and queue; the dispatcher (or the cloud launcher) takes the slot.
-    Safe to call twice: a second Start (a double tap, a retried request) answers 200."""
+    Safe to call twice: a second Start (a double tap, a retried request) answers 200, and one
+    that finds the order still queued (the first ran out of attempts after queueing) launches."""
     if order.status in STARTED:
+        if order.status == "queued":
+            _launch_waiting(order.deps)
         return
     if order.status != "paid":
         raise wrong_status()
@@ -214,9 +223,7 @@ def start(order: Exclusive) -> None:
         "order queued",
         extra={"order_id": order.id, "stage": "start", "event": "queue", "outcome": "ok"},
     )
-    launcher = order.deps.launcher
-    if launcher is not None:
-        launch_waiting(order.deps.orders, launcher, launch_failed(order.deps), stage="start")
+    _launch_waiting(order.deps)
 
 
 @router.post("/viewed")

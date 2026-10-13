@@ -137,3 +137,34 @@ run "request_logs_keep_only_a_sample" {
     error_message = "The exclusion must be active."
   }
 }
+
+# The env contract test (tests/unit/infra/test_env_contract.py) checks the maps in locals.tf;
+# these check that each map is attached to its workload (task 2 review W5).
+run "each_workload_gets_its_environment" {
+  command = apply
+
+  assert {
+    condition = length(setsubtract(
+      ["TIER", "FIRESTORE_PROJECT", "SITE_URL", "MAIL_FROM", "KEVIN_ALERT_EMAIL", "GCS_BUCKET", "EDITOR_JOB",
+        "PAYMENTS", "STRIPE_PRICE_ID", "STRIPE_COUPON_ID", "VOICE_AVAILABLE", "WEB_DIST",
+      "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "RESEND_SENDING_KEY"],
+      [for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.name]
+    )) == 0
+    error_message = "reel-api must get common_env, api_env and api_secrets (RuntimeSettings, WebSettings)."
+  }
+  assert {
+    condition = length(setsubtract(
+      ["TIER", "FIRESTORE_PROJECT", "SITE_URL", "MAIL_FROM", "KEVIN_ALERT_EMAIL", "GCS_BUCKET", "EDITOR_JOB",
+      "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "RESEND_SENDING_KEY"],
+      [for e in google_cloud_run_v2_job.editor.template[0].template[0].containers[0].env : e.name]
+    )) == 0
+    error_message = "reel-editor must get common_env and editor_secrets (RuntimeSettings, EditorSettings)."
+  }
+  assert {
+    condition = length([
+      for e in google_cloud_run_v2_job.editor.template[0].template[0].containers[0].env : e.name
+      if startswith(e.name, "STRIPE_")
+    ]) == 0
+    error_message = "D62: the editor job never holds a Stripe value."
+  }
+}

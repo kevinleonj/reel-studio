@@ -28,6 +28,9 @@ MAIN-NEXT in progress (13 Oct 2026): task 1 merged (#17); task 2 is PR #19; task
 ## Needs Kevin
 - Before the first deploy: set the repository variables `STRIPE_PRICE_ID` and `STRIPE_COUPON_ID`
   (deploy.yml passes them to Terraform since task 2).
+- `.env` needs `TIER=laptop` (new required setting; `.env.example` has it, `make up` and
+  `LAPTOP_HOST` set it themselves, `reelctl` reads it from `.env`):
+  `printf '%s' laptop | uv run reelctl dotenv-set TIER`.
 - Doc gate: `~/.claude/hooks/gate-docs.sh` refuses Write and Edit on files importing `fastapi`,
   `httpx` or `google` because `.claude/doc-ledger.json` (protected) lists none of them; those test
   files were written through the shell. Their docs are cited in FACTS (F89-F91) and the cloud
@@ -109,6 +112,11 @@ MAIN-NEXT in progress (13 Oct 2026): task 1 merged (#17); task 2 is PR #19; task
   - A launch that fails fails the order at once and frees its slot (`launch_waiting`, as the
     laptop dispatcher already did), instead of leaving it running for the sweep: the sweep cannot
     authenticate the scheduler yet, and an execution a lost response started exits at its claim.
+    Residual: an execution that claimed before the order was failed (a launch that timed out
+    late) runs to its end and pays Claude for an order the customer was told failed.
+  - reel-api's outside calls get a request budget (`[gcp] request_*`, `[resend] request_*`:
+    10 s per call, 10 s of storage retries, 2 x 8 s for the link email), summed against the 30 s
+    request timeout in a test; the editor job keeps the full budget (`Budget.job`).
   - One live upload session per name: the session URL is kept in
     `work/<order>/upload-sessions/<name>` and the older session is cancelled with a DELETE (F89).
     Cost: one read and one write per file per batch on top of the session itself.
@@ -117,9 +125,18 @@ MAIN-NEXT in progress (13 Oct 2026): task 1 merged (#17); task 2 is PR #19; task
     STEP-08 added deploy.yml, and `step08.py` needs a live deploy (gates are Kevin's).
 - Follow-ups before the first deploy: the sweep endpoint still refuses every caller
   (`refuse_all`): it needs the scheduler's OIDC check, or the scheduler gets 401 every 10 minutes
-  and no lease is swept; `FORWARDED_ALLOW_IPS` on the service (web.md); `--build-arg SITE_URL` in
-  deploy.yml (web.md); set the repository variables `STRIPE_PRICE_ID` and `STRIPE_COUPON_ID`;
-  measure the uploads call with 40 files (three bucket calls each).
+  and no lease is swept; once it authenticates it must also start waiting orders
+  (`launch_waiting`) and mail the failures it reports, as ARCHITECTURE §1 step 14 says and the
+  laptop dispatcher does; `FORWARDED_ALLOW_IPS` on the service (web.md); `--build-arg SITE_URL`
+  in deploy.yml (web.md); set the repository variables `STRIPE_PRICE_ID` and `STRIPE_COUPON_ID`
+  (Terraform now stops the plan when they are empty); measure the uploads call with 40 files
+  (three bucket calls each); two upload-session requests for one name at the same moment can both
+  stay open (a generation check on the marker would close it; the reservation caps the size).
+- Senior review round 1 of this branch: FAIL (C1: a model-level settings error printed the tail of
+  the Resend key; now `hide_input_in_errors`, with a test), warnings W1-W9 fixed: a retried Start
+  that finds the order queued launches it; request budgets; open, cancel, then record the upload
+  session; the email wiring and the Terraform env attachment tested; `TIER=laptop` in
+  `LAPTOP_HOST`; F89 status and F92.
 - Not run: anything against Google Cloud or Resend; the Firestore emulator cases (only lane web
   starts containers).
 
