@@ -47,6 +47,21 @@ Written by the engine lane only. Newest entry on top.
   REDO after a partial run: it pays finished arms again; narrow ONLY/REDO to the fixtures whose
   `new` arm in the day's ab-runs.json is still `carried`. Expected about $0.4 per arm, ledger
   near $14.5-14.8 of $20.
+  Rerun done (13 Oct, eval/results/2026-10-13/ab-runs.json, no error, not stopped; each arm read
+  the row's files: cookies 15, creami 14, meat 15, mercadona 2, so every pair is like for like
+  now). Our arm, new edit lists:
+
+  | fixture | $ | critic new / kit (was) | grade | shots, total s | zoomed | speed-ups | hook s |
+  |---|---|---|---|---|---|---|---|
+  | cookies | 0.4556 | 21 / 23 (22) | warm 0.6 m0.8 | 9, 16.4 (16, 26.6) | 7 (3) | 5 (0) | 2.0 |
+  | creami | 0.4336 | 23 / 21 (23) | natural 0.6 m0.8 b+0.02 | 9, 15.6 (9, 15.6) | 8 (7) | 5 (0) | 2.8 |
+  | meat | 0.4824 | 23 / 24 (23) | warm 0.6 m0.8 | 9, 15.2 (12, 18.4) | 7 (2) | 3 (0) | 2.0 |
+  | mercadona | 0.2404 | 17 / 20 (16) | natural 0.5 m0.9 | 4, 4.9 (8, 9.1) | 2 (0) | 0 (0) | 1.4 |
+
+  The rules moved the cuts (grade, speed-ups, zoom-ins, longer hooks), but sped actions shortened
+  them: cookies 26.6 to 16.4 s, meat 18.4 to 15.2 s, and mercadona's 4.9 s is a 4-shot cut of 2
+  files. Mean critic new 21.4, old 22.0 (gate floor 21.0, unchanged slack). Paid this round
+  $1.6120; ledger $14.51 of $20. AB-RESULT.md is the pending page from these runs.
 - Round 2 result (13 Oct, eval/results/2026-10-12/ab.json): old 4, new 1, tie 0 (cookies, creami,
   meat, mercadona old; pastav2 new). The step04 gate (`--local`): `GATE step04 FAIL (1 of 11
   checks failed)`, only `A/B picks: new engine picked or tied in >= 3 of 5`. Not model-judged, so
