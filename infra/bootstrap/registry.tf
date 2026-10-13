@@ -25,6 +25,11 @@ resource "google_artifact_registry_repository" "reel" {
     }
   }
 
+  # No paid vulnerability scans if the Container Scanning API is ever turned on (F416).
+  vulnerability_scanning_config {
+    enablement_config = "DISABLED"
+  }
+
   labels = merge(local.labels, { component = "registry" })
 
   depends_on = [google_project_service.bootstrap]

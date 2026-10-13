@@ -109,3 +109,28 @@ run "ttl_does_not_block_the_apply" {
     error_message = "Enabling TTL takes ten minutes or more; waiting would outlive the 15-minute apply job."
   }
 }
+
+run "request_logs_keep_only_a_sample" {
+  command = apply
+
+  assert {
+    condition     = strcontains(google_logging_project_exclusion.requests.filter, "logName=\"projects/test-project/logs/run.googleapis.com%2Frequests\"")
+    error_message = "The exclusion must name reel-api's request log (CLOUD-COST-CAP settled 2)."
+  }
+  assert {
+    condition     = strcontains(google_logging_project_exclusion.requests.filter, "sample(insertId, 0.99)")
+    error_message = "Exclude 99 % so a 1 % sample of request logs is kept (F415)."
+  }
+  assert {
+    condition     = !strcontains(google_logging_project_exclusion.requests.filter, "httpRequest.status")
+    error_message = "Any status: a flood of 5xx answers during a spend-cap pause must not be stored in full."
+  }
+  assert {
+    condition     = strcontains(google_logging_project_exclusion.requests.filter, "resource.labels.service_name=\"reel-api\"")
+    error_message = "Only reel-api's request log is sampled, no other service's."
+  }
+  assert {
+    condition     = google_logging_project_exclusion.requests.disabled == false
+    error_message = "The exclusion must be active."
+  }
+}

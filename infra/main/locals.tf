@@ -79,6 +79,9 @@ locals {
   sweep_path             = "/api/internal/sweep"
 
   log_retention_days = 30
+  # Request logs kept as a sample; the application's own logs stay complete (CLOUD-COST-CAP
+  # settled 2, F415). Exclusions drop what they match, so the filter samples 1 - this.
+  request_log_keep_fraction = 0.01
 
   # docs/ARCHITECTURE.md §6: which secret each workload reads, by environment variable name.
   api_secrets = {

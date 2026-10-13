@@ -331,6 +331,20 @@ class Smoke(_Strict):
     root_marker: str
 
 
+class SpendCap(_Strict):
+    service: str = Field(pattern=r"^services/[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$")
+    amount_units: int = Field(gt=0)
+    display_name: str = Field(min_length=1)
+    http_timeout_s: float = Field(gt=0)
+
+
+class GithubEnv(_Strict):
+    name: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    wait_timer_minutes: int = Field(ge=0)
+    prevent_self_review: bool
+
+
 class Cloud(_Strict):
     gcp: Gcp
     resend: Resend
@@ -339,6 +353,8 @@ class Cloud(_Strict):
     dns: Dns
     stripe: StripeSetup
     smoke: Smoke
+    spend_cap: SpendCap
+    github_env: GithubEnv
 
 
 # ---------------------------------------------------------------- loading

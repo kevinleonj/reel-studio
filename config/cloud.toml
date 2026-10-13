@@ -51,3 +51,20 @@ expected_max_instances = 2   # D51
 expected_job_timeout_s = 3600   # D52
 expected_job_max_retries = 0   # D52
 root_marker = "<html"   # GET / must serve the built site; web lane may tighten this
+
+[spend_cap]
+# make spend-cap: a budget with spend-cap enforcement, this project and one service, monthly.
+# CLOUD-COST-CAP.md settled 1: 30 units of the billing account's currency, gross cost; about twice
+# the 50-Reels-a-week maximum at 600 s per run (217 x $0.0624 = $13.54). Service ids: F414.
+service = "services/152E-C115-5142"   # Cloud Run (Gemini API: services/AEFD-7695-64FA)
+amount_units = 30
+display_name = "reel-studio spend cap"
+http_timeout_s = 30
+
+[github_env]
+# make github-env: the deploy approval gate deploy.yml and the Workload Identity binding rely on
+# (infra/bootstrap/wif.tf trusts any job in this environment). Reviewer: the repository owner.
+name = "beta"
+branch = "main"   # the only branch that may deploy
+wait_timer_minutes = 0
+prevent_self_review = false   # Kevin dispatches and approves his own deploy

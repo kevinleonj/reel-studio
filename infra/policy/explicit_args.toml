@@ -9,7 +9,15 @@
 arguments = ["service", "disable_on_destroy", "disable_dependent_services"]
 
 [google_artifact_registry_repository]
-arguments = ["repository_id", "format", "location", "cleanup_policy_dry_run", "cleanup_policies", "labels"]
+arguments = [
+  "repository_id",
+  "format",
+  "location",
+  "cleanup_policy_dry_run",
+  "cleanup_policies",
+  "labels",
+  "vulnerability_scanning_config.enablement_config",
+]
 
 [google_storage_bucket]
 arguments = [

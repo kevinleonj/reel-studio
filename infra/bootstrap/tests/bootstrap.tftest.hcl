@@ -73,3 +73,12 @@ run "budget_warns_before_the_money_is_spent" {
     error_message = "The 50/90/100 % rules on actual spend stay (D59)."
   }
 }
+
+run "no_paid_image_scans" {
+  command = apply
+
+  assert {
+    condition     = google_artifact_registry_repository.reel.vulnerability_scanning_config[0].enablement_config == "DISABLED"
+    error_message = "No paid vulnerability scans if the scanning API is ever turned on (F416)."
+  }
+}
