@@ -52,6 +52,13 @@ BAD = {
         '  region           = "europe-southwest1"\n',
         "google_cloud_scheduler_job.sweep: region europe-southwest1 not allowed (europe-west1)",
     ),
+    # explicit_args.toml, MAIN-NEXT task 3: without args the image's CMD prints help and exits
+    "job without its command": (
+        "main/run.tf",
+        "        args  = local.editor_args\n",
+        "",
+        "google_cloud_run_v2_job.editor: missing template.template.containers.args",
+    ),
     # limits.toml, lesson L7: 32 GiB was planned at 4 vCPU; the maximum is 16 GiB
     "job memory above the maximum": (
         "main/locals.tf",
