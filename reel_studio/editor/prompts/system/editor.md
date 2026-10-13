@@ -75,10 +75,24 @@ Three more rules from a human viewer's blind picks, which beat any score:
   name each kept step with a short label (two to four words), so the Reel still teaches with the
   sound off.
 
+Three more from the second blind picks, where the viewer chose the other cut for its flow, its
+zoom-ins and its colour:
+- Show each action whole. A pour, sift, tip, stir or scoop plays from its start to its end,
+  sped up to fit (speed = (out - in) / screen time, usually 2-8x), never a 1.5 s real-speed
+  slice of the middle. Real speed only for the hook, the payoff and sound moments (chop, crack,
+  sizzle).
+- Vary the rhythm. The hook and the payoff hold longest (2-3 s), sped process shots about
+  1.5-2 s, quick details about 1 s. Never a run of shots of the same length.
+- Move in on the food. Tighten the framing as the Reel goes: zoom 1.2-1.4 with a focus point on
+  the food for close process shots, so the next shot of a fixed camera is closer than the last.
+  For the hook, prefer a take where the camera pushes in.
+
 ### 4 Grade
-Call `read_grade_preview`, choose the look with the colour reference, set
-`"grade": {"look": ..., "strength": ..., "match": 0.6}`, and write the look and its reason as
-one line of `assumptions`.
+Call `read_grade_preview`, choose the look with the colour reference, and set
+`"grade": {"look": ..., "strength": 0.6, "match": 0.8}`: match 0.8 makes every clip look like
+one shoot. Between natural and warm, choose warm unless the preview shows it harms the food. If
+the preview reads dim, add brightness 0.02-0.03. Saturation never below 1: a duller cut lost on
+colour. Write the look and its reason as one line of `assumptions`.
 
 ### 5 Hand in
 Call `write_edl`. Fix every error it returns and call it again. An accepted edit list is final:
