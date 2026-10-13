@@ -16,10 +16,10 @@ Written by the engine lane only. Newest entry on top.
   4, 4 and 6 labels, no two photos in a row, photos at most 1.2 s, each ends on its payoff.
   Cookies: the first 15 files by name end before the cookies come out of the oven (IMG_0499,
   0500, 0502 are left out), for both engines, so no prompt can show the finished cookies. A
-  spread file choice fixed that (3d5f3da, both engines rerun, $1.95) but replaced the kit's 11 Oct
-  cut, which Kevin's goal keeps; it was reverted (f879cac) and the cookies row restored to our
-  round-2 cut and the kit's 11 Oct cut. The $1.95 stays on the ledger (`superseded_paid_usd`).
-  Ledger $12.90 of $15; a fixture's new cost in the report includes every same-day pass.
+  spread file choice fixes that (3d5f3da, both engines rerun 12 Oct, $1.95). 13 Oct: Kevin
+  approved the spread-file pair, so f879cac is reverted and the cookies row points at the paid
+  12 Oct runs (`out/ab/2026-10-12/cookies/new-210614`, `old-211403`; critic 22 and 23), no new
+  paid run. Ledger $12.90 of $15; a fixture's new cost in the report includes every same-day pass.
 - Open from the round 2 review (not done): "at most four process steps" and "photo at most 1.2 s" pull against the recipe structure
   and the craft reference, and the critic does not know the new rules; REDO with the same name
   twice keeps only the last entry; the prompt tests pin phrases, not whole rules; the cross-day
