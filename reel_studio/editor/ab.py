@@ -291,8 +291,7 @@ class Harness:
             if row is None:
                 row = {"name": name}
                 self.rows.append(row)
-            files = select_inputs(self.fixtures / name, ab_cfg.max_files)
-            row["files"] = [f.name for f in files]
+            files = self._inputs(row, redo.get(name, ()))
             base = self.root / OUT / day / name
             for side in SIDES:
                 again = side in redo.get(name, ())
