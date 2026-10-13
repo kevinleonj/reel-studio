@@ -62,7 +62,10 @@ Written by the engine lane only. Newest entry on top.
 
   The rules moved the cuts (grade, speed-ups, zoom-ins, longer hooks), but sped actions shortened
   them: cookies 26.6 to 16.4 s, meat 18.4 to 15.2 s, and mercadona's 4.9 s is a 4-shot cut of 2
-  files. Mean critic new 21.4, old 22.0 (gate floor 21.0, unchanged slack). Paid this round
+  files, all four segments muted (-70 LUFS, QA flag), one flagged blurry, the walking clip
+  dropped. Creami graded natural (the rule says clean for ice cream, reference with style photos)
+  and mercadona 0.5/0.9, so the grade rule is not always followed. Next tune, if picks still
+  fail: a length floor against sped-up cuts, and mercadona's sound. Mean critic new 21.4, old 22.0 (gate floor 21.0, unchanged slack). Paid this round
   $1.6120; ledger $14.51 of $20. AB-RESULT.md is the pending page from these runs.
 - Round 2 result (13 Oct, eval/results/2026-10-12/ab.json): old 4, new 1, tie 0 (cookies, creami,
   meat, mercadona old; pastav2 new). The step04 gate (`--local`): `GATE step04 FAIL (1 of 11
