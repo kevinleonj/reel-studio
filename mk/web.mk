@@ -34,7 +34,7 @@ prerelease:
 
 # What compose's x-website-settings gives the containers, as the laptop itself sees it: the
 # host processes (reelctl, the real-editor dispatcher) reach Mailpit and the emulator on loopback.
-LAPTOP_HOST := SMTP_HOST=127.0.0.1 SMTP_PORT=1025 DATA_DIR=./data WEB_DIST=./web/dist \
+LAPTOP_HOST := TIER=laptop SMTP_HOST=127.0.0.1 SMTP_PORT=1025 DATA_DIR=./data WEB_DIST=./web/dist \
   FIRESTORE_EMULATOR_HOST=127.0.0.1:8681
 
 # The containers run as the host user, so ./data stays writable on Linux too (compose.yaml).
