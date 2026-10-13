@@ -104,7 +104,7 @@ locals {
   secret_version = "latest"
 
   # The editor job's command after the image's ENTRYPOINT ["reel"]: one order, from the ORDER_ID
-  # and RUN_TOKEN the launcher sets (reel_studio/cli/job.py). The image's CMD is only --help.
+  # and RUN_TOKEN the launcher sets (reel_studio/cli/job.py). The image's CMD is only --help (F93).
   editor_args = ["job"]
 
   # Plain environment for both workloads. Names follow .env.example; the env contract test

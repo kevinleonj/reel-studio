@@ -150,7 +150,8 @@ def build_dispatcher(deps: ApiDeps, *, make_reel: MakeReel | None = None) -> Dis
 
 def engine_make_reel(config: Config) -> MakeReel:
     """The engine's `make` (STEP-03) for one order: the same deps as `reel make`."""
-    # Imported here: the api image has no editor extra; only the laptop's host dispatcher runs it.
+    # Imported here: the api image has no editor extra; the laptop's host dispatcher and the
+    # editor job (`reel job`) run it.
     from reel_studio.cli.reel import real_deps  # noqa: PLC0415
     from reel_studio.editor import make, prompt  # noqa: PLC0415
     from reel_studio.editor.media import render  # noqa: PLC0415

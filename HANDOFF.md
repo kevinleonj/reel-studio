@@ -79,6 +79,15 @@ MAIN-NEXT in progress (13 Oct 2026): task 1 merged (#17); task 2 is PR #19; task
     google-cloud-storage, -run, -firestore and httpx in `[editor]`.
   - A run the engine refuses (ReelError) exits 0: the order is already failed or paused and told;
     only a crash exits 1.
+- Senior review: PASS, 0 critical; its warnings fixed after it: the next order is launched in a
+  `finally` and a failing ready email is logged, not raised; tests for a duplicate that arrives
+  while the first run edits, an engine refusal, the monthly-limit pause, the ready email's
+  guards, the launcher-to-`JobSettings` env names and the job's full budget; F93 for `args`.
+- Follow-ups: `make test-emulator` before the first deploy (the four `claim_run` Firestore cases
+  run in no CI job); a job that dies before its claim (no credentials, bad config) leaves the
+  order running until the lease sweep, which cannot authenticate yet; the ready email is claimed
+  before it is sent, so a Resend outage longer than the retries loses it (release the claim on
+  `DeliveryFailed`?).
 - Not run: the image build and a real execution (no project, D44); the Firestore emulator cases of
   `claim_run`.
 

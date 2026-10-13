@@ -3,11 +3,10 @@
 
 The launcher starts the job with ORDER_ID and RUN_TOKEN as overrides (gcp_launcher). The job
 claims the run first (`claim_run`, `queue.claimed_token`): when another execution already has
-it, or the order is no
-longer running, it exits without touching anything. Then it downloads the files Start listed,
-runs the engine, uploads both Reels, finishes the order, emails the result and starts the next
-waiting order. Nothing is retried: Cloud Run runs the job with 0 retries (D52), because a second
-run pays Claude twice.
+it, or the order is no longer running, it exits without touching anything. Then it downloads
+the files Start listed, runs the engine, uploads both Reels, finishes the order, emails the
+result and starts the next waiting order, whatever happened to this one. Nothing is retried:
+Cloud Run runs the job with 0 retries (D52), because a second run pays Claude twice.
 """
 
 from dataclasses import dataclass
@@ -73,7 +72,21 @@ def run_job(job: JobSettings, ports: JobPorts, make_reel: MakeReel) -> int:
         )
         return OK
     log.info("run claimed", extra=_fields(order_id, "claim", "ok"))
-    outcome = OK
+    try:
+        return _edit(order_id, ports, make_reel)
+    finally:
+        # This run's slot is free now (finish, fail or pause released it), or the run died: start
+        # the oldest waiting order either way (ARCHITECTURE §1 step 12). The sweep does not
+        # launch yet, so nothing else would.
+        launch_waiting(
+            ports.orders,
+            ports.launcher,
+            lambda waiting: _tell_failed(ports, waiting, ErrorCode.JOB_KILLED, "launch"),
+            stage=STAGE,
+        )
+
+
+def _edit(order_id: str, ports: JobPorts, make_reel: MakeReel) -> int:
     try:
         # The engine's own refusals (ReelError) fail or pause the order inside RealEditor.
         RealEditor(ports.orders, ports.storage, make_reel, notifier=ports.notifier).run(order_id)
@@ -83,18 +96,13 @@ def run_job(job: JobSettings, ports: JobPorts, make_reel: MakeReel) -> int:
         log.exception("editor crashed", extra=_fields(order_id, "run", "error"))
         ports.orders.fail(order_id, code=ErrorCode.RENDER_ERROR)
         _tell_failed(ports, order_id, ErrorCode.RENDER_ERROR, "rendering")
-        outcome = FAILED
-    else:
+        return FAILED
+    try:
         ports.notifier.order_ready(order_id, out_days=ports.out_days)
-    # This run's slot is free now (finish, fail or pause released it): start the oldest waiting
-    # order (ARCHITECTURE §1 step 12).
-    launch_waiting(
-        ports.orders,
-        ports.launcher,
-        lambda waiting: _tell_failed(ports, waiting, ErrorCode.JOB_KILLED, "launch"),
-        stage=STAGE,
-    )
-    return outcome
+    except Exception:
+        # The Reel is saved and the page shows it; a lost email must not stop the next order.
+        log.exception("ready notice not sent", extra=_fields(order_id, "notify", "error"))
+    return OK
 
 
 def main() -> int:
