@@ -33,6 +33,9 @@ variables {
   email_domain = "mail.test"
   mail_from    = "Reel Studio <reels@mail.test>"
   alert_email  = "alerts@mail.test"
+
+  stripe_price_id  = "price_test"
+  stripe_coupon_id = "coupon_test"
 }
 
 run "service_url_from_project_number" {

@@ -119,15 +119,7 @@ def test_runtime_requires_where_orders_live_and_how_mail_leaves() -> None:
         RuntimeSettings(_env_file=None)
 
     missing = {e["loc"][0] for e in caught.value.errors() if e["type"] == "missing"}
-    assert missing == {
-        "site_url",
-        "mail_from",
-        "kevin_alert_email",
-        "firestore_project",
-        "smtp_host",
-        "smtp_port",
-        "data_dir",
-    }
+    assert missing == {"tier", "site_url", "mail_from", "kevin_alert_email", "firestore_project"}
 
 
 def test_web_runtime_values_are_typed(make_settings: MakeSettings) -> None:
@@ -207,3 +199,59 @@ def test_every_env_example_name_has_one_field() -> None:
 
     assert sorted(set(fields)) == sorted(names)
     assert len(fields) == len(set(fields)), "a variable belongs to one Settings class"
+
+
+CLOUD_VALUES = {
+    "tier": "cloud",
+    "gcs_bucket": "reel-studio-media-test",
+    "editor_job": "projects/test-project/locations/test-region/jobs/reel-editor",
+    "resend_sending_key": "test-sending-key",
+}
+
+
+def test_the_tier_is_chosen_never_defaulted() -> None:
+    assert RuntimeSettings.model_fields["tier"].is_required()
+
+
+def test_the_laptop_tier_needs_smtp_and_a_data_folder(make_settings: MakeSettings) -> None:
+    with pytest.raises(ValidationError) as caught:
+        make_settings(RuntimeSettings, tier="laptop", smtp_host=None, data_dir=None)
+    assert "TIER=laptop needs SMTP_HOST, DATA_DIR" in str(caught.value)
+
+
+def test_the_cloud_tier_needs_the_bucket_the_job_and_the_sending_key(
+    make_settings: MakeSettings,
+) -> None:
+    with pytest.raises(ValidationError) as caught:
+        make_settings(RuntimeSettings, tier="cloud")
+    assert "TIER=cloud needs GCS_BUCKET, EDITOR_JOB, RESEND_SENDING_KEY" in str(caught.value)
+
+
+def test_the_cloud_tier_needs_no_smtp_or_data_folder(make_settings: MakeSettings) -> None:
+    built = make_settings(
+        RuntimeSettings, smtp_host=None, smtp_port=None, data_dir=None, **CLOUD_VALUES
+    )
+    assert isinstance(built, RuntimeSettings)
+    cloud = built.cloud()
+    assert cloud.gcs_bucket == CLOUD_VALUES["gcs_bucket"]
+    assert cloud.resend_sending_key.get_secret_value() == CLOUD_VALUES["resend_sending_key"]
+    with pytest.raises(ValueError, match="TIER=laptop"):
+        built.laptop()
+
+
+def test_the_laptop_view_has_no_optional_values(make_settings: MakeSettings) -> None:
+    built = make_settings(RuntimeSettings, tier="laptop")
+    assert isinstance(built, RuntimeSettings)
+    laptop = built.laptop()
+    assert (laptop.smtp_host, laptop.smtp_port) == (TEST_VALUES["smtp_host"], 1025)
+    with pytest.raises(ValueError, match="TIER=cloud"):
+        built.cloud()
+
+
+@pytest.mark.parametrize(
+    "job", ["reel-editor", "projects/p/jobs/reel-editor", "projects/p/locations/r/jobs/"]
+)
+def test_the_editor_job_is_its_full_resource_name(make_settings: MakeSettings, job: str) -> None:
+    # The launcher passes it to jobs.run as `name` (F30), so a short name fails at the first Start.
+    with pytest.raises(ValidationError, match="editor_job"):
+        make_settings(RuntimeSettings, **{**CLOUD_VALUES, "editor_job": job})

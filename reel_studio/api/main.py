@@ -52,11 +52,12 @@ USAGE_ERROR = 2
 
 
 def _storage(runtime: RuntimeSettings, clock: Clock) -> LocalStorage:
-    runtime.data_dir.mkdir(parents=True, exist_ok=True)
+    data_dir = runtime.laptop().data_dir
+    data_dir.mkdir(parents=True, exist_ok=True)
     # A fresh key per process: links are re-signed on every status poll, so a restart only
     # invalidates links that were about to be replaced anyway. Nothing to store or leak.
     return LocalStorage(
-        runtime.data_dir,
+        data_dir,
         upload_path=UPLOAD_PATH,
         download_path=DOWNLOAD_PATH,
         signing_key=secrets.token_bytes(SIGNING_KEY_BYTES),
@@ -65,9 +66,10 @@ def _storage(runtime: RuntimeSettings, clock: Clock) -> LocalStorage:
 
 
 def _mailer(runtime: RuntimeSettings, config: Config) -> SmtpMailer:
+    laptop = runtime.laptop()
     return SmtpMailer(
-        runtime.smtp_host,
-        runtime.smtp_port,
+        laptop.smtp_host,
+        laptop.smtp_port,
         sender=runtime.mail_from,
         timeout_s=config.limits.smtp.timeout_s,
     )

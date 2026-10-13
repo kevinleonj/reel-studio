@@ -30,3 +30,13 @@ variable "alert_email" {
   description = "Where failure and pause alerts go; KEVIN_ALERT_EMAIL in .env.example."
   type        = string
 }
+
+variable "stripe_price_id" {
+  description = "The €19 price `make stripe-setup` finds or creates (D58); STRIPE_PRICE_ID in .env.example."
+  type        = string
+}
+
+variable "stripe_coupon_id" {
+  description = "The 100%-off coupon promotion codes attach to; STRIPE_COUPON_ID in .env.example."
+  type        = string
+}

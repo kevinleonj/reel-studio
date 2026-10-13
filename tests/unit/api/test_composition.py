@@ -94,7 +94,7 @@ def test_the_api_is_wired_from_settings(tmp_path: Path, make_settings: MakeSetti
         headers={"X-Order-Token": token},
     ).json()
     assert targets["targets"][0]["upload_url"].startswith(f"{UPLOAD_PATH}/")
-    assert (runtime.data_dir).is_dir()
+    assert runtime.laptop().data_dir.is_dir()
 
 
 def test_stripe_settings_wire_the_stripe_adapter(
@@ -206,6 +206,7 @@ COMPLETE = {
     "SITE_URL": "http://example.test",
     "MAIL_FROM": "reels@example.test",
     "KEVIN_ALERT_EMAIL": "kevin@example.test",
+    "TIER": "laptop",
     "FIRESTORE_PROJECT": "reel-studio-test",
     "SMTP_HOST": "mailpit",
     "SMTP_PORT": "1025",
@@ -221,6 +222,7 @@ def test_check_passes_a_complete_environment(
         "SITE_URL": "http://example.test",
         "MAIL_FROM": "reels@example.test",
         "KEVIN_ALERT_EMAIL": "kevin@example.test",
+        "TIER": "laptop",
         "FIRESTORE_PROJECT": "reel-studio-test",
         "SMTP_HOST": "mailpit",
         "SMTP_PORT": "1025",

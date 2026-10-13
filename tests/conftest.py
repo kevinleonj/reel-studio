@@ -25,6 +25,7 @@ TEST_VALUES: dict[str, Any] = {
     "old_kit_dir": "/nonexistent/old-kit",
     "reel_fixtures_dir": "/nonexistent/fixtures",
     "payments": "off",
+    "tier": "laptop",
     "site_url": "http://127.0.0.1:8000",
     "mail_from": "reels@example.test",
     "kevin_alert_email": "kevin@example.test",

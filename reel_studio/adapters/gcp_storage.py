@@ -28,7 +28,7 @@ from google.auth.transport.requests import Request
 from google.cloud.storage.retry import DEFAULT_RETRY  # type: ignore[import-untyped]
 
 from reel_studio.core import config, ports
-from reel_studio.core.constants import GOOGLE_CLOUD_PLATFORM_SCOPE
+from reel_studio.core.constants import GCS_SESSION_CANCELLED, GOOGLE_CLOUD_PLATFORM_SCOPE
 from reel_studio.core.errors import CloudUnavailable
 from reel_studio.core.file_names import check_file_name
 from reel_studio.core.logging import get_logger, latency_ms
@@ -46,7 +46,7 @@ SESSIONS_FOLDER = "upload-sessions"  # work/{order}/upload-sessions/{name}: the 
 SESSION_TYPE = "text/plain"
 # A cancelled JSON-API session answers 499; one already finished or gone answers another 4xx,
 # which also means it takes no more bytes (F89).
-SESSION_CLOSED = frozenset({499, httpx.codes.NOT_FOUND, httpx.codes.GONE})
+SESSION_CLOSED = frozenset({GCS_SESSION_CANCELLED, httpx.codes.NOT_FOUND, httpx.codes.GONE})
 
 
 class Blob(Protocol):
