@@ -5,8 +5,8 @@ order store, the reel-editor job and Resend behind the same routes as the laptop
 (the service's own account on Cloud Run); `cloud_adapters` wires them into the ports, so tests
 hand it fakes. Client arguments not set here stay at the library defaults: ADC credentials, the
 global endpoints (the job's full name carries its region) and gRPC for Cloud Run (doc ledger:
-google-cloud-storage 3.17.0, google-cloud-run 0.16.2). The Google client libraries load with
-this module, so only the TIER=cloud paths import it at runtime.
+google-cloud-storage 3.17.0, google-cloud-run 0.16.2). The adapters it imports load the Google
+client libraries, so importing reel_studio.api.main loads them on the laptop too (api extra).
 """
 
 import time

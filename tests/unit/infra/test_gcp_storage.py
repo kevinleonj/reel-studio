@@ -306,7 +306,7 @@ def canceller(status: int, seen: list[httpx.Request]) -> SessionCanceller:
     return SessionCanceller(httpx.Client(transport=httpx.MockTransport(answer)))
 
 
-@pytest.mark.parametrize("status", [499, 404, 410, 200])
+@pytest.mark.parametrize("status", [499, 404, 410, 200, 400, 401, 403])
 def test_a_cancelled_or_finished_session_counts_as_closed(status: int) -> None:
     seen: list[httpx.Request] = []
 
@@ -318,7 +318,7 @@ def test_a_cancelled_or_finished_session_counts_as_closed(status: int) -> None:
     assert "Authorization" not in request.headers  # the session URL is its own credential
 
 
-@pytest.mark.parametrize("status", [500, 503, 401])
+@pytest.mark.parametrize("status", [500, 503, 408, 429])
 def test_a_session_that_may_still_be_open_is_cloud_unavailable(status: int) -> None:
     with pytest.raises(CloudUnavailable, match=f"HTTP {status}"):
         canceller(status, [])(SESSION_URL)

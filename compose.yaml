@@ -6,7 +6,7 @@
 # env_file, so the Anthropic, Gemini and cloud keys in .env never reach the website (D62).
 # Images are pinned by digest (docs/FACTS.md F308, F309), the same ones the contract suites use.
 
-x-website-settings: &website  # every WebSettings field (reel_studio/settings.py), tests pin the list
+x-website-settings: &website  # every WebSettings and RuntimeSettings field (reel_studio/settings.py), tests pin the list
   PAYMENTS: ${PAYMENTS:-}
   STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
   STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}

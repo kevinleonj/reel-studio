@@ -4,6 +4,7 @@ the same routes, every Google and Resend client replaced by its fake."""
 import json
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -241,8 +242,9 @@ def test_create_builds_the_cloud_app_when_tier_is_cloud(
         monkeypatch.setenv(name, value)
     built: list[str] = []
 
-    def fake_clients(runtime: RuntimeSettings, _config: object, **_: object) -> CloudClients:
+    def fake_clients(runtime: RuntimeSettings, budget: Budget) -> CloudClients:
         built.append(runtime.cloud().gcs_bucket)
+        assert budget == Budget.request(load_cloud())  # reel-api's, not the editor job's
         return clients(FakeBucket(), FakeJobsClient(), Sent())
 
     def fake_orders(_runtime: object, _config: object, clock: FrozenClock) -> FakeOrders:
@@ -259,15 +261,41 @@ def api_request_timeout_s() -> float:
     return float(str(terraform_locals()["api_request_timeout"]).strip('"').removesuffix("s"))
 
 
-def test_every_call_on_a_request_path_fits_inside_one_api_request() -> None:
+def retried_call_worst_case_s(budget: Budget) -> float:
+    """api_core's deadline only gates when an attempt may start: the last one may still run a
+    whole call timeout after it (task 2 review round 2, measured)."""
+    return budget.retry_deadline_s + budget.call_timeout_s
+
+
+def test_the_link_email_and_one_call_fit_inside_one_api_request() -> None:
     """cloud.md W7: 4 attempts of 15 s exceed Cloud Run's 30 s request timeout, and Cloud Run
     gives no CPU after the response (F90). The webhook sends the link email after a Firestore
-    call; Start lists the bucket, then launches (review W2)."""
+    call. Stripe's own calls are not in this sum (config/limits.toml [stripe])."""
     budget = Budget.request(load_cloud())
 
     assert link_email_worst_case_s(budget) + budget.call_timeout_s < api_request_timeout_s()
-    start = budget.retry_deadline_s + budget.call_timeout_s  # list the uploads, then launch
-    assert start < api_request_timeout_s()
+
+
+def test_start_lists_the_bucket_and_launches_inside_one_api_request() -> None:
+    budget = Budget.request(load_cloud())
+
+    assert retried_call_worst_case_s(budget) + budget.call_timeout_s < api_request_timeout_s()
+
+
+def test_reel_api_wires_the_request_budget_into_every_adapter(
+    tmp_path: Path, make_settings: MakeSettings
+) -> None:
+    """Pinned at the call sites, not only in the arithmetic (task 2 review round 2, W1)."""
+    deps = cloud_deps(tmp_path, make_settings, (FakeBucket(), FakeJobsClient(), Sent()))
+    budget = Budget.request(load_cloud())
+    storage: Any = deps.storage
+    launcher: Any = deps.launcher
+    mailer: Any = deps.mailer
+
+    assert storage._cfg.timeout_s == budget.call_timeout_s
+    assert storage._cfg.retry._timeout == budget.retry_deadline_s
+    assert launcher._timeout_s == budget.call_timeout_s
+    assert mailer._backoff.retries == budget.resend_retries
 
 
 def test_reel_api_mails_with_its_request_budget(

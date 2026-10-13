@@ -33,8 +33,7 @@ MAIN-NEXT in progress (13 Oct 2026): task 1 merged (#17); task 2 is PR #19; task
   `printf '%s' laptop | uv run reelctl dotenv-set TIER`.
 - Doc gate: `~/.claude/hooks/gate-docs.sh` refuses Write and Edit on files importing `fastapi`,
   `httpx` or `google` because `.claude/doc-ledger.json` (protected) lists none of them; those test
-  files were written through the shell. Their docs are cited in FACTS (F89-F91) and the cloud
-  lane's `infra/doc-ledger.pending.json`.
+  files were written through the shell. Their docs are cited in FACTS (F89-F94).
 - D35 in the decisions file still says `write_edl` is strict; since 11 Oct it is not (F211, engine.md
   Needs Kevin 20). The file is locked (a hook blocks edits), so that line is yours; EDITOR.md §4 now
   says so.
@@ -83,6 +82,12 @@ MAIN-NEXT in progress (13 Oct 2026): task 1 merged (#17); task 2 is PR #19; task
   `finally` and a failing ready email is logged, not raised; tests for a duplicate that arrives
   while the first run edits, an engine refusal, the monthly-limit pause, the ready email's
   guards, the launcher-to-`JobSettings` env names and the job's full budget; F93 for `args`.
+- Also here, task 2's round-2 review warnings (PASS on #19, fixed after its merge): the request
+  budget is pinned at each adapter and at `create()`; a retried bucket call is modelled as its
+  deadline plus one call (api_core's deadline only gates when an attempt starts), so the request
+  retry deadline is 5 s; any 4xx except 408 and 429 counts as a closed upload session, so an
+  unconfirmed answer for a finished session cannot wedge a name (F89 now cites both pages); every
+  settings class hides its input in errors (F94).
 - Follow-ups: `make test-emulator` before the first deploy (the four `claim_run` Firestore cases
   run in no CI job); a job that dies before its claim (no credentials, bad config) leaves the
   order running until the lease sweep, which cannot authenticate yet; the ready email is claimed
