@@ -10,17 +10,17 @@ beats a cut that is merely smooth.
 
 ## Montage
 - **Metric and rhythmic montage** [E: Eisenstein]: metric = cuts at a steady length; rhythmic =
-  cut length follows the movement inside the shots. Food Reels use metric for process (an even
-  pulse that any song chosen later sits on) and rhythmic at peaks (let the pour or pull finish).
+  cut length follows the movement inside the shots. Food Reels cut rhythmically: a shot holds
+  until its action completes, sped up to fit; metric (an even pulse) only in rapid-fire detail runs.
 - **Graphic match** [E]: a round bowl cut to a round pan, a pour cut to a pour, a colour cut to
   the same colour. It turns a list of steps into a flow. Look for them on the cuts sheet: shape,
   position and dominant colour at the last frame of one shot and the first frame of the next.
   Use `focus_x/focus_y/zoom` to line the shapes up.
 - **Match on action** [E]: cut in the middle of a motion and continue the motion in the next
   shot (lift the spoon -> spoon arrives at the mouth). The motion hides the cut.
-- **Cut on action, mid-action** [P]: start a shot mid-motion; leave before the motion ends.
-  One second of chopping says "chopping". Never cut mid-pour; show the whole pour sped up, or
-  cut before it starts.
+- **Cut on action** [P]: a short single motion (a drop, a crack) starts mid-motion at real
+  speed. A longer action (pour, sift, tip, stir, chop) plays whole, sped up to fit, never as a
+  real-speed slice of its middle; or cut before it starts.
 - **Jump cuts** [E: 30-degree rule]: two shots of the same subject from almost the same
   framing look like a glitch. Same clip, same zoom, close in time -> merge, insert a different
   shot, or change framing by zoom 0.2 or more. A fixed overhead camera across different steps
@@ -29,8 +29,9 @@ beats a cut that is merely smooth.
   for a second croquette after the bite says "this is good" without text.
 
 ## Pacing
-- Middle shots max 2.0 s on screen (enforced), most 0.7-1.5 s. [P; I]
-- Even pulse in the middle: similar shot lengths, no random 0.3 s blips next to 2 s holds.
+- Middle shots max 2.0 s on screen (enforced), most 1.0-2.0 s. [P; I]
+- Vary lengths with purpose: sped process shots about 1.5-2 s, quick details about 1 s, the
+  hook and payoff longest; no random 0.3 s blips next to 2 s holds.
   Cuts under about 0.5 s only in deliberate rapid-fire runs. [P; E: gaze needs ~0.33 s to
   re-centre after a cut, Mital et al. 2011]
 - Something must change on screen at least every 2-3 s. [P]
