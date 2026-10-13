@@ -87,9 +87,8 @@ Written by the engine lane only. Newest entry on top.
   paid run. The pair is not like for like: the review found our arm read 21 files (the 15 in the
   row plus IMG_0473, 0475, 0478, 0480, 0482, 0485, links the first-15 passes left in the shared
   `inputs/` folder; its cut uses 0473, 0475, 0482, 0485), while the kit read the 15. The row's
-  `inputs_note` says so; AB-RESULT.md's "same files" header is wrong for cookies. `stage()` now
-  removes stale links (tested). Cookies still went to old; a clean rerun of our arm is Kevin's
-  call. Ledger $12.90 of $15; a fixture's new cost in the report includes every same-day pass.
+  `inputs_note` says so. `stage()` now removes stale links (tested). Cookies still went to old.
+  Closed 13 Oct: round 3 reran our cookies arm on the 15 files, so the pair is like for like. Ledger $12.90 of $15; a fixture's new cost in the report includes every same-day pass.
 - Open (not done): "at most four process steps" and "photo at most 1.2 s" pull against the
   recipe structure, and "photo at most 1.2 s" against "payoff holds 2-3 s" when the only finished
   shot is a photo; the critic does not know the new rules; REDO with the same name twice keeps
