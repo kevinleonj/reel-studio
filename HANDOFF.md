@@ -22,6 +22,9 @@ MAIN-NEXT in progress (13 Oct 2026): task 1, the parked docs and config (branch 
 | cloud | `~/projects/reel/reel-studio-cloud` | 08 | `docs/handoff/cloud.md` |
 
 ## Needs Kevin
+- D35 in the decisions file still says `write_edl` is strict; since 11 Oct it is not (F211, engine.md
+  Needs Kevin 20). The file is locked (a hook blocks edits), so that line is yours; EDITOR.md §4 now
+  says so.
 - Merge PR #1 (STEP-01). The three lanes wait for it.
 - Two more footage folders in `REEL_FIXTURES_DIR` before STEP-04 (5 needed, 3 present).
 - STEP-00 leftovers on the Mac, needed from STEP-02 (ffmpeg) and STEP-06 (node): `command -v ffmpeg` is
