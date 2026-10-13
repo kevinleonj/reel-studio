@@ -74,7 +74,8 @@ web `npm ci`, `eslint`, `astro check`, `vitest`, `astro build`,
 `gitleaks detect`, `terraform fmt -check -recursive`, `terraform validate` (both roots, `-backend=false`),
 `tflint`, `trivy config infra/`, the explicit-arguments policy check, the hard-coded value scan (`scripts/check_literals.py`, D76),
 the hook self-check, the gates self-test,
-and the env contract test (every variable the code reads is set in Terraform or `.env.example`).
+and the env contract test (every variable the code reads is set in Terraform or `.env.example`;
+`tests/unit/infra/test_env_contract.py` builds each workload's settings from `infra/main/locals.tf`).
 On success, and only with a clean working tree, it writes `.ci-pass` containing `git rev-parse HEAD`
 (the push hook checks it). Lighthouse and the Playwright suite run in `make prerelease`, by hand before
 STEP-08 and STEP-09, not on every push.
