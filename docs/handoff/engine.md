@@ -3,6 +3,13 @@
 Written by the engine lane only. Newest entry on top.
 
 ## Status board
+- BLOCKED: round 2 blind picks (13 Oct, eval/results/2026-10-12/ab.json) gave old 4, new 1, tie 0
+  (cookies, creami, meat, mercadona old; pastav2 new). `scripts/gates/step04.py --local`: `GATE
+  step04 FAIL (1 of 11 checks failed)`, only `A/B picks: new engine picked or tied in >= 3 of 5`.
+  The picks are Kevin's, not model-judged, so standing-order rule 5 does not apply; PR #10 is not
+  queued. Kevin's reasons: better colours (cookies), flow (cookies, creami), the zoom in (creami);
+  pastav2 new won on colours. Next is Kevin's call: a round 3 tune (colour grade, flow, zoom) and
+  `make ab REDO=...` inside the $15 (ledger $12.90, so about $2.10 left), or a STEP-04 decision.
 - Done: STEP-03 merged (PR #5, 11 Oct 19:28 UTC; gate 12 of 13, only the model-judged
   `critic.passed` failed after 3 rounds: 24, 21, 23 of 35, gate 26; $1.4731 of $5). STEP-04 tasks 1,
   2 and 4 built on `step-04-ab`: `make ab` (both engines, same files, our critic judges both, budget
