@@ -106,7 +106,7 @@ Written by the engine lane only. Newest entry on top.
   never sees match 0.8 before choosing it; `files` is recorded per row, not per arm.
 - For MAIN: `docs/build/STEP-04.md:8,54` and `docs/build/README.md:14` still say the paid budget
   is $15 ("STOP if the paid budget would pass $15"); Kevin raised it to $20 on 13 Oct (round 3).
-- Needs Kevin: round 3 blind picks after the rerun (`make ab-pick`). PR #10 stays open until the
+- Needs Kevin: the next step after round 3 (BLOCKED line above). PR #10 stays open until the
   step04 gate passes.
 - Waits on #10 and Kevin: STEP-05 on PR #12 (see that branch's handoff: film the speech
   fixtures; main adds google-genai to the doc ledger)
