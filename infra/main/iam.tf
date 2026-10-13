@@ -82,9 +82,9 @@ resource "google_secret_manager_secret_iam_member" "accessor" {
   member    = each.value.member
 }
 
-# docs/ARCHITECTURE.md §5 lists this under the bootstrap root, but the accounts are created here
-# (docs/INFRA.md §2), so the grant lives here with the same scope: the deployer may act as each
-# runtime account to deploy the service, the job and the scheduler. Recorded under "Needs Kevin".
+# The accounts are created here (docs/INFRA.md §2), so the grant lives here too, as
+# docs/ARCHITECTURE.md §5 says: the deployer may act as each runtime account to deploy the
+# service, the job and the scheduler.
 data "google_service_account" "deployer" {
   account_id = "github-deployer"
 }
