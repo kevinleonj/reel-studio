@@ -4,7 +4,8 @@ The main checkout's log and the status of every lane. Lanes write their own file
 Newest entry on top.
 
 ## Status board
-MAIN-NEXT in progress (13 Oct 2026): task 1 merged (#17); task 2 on branch `cloud-wiring`
+MAIN-NEXT in progress (13 Oct 2026): task 1 merged (#17); task 2 is PR #19; task 3 on branch
+`editor-job`, stacked on #19
 - Done: starter kit v1.1; STEP-01 (#1), STEP-02 (#2), STEP-03 (#5), STEP-08 short of the real project
   (#3), STEP-06 except task 8 (#4, #8), STEP-07 (#11, #13, #14), `httpx2` and laptop `WebSettings`
   (#6), auto-merge guardrail (#7), Stripe ids (#9), cloud cost cap (#15, #16), MAIN-NEXT task 1
@@ -13,9 +14,8 @@ MAIN-NEXT in progress (13 Oct 2026): task 1 merged (#17); task 2 on branch `clou
   in lane engine; MAIN-NEXT tasks 2-3
 - Blocked: —
 - Not started: STEP-09
-- Next: MAIN-NEXT task 3 (`reel job`, branch `editor-job`) after task 2 merges. Task 3's claim
-  follows ARCHITECTURE §4 (`queue.claimed_token`), not the `queue.started_at` wording in
-  MAIN-NEXT.md and cloud.md
+- Next: the first-deploy follow-ups in the task 2 entry (sweep OIDC first), then STEP-04's gate
+  (D44) before any deploy
 
 ## Lanes
 | Lane | Worktree | Steps | File |
@@ -49,6 +49,36 @@ MAIN-NEXT in progress (13 Oct 2026): task 1 merged (#17); task 2 on branch `clou
   (one class per consumer; a test keeps the two in step). A lane that needs a new variable asks here.
 
 ## Log
+### 13 Oct 2026 — MAIN-NEXT task 3: the editor job's entry, `reel job` (branch `editor-job`)
+- Before: `docker/editor.Dockerfile` ended in `ENTRYPOINT ["reel"]`, `CMD ["--help"]` and
+  `infra/main/run.tf` passed the job no args, so a deployed job would print help and exit on every
+  order; nothing read `ORDER_ID` and `RUN_TOKEN`; two executions with the same token would both
+  have run (cloud.md "Launcher is at-most-once"); the image lacked the cloud clients (W10).
+- After: `reel job` (`reel_studio/cli/job.py`): `JobSettings` reads the two overrides; the run is
+  claimed in a transaction (`claim_run`: records `queue.claimed_token`, so a duplicate execution
+  exits and a run resumed after a pause claims with its new token); `RealEditor` downloads only
+  the files Start listed, runs the engine, uploads both Reels and finishes the order; the ready
+  email goes out once; an engine crash fails the order (`render_error`) and tells Kevin and the
+  customer; then the next waiting order is launched. run.tf passes `args = ["job"]`
+  (`local.editor_args`), `explicit_args.toml` requires `template.template.containers.args`, and the
+  image installs the api extra and copies `en.json`.
+- Tests first: the `claim_run` contract cases (fake; the emulator cases need lane web's
+  containers), `tests/unit/test_editor_job.py` end to end over the fake bucket, Resend and Cloud
+  Run clients with the engine replaced (no model call), the policy mutant without `args`, the image
+  test and `test_the_editor_job_runs_reel_job` (Terraform's args parse to `job`).
+- Decided by standing orders:
+  - The ready email carries no link: the token is stored only as a hash (D18), so it points to the
+    link in the first email (UX.md §3 row updated). Undo: revert the commit and pick another option
+    from web.md "Needs Kevin" (an encrypted token, or a re-access flow).
+  - The editor image installs the api extra instead of listing the Google libraries in `[editor]`
+    (cloud.md W10 offered both): `reel job` reuses the API's composition and failure emails. No
+    package outside uv.lock. Undo: move the job's imports off `reel_studio.api` and list
+    google-cloud-storage, -run, -firestore and httpx in `[editor]`.
+  - A run the engine refuses (ReelError) exits 0: the order is already failed or paused and told;
+    only a crash exits 1.
+- Not run: the image build and a real execution (no project, D44); the Firestore emulator cases of
+  `claim_run`.
+
 ### 13 Oct 2026 — MAIN-NEXT task 2: reel-api composed for Cloud Run (branch `cloud-wiring`)
 - Before: nothing in `reel_studio/` imported `gcp_storage`, `gcp_launcher` or `resend_mailer`;
   settings had no bucket or editor-job value although Terraform set `GCS_BUCKET` and `EDITOR_JOB`;

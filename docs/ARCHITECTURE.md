@@ -82,7 +82,7 @@ adapter. One contract test suite runs against every adapter.
 | Port | Methods (names are binding) | Local | Cloud |
 |---|---|---|---|
 | `Storage` | `create_upload_session(order_id, file) -> UploadTarget`, `list_inputs(order_id)`, `download(key, path)`, `upload(path, key, content_type)`, `signed_url(key, filename, minutes)`, `delete_order(order_id)` | Filesystem + API chunk endpoint | Cloud Storage (F32–F34) |
-| `Orders` | `create_awaiting_payment(...)`, `mark_paid(order_id, stripe)`, `expire(order_id)`, `set_manifest(...)`, `queue(order_id)`, `take_slot(order_id)`, `release_slot(order_id)`, `next_queued()`, `set_stage(...)`, `finish(...)`, `fail(...)`, `pause(...)`, `get(order_id)` | Firestore emulator | Firestore |
+| `Orders` | `create_awaiting_payment(...)`, `mark_paid(order_id, stripe)`, `expire(order_id)`, `set_manifest(...)`, `queue(order_id)`, `take_slot(order_id)`, `claim_run(order_id, run_token) -> bool`, `release_slot(order_id)`, `next_queued()`, `set_stage(...)`, `finish(...)`, `fail(...)`, `pause(...)`, `get(order_id)` | Firestore emulator | Firestore |
 | `Launcher` | `launch(order_id) -> str`, at most once per run token: never retried (a lost response may hide a started execution) | Dispatcher subprocess | Cloud Run Admin API `jobs.run` with env override `ORDER_ID` and `RUN_TOKEN`; the adapter reads `queue.run_token` from the order |
 | `Mailer` | `send(template, to, data)` | SMTP to Mailpit | Resend |
 | `Payments` | `find_code(code)`, `create_checkout(order_id, promo_id, urls, expires_at)`, `parse_webhook(payload, signature)`, `get_session(session_id)` | Off adapter or Stripe test | Stripe |

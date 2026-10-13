@@ -65,7 +65,7 @@ def test_the_editor_job_runs_reel_job() -> None:
 
 def test_the_editor_job_gets_every_editor_value() -> None:
     values = _values("common_env", "editor_secrets")
-    image = {"ffmpeg_path": "/usr/bin/ffmpeg", "ffprobe_path": "/usr/bin/ffprobe"}  # its ENV
+    image: dict[str, Any] = {"ffmpeg_path": "/usr/bin/ffmpeg", "ffprobe_path": "/usr/bin/ffprobe"}
     try:
         EditorSettings(_env_file=None, **values, **image)
     except ValidationError as error:
