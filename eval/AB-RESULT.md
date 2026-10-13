@@ -1,25 +1,23 @@
 # A/B result: new engine vs the old kit (STEP-04)
 
-Source: `eval/results/2026-10-12/ab.json`. Same files and order to both engines;
+**Kevin: run `make ab-pick` before reading this page; the scores would**
+**anchor the blind picks.**
+
+Source: `eval/results/2026-10-13/ab-runs.json`. Same files and order to both engines;
 our critic judges both finished cuts.
 
 | fixture | pick | reason | new critic | old critic | new $ | old $ | new s | old s |
 |---|---|---|---|---|---|---|---|---|
-| cookies | old | Better colors and better flow | 22 | 23 | 1.14 | 1.51 | 469 | 740 |
-| creami | old | I like the zoom in and the flow | 23 | 21 | 0.81 | 1.20 | 290 | 430 |
-| meat | old | y | 23 | 24 | 0.86 | 1.77 | 349 | 675 |
-| mercadona | old | y | 16 | 20 | 0.28 | 1.06 | 159 | 336 |
-| pastav2 | new | Better colors | 23 | 22 | 0.47 | 1.20 | 371 | 510 |
+| cookies | pending |  | 21 | 23 | 0.46 | 1.51 | 584 | 740 |
+| creami | pending |  | 23 | 21 | 0.43 | 1.20 | 297 | 430 |
+| meat | pending |  | 23 | 24 | 0.48 | 1.77 | 462 | 675 |
+| mercadona | pending |  | 17 | 20 | 0.24 | 1.06 | 219 | 336 |
+| pastav2 | pending |  | 23 | 22 | 0.47 | 1.20 | 371 | 510 |
 
-Verdict: FAIL
+Verdict: pending Kevin's blind picks (make ab-pick)
 
-- `FAIL  new picked or tied in 1 of 5`
 - `ok    mean critic new 21.4, old 22.0`
 - `ok    gates lost by new: none`
-- `ok    mean new cost $0.71`
-- `ok    budget: $10.30 of $15.0`
-- every paid attempt, superseded ones included: ledger $12.90
-
-What to tune: read each lost fixture's weakness in ab-runs.json, change the prompts
-for it, and rerun only those fixtures (`make ab REDO=<names>`; a plain `make ab`
-resumes a run that stopped).
+- `ok    mean new cost $0.42`
+- `ok    budget: $8.82 of $20.0`
+- every paid attempt, superseded ones included: ledger $14.51
