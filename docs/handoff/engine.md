@@ -10,9 +10,11 @@ Written by the engine lane only. Newest entry on top.
   queued. Kevin's reasons: better colours (cookies), flow (cookies, creami), the zoom in (creami);
   pastav2 new won on colours. Next is Kevin's call: a round 3 tune (colour grade, flow, zoom) or a
   STEP-04 decision. A round 3 `make ab REDO=...` cannot start at today's limits: the guard needs
-  ledger + `kit_run_cap_usd` + `judge_reserve_usd` <= budget, and 12.90 + 2.50 + 0.15 = 15.55 >
-  15.00 for either side. It needs `budget_usd` raised to at least 15.55 or a lower cap
-  (`limits.toml [eval.ab]`, Kevin's file).
+  ledger + the arm's cap + `judge_reserve_usd` <= budget, and 12.900319 + 2.50 + 0.15 = 15.550319
+  > 15.00 for either side. It needs `[eval.ab] budget_usd` >= 15.56, or both `[eval] run_cap_usd`
+  (our arm) and `[eval.ab] kit_run_cap_usd` (the kit) <= 1.94 (`config/limits.toml`, Kevin's
+  file). Until `run()` stops rewriting other rows' `files` (follow-up below, fix it first in round
+  3), run only `make ab ONLY=<name> REDO=<name>:<side>`, never a plain `make ab`.
 - Done: STEP-03 merged (PR #5, 11 Oct 19:28 UTC; gate 12 of 13, only the model-judged
   `critic.passed` failed after 3 rounds: 24, 21, 23 of 35, gate 26; $1.4731 of $5). STEP-04 tasks 1,
   2 and 4 built on `step-04-ab`: `make ab` (both engines, same files, our critic judges both, budget
