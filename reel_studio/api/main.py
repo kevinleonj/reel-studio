@@ -33,11 +33,12 @@ from reel_studio.adapters.payments_stripe import StripePayments, StripeSetup, bu
 from reel_studio.adapters.storage_local import LocalStorage
 from reel_studio.api import payments
 from reel_studio.api.app import create_app
+from reel_studio.api.cloud import Process, build_cloud_deps, google_clients
 from reel_studio.api.deps import ApiDeps
 from reel_studio.api.notify import Notifier
 from reel_studio.api.routes_local import DOWNLOAD_PATH, UPLOAD_PATH
 from reel_studio.core import logging as reel_logging
-from reel_studio.core.config import Config, load
+from reel_studio.core.config import Config, load, load_cloud
 from reel_studio.core.constants import SIGNING_KEY_BYTES, STRIPE_API_VERSION
 from reel_studio.core.logging import get_logger
 from reel_studio.core.order_rules import limits_from
@@ -236,11 +237,20 @@ def check(out: TextIO) -> int:
 
 
 def create() -> FastAPI:
-    """uvicorn's factory: settings are read (and validated) at startup, not at import."""
+    """uvicorn's factory: settings are read (and validated) at startup, not at import. TIER
+    picks the laptop adapters or the Cloud Run ones (reel_studio.api.cloud)."""
     reel_logging.configure()
     settings, runtime, config, clock = WebSettings(), RuntimeSettings(), load(), SystemClock()
     orders = firestore_orders(runtime, config, clock)
-    return create_app(build_deps(settings, runtime, orders=orders, clock=clock, config=config))
+    if runtime.tier == "laptop":
+        return create_app(build_deps(settings, runtime, orders=orders, clock=clock, config=config))
+    deps = build_cloud_deps(
+        Process(settings, runtime, config, clock),
+        orders=orders,
+        clients=google_clients(runtime, load_cloud()),
+        payments=build_payments(settings, config, clock),
+    )
+    return create_app(deps)
 
 
 def dispatch(*, real: bool = False) -> None:

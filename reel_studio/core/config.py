@@ -277,6 +277,10 @@ class Resend(_Strict):
     timeout_s: float
     retries: int
     backoff_s: float
+    # reel-api sends the order-link email inside a request, so it gets its own smaller budget
+    # (cloud.md W7, F90); the editor job uses the three values above.
+    request_timeout_s: float
+    request_retries: int
 
 
 class GcpProject(_Strict):

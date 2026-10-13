@@ -7,6 +7,8 @@ The "ready" email is not sent from here yet: its button needs the order link, an
 token is stored only as a hash (D18), so nothing after checkout can rebuild it (Needs Kevin).
 """
 
+from collections.abc import Callable
+
 from reel_studio.api.deps import ApiDeps
 from reel_studio.api.messages import failure_message
 from reel_studio.core.constants import BYTES_PER_GB
@@ -80,6 +82,38 @@ class Notifier:
             return
         if self._orders.claim_email(order_id, "failed"):
             self._send("failed", email, failed)
+
+
+def notifier(deps: ApiDeps) -> Notifier:
+    return Notifier(
+        deps.orders,
+        deps.mailer,
+        site_url=deps.runtime.site_url,
+        kevin=deps.runtime.kevin_alert_email,
+    )
+
+
+def launch_failed(deps: ApiDeps) -> Callable[[str], None]:
+    """What launch_waiting calls for an order it had to fail: Kevin's alert and the customer's
+    email, never an error into the request that started it."""
+    tell = notifier(deps)
+
+    def failed(order_id: str) -> None:
+        try:
+            tell.order_failed(order_id, ErrorCode.JOB_KILLED, "launch")
+        except Exception:
+            # Logged with its traceback; the order's own state is already written.
+            log.exception(
+                "failure notice not sent",
+                extra={
+                    "order_id": order_id,
+                    "stage": "start",
+                    "event": "notify",
+                    "outcome": "error",
+                },
+            )
+
+    return failed
 
 
 def send_link(deps: ApiDeps, order_id: str, email: str, path: str) -> None:

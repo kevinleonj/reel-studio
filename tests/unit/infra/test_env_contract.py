@@ -16,7 +16,7 @@ INTERPOLATION = re.compile(r"\$\{[^}]*\}")
 STAND_IN = "x"  # every value Terraform computes; the settings check shapes, not projects
 
 
-def _locals() -> dict[str, Any]:
+def terraform_locals() -> dict[str, Any]:
     with LOCALS.open(encoding="utf-8") as handle:
         parsed = hcl2.load(handle)
     merged: dict[str, Any] = {}
@@ -27,7 +27,7 @@ def _locals() -> dict[str, Any]:
 
 def _values(*maps: str) -> dict[str, Any]:
     """Plain values as Terraform writes them; computed parts replaced by a stand-in."""
-    found = _locals()
+    found = terraform_locals()
     values: dict[str, Any] = {}
     for name in maps:
         for key, value in found[name].items():
@@ -57,4 +57,4 @@ def test_the_editor_job_gets_every_runtime_value() -> None:
 
 def test_the_editor_job_holds_no_stripe_secret() -> None:
     # D62 and ARCHITECTURE §6: Stripe's keys are read by reel-api only.
-    assert not {k for k in _locals()["editor_secrets"] if k.startswith("STRIPE_")}
+    assert not {k for k in terraform_locals()["editor_secrets"] if k.startswith("STRIPE_")}

@@ -62,6 +62,7 @@ SSIM_K2 = 0.03  # Wang et al. (2004) SSIM stabiliser K2 (kit qa.py:45)
 MS_PER_S = 1000  # milliseconds per second
 # A resumable upload session cancelled by DELETE answers this non-standard status (F89).
 GCS_SESSION_CANCELLED = 499
+RESEND_API_BASE = "https://api.resend.com"  # Resend's REST API (F91)
 BYTES_PER_MB = 1_000_000  # decimal megabytes, as the kit reports file sizes (kit qa.py:109-110)
 SECONDS_DECIMALS = 3  # durations rounded to whole milliseconds (kit prep.py:271)
 COLOUR_CHANNELS = 3  # three-channel images: BGR, RGB and Lab pixels

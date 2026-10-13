@@ -32,7 +32,7 @@ CONCURRENT_KEY = "concurrent_idempotent_requests"
 @dataclass(frozen=True)
 class Email:
     subject: str
-    html: str
+    html: str | None  # None for a text-only email (Kevin's alert); Resend needs neither (F91)
     text: str
 
 
@@ -86,13 +86,14 @@ class ResendMailer:
 
     def send(self, template: str, to: str, data: ports.Record) -> None:
         email = self._render(template, data)
-        body = {
+        body: dict[str, object] = {
             "from": self._config.sender,
             "to": [to],
             "subject": email.subject,
-            "html": email.html,
             "text": email.text,
         }
+        if email.html is not None:
+            body["html"] = email.html
         headers = {
             "Authorization": f"Bearer {self._config.api_key.get_secret_value()}",
             IDEMPOTENCY_HEADER: idempotency_key(template, to, data),

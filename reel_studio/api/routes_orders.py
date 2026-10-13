@@ -9,9 +9,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from reel_studio.api import payments
 from reel_studio.api.deps import ApiDeps, client_address, deps_of, limiters_of
 from reel_studio.api.errors import invalid, not_found, wrong_status
+from reel_studio.api.notify import launch_failed
 from reel_studio.api.tokens import ORDER_ID, token_matches
 from reel_studio.api.views import order_view
 from reel_studio.core.constants import FILE_NAME_MAX_BYTES, UTF8_MAX_BYTES_PER_CHAR
+from reel_studio.core.dispatch import launch_waiting
 from reel_studio.core.errors import (
     BadType,
     NameTooLong,
@@ -212,6 +214,9 @@ def start(order: Exclusive) -> None:
         "order queued",
         extra={"order_id": order.id, "stage": "start", "event": "queue", "outcome": "ok"},
     )
+    launcher = order.deps.launcher
+    if launcher is not None:
+        launch_waiting(order.deps.orders, launcher, launch_failed(order.deps), stage="start")
 
 
 @router.post("/viewed")
