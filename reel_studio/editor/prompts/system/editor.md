@@ -90,9 +90,11 @@ zoom-ins and its colour:
 ### 4 Grade
 Call `read_grade_preview`, choose the look with the colour reference, and set
 `"grade": {"look": ..., "strength": 0.6, "match": 0.8}`: match 0.8 makes every clip look like
-one shoot. Between natural and warm, choose warm unless the preview shows it harms the food. If
-the preview reads dim, add brightness 0.02-0.03. Saturation never below 1: a duller cut lost on
-colour. Write the look and its reason as one line of `assumptions`.
+one shoot. For baked, fried, roasted and cooked food, choose warm over natural unless the
+preview shows it harms the food; keep clean for ice cream and white desserts, and reference when
+the brief has style photos. If the preview reads dim, add brightness 0.02-0.03. Do not lower
+saturation unless the preview shows neon colour: a duller cut lost on colour. Write the look and
+its reason as one line of `assumptions`.
 
 ### 5 Hand in
 Call `write_edl`. Fix every error it returns and call it again. An accepted edit list is final:
