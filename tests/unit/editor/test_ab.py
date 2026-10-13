@@ -70,6 +70,19 @@ def test_staged_inputs_are_links_and_a_second_stage_is_harmless(tmp_path: Path) 
     assert sorted(p.name for p in source.iterdir()) == ["IMG_1.mov", "IMG_2.mov"]
 
 
+def test_a_second_stage_with_other_files_holds_only_those(tmp_path: Path) -> None:
+    # 12 Oct: a spread pass staged into the first-15 pass's folder, so `make` read 21 files
+    source = tmp_path / "fixture"
+    _touch(source, "IMG_1.mov", "IMG_2.mov", "IMG_3.mov")
+    first, second = sorted(source.iterdir())[:2], sorted(source.iterdir())[1:]
+
+    ab.stage(first, tmp_path / "staged")
+    staged = ab.stage(second, tmp_path / "staged")
+
+    assert sorted(p.name for p in staged.iterdir()) == ["IMG_2.mov", "IMG_3.mov"]
+    assert sorted(p.name for p in source.iterdir()) == ["IMG_1.mov", "IMG_2.mov", "IMG_3.mov"]
+
+
 def test_one_order_for_the_engine_the_kit_and_the_judge() -> None:
     order = ab.order_for(CFG)
 
