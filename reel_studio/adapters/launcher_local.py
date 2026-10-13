@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Protocol
 
+from reel_studio.core.dispatch import launch_waiting
 from reel_studio.core.errors import ErrorCode
 from reel_studio.core.logging import get_logger
 from reel_studio.core.ports import Clock, Launcher, OrderStore, Storage, SweepReport
@@ -85,36 +86,12 @@ class Dispatcher:
             )
             for failed in report["failed"]:
                 self._failed(failed, "running")
-        while (order_id := self._orders.next_queued()) is not None:
-            if not self._orders.take_slot(order_id):
-                return
-            try:
-                execution = self._launcher.launch(order_id)
-            except Exception:
-                # Any launch error: the order must fail and free its slot now, not hold it for
-                # the 70-minute lease. Logged with its traceback.
-                log.exception(
-                    "launch failed",
-                    extra={
-                        "order_id": order_id,
-                        "stage": "dispatcher",
-                        "event": "launch",
-                        "outcome": "error",
-                    },
-                )
-                self._orders.fail(order_id, code=ErrorCode.JOB_KILLED)
-                self._failed(order_id, "launch")
-                continue
-            log.info(
-                "launched %s",
-                execution,
-                extra={
-                    "order_id": order_id,
-                    "stage": "dispatcher",
-                    "event": "launch",
-                    "outcome": "ok",
-                },
-            )
+        launch_waiting(
+            self._orders,
+            self._launcher,
+            lambda order_id: self._failed(order_id, "launch"),
+            stage="dispatcher",
+        )
 
     def run_forever(self, poll_s: float, stop: threading.Event) -> None:
         while not stop.is_set():

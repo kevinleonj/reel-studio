@@ -11,6 +11,8 @@ from pathlib import Path
 
 from google.api_core.exceptions import NotFound
 
+from reel_studio.adapters.storage_local import SessionNotFound
+
 
 @dataclass
 class FakeOperationProto:
@@ -61,7 +63,10 @@ class FakeBlob:
             "session", self.name, size=size, origin=origin, content_type=content_type
         )
         self.bucket.fail_if_asked()
-        return f"https://storage.test/upload/{self.name}?upload_id=1"
+        self.bucket.made += 1
+        url = f"https://storage.test/upload/{self.name}?upload_id={self.bucket.made}"
+        self.bucket.sessions[url] = (self.name, content_type)
+        return url
 
     def generate_signed_url(self, **options: object) -> str:
         """Keyword options as the adapter passes them; tests assert the exact set."""
@@ -72,7 +77,19 @@ class FakeBlob:
     def download_to_filename(self, filename: str, *, timeout: float, retry: object) -> None:
         self.bucket.record("download", self.name, filename=filename)
         self.bucket.fail_if_asked()
-        Path(filename).write_bytes(self.bucket.contents.get(self.name, b""))
+        Path(filename).write_bytes(self.bucket.stored(self.name))
+
+    def download_as_text(self, *, timeout: float, retry: object) -> str:
+        self.bucket.record("read", self.name)
+        self.bucket.fail_if_asked()
+        return self.bucket.stored(self.name).decode()
+
+    def upload_from_string(
+        self, data: str, *, content_type: str, timeout: float, retry: object
+    ) -> None:
+        self.bucket.record("write", self.name, content_type=content_type)
+        self.bucket.fail_if_asked()
+        self.bucket.contents[self.name] = data.encode()
 
     def upload_from_filename(
         self, filename: str, *, content_type: str, timeout: float, retry: object
@@ -98,6 +115,27 @@ class FakeBucket:
     # Listed but already deleted: the race between list and delete.
     stale: set[str] = field(default_factory=set)
     calls: list[tuple[str, str, dict[str, object]]] = field(default_factory=list)
+    # Open resumable sessions: session URL -> (object name, content type).
+    sessions: dict[str, tuple[str, str]] = field(default_factory=dict)
+    made: int = 0
+
+    def stored(self, name: str) -> bytes:
+        if name not in self.contents:  # the real client raises NotFound for a missing object
+            raise NotFound(f"No such object: {self.name}/{name}")  # type: ignore[no-untyped-call]
+        return self.contents[name]
+
+    def complete(self, url: str, data: bytes) -> None:
+        """The browser's PUT of the whole file to a session; a cancelled one answers 4xx."""
+        if url not in self.sessions:
+            raise SessionNotFound(url)
+        name, content_type = self.sessions.pop(url)
+        self.contents[name] = data
+        self.types[name] = content_type
+
+    def cancel(self, url: str) -> None:
+        """DELETE on the session URL (Cloud Storage answers 499, F89)."""
+        self.record("cancel", url)
+        self.sessions.pop(url, None)
 
     def record(self, action: str, key: str, **details: object) -> None:
         self.calls.append((action, key, details))

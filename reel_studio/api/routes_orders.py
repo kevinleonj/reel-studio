@@ -9,9 +9,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from reel_studio.api import payments
 from reel_studio.api.deps import ApiDeps, client_address, deps_of, limiters_of
 from reel_studio.api.errors import invalid, not_found, wrong_status
+from reel_studio.api.notify import launch_failed
 from reel_studio.api.tokens import ORDER_ID, token_matches
 from reel_studio.api.views import order_view
 from reel_studio.core.constants import FILE_NAME_MAX_BYTES, UTF8_MAX_BYTES_PER_CHAR
+from reel_studio.core.dispatch import launch_waiting
 from reel_studio.core.errors import (
     BadType,
     NameTooLong,
@@ -178,11 +180,20 @@ def files(order: Authorised) -> dict[str, object]:
 STARTED = {"queued", "running", "done"}
 
 
+def _launch_waiting(deps: ApiDeps) -> None:
+    """TIER=cloud: no dispatcher polls the queue, so Start launches (ARCHITECTURE §7)."""
+    if deps.launcher is not None:
+        launch_waiting(deps.orders, deps.launcher, launch_failed(deps), stage="start")
+
+
 @router.post("/start")
 def start(order: Exclusive) -> None:
     """Write the manifest and queue; the dispatcher (or the cloud launcher) takes the slot.
-    Safe to call twice: a second Start (a double tap, a retried request) answers 200."""
+    Safe to call twice: a second Start (a double tap, a retried request) answers 200, and one
+    that finds the order still queued (the first ran out of attempts after queueing) launches."""
     if order.status in STARTED:
+        if order.status == "queued":
+            _launch_waiting(order.deps)
         return
     if order.status != "paid":
         raise wrong_status()
@@ -212,6 +223,7 @@ def start(order: Exclusive) -> None:
         "order queued",
         extra={"order_id": order.id, "stage": "start", "event": "queue", "outcome": "ok"},
     )
+    _launch_waiting(order.deps)
 
 
 @router.post("/viewed")

@@ -20,6 +20,10 @@ x-website-settings: &website  # every WebSettings field (reel_studio/settings.py
   FIRESTORE_PROJECT: ${FIRESTORE_PROJECT:-}
   VOICE_AVAILABLE: ${VOICE_AVAILABLE:-}
   # The container's view, whatever .env says for running on the host:
+  TIER: laptop
+  GCS_BUCKET: ""  # TIER=cloud only; blank is unset (env_ignore_empty)
+  EDITOR_JOB: ""
+  RESEND_SENDING_KEY: ""
   SMTP_HOST: mailpit
   SMTP_PORT: "1025"
   DATA_DIR: /app/data

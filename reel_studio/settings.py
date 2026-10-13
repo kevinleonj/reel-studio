@@ -5,6 +5,8 @@ holds the Anthropic or Gemini key). A field without a default is required: a mis
 the process at startup with the variable's name. Every default says why it exists.
 """
 
+import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Self
 
@@ -12,10 +14,14 @@ from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_FILE = ".env"
+# jobs.run takes the job's full resource name (F92); a short name would fail at the first Start.
+JOB_NAME = re.compile(r"^projects/[^/]+/locations/[^/]+/jobs/[^/]+$")
 
 
 class _Base(BaseSettings):
     # extra="ignore": .env holds every tier's variables; each class reads only its own.
+    # hide_input_in_errors: a model-level rule makes pydantic print the input, which holds keys
+    # (task 2 review C1).
     # env_ignore_empty: a blank `KEY=` (as copied from .env.example) counts as missing, so a
     # required value fails by name and an optional one falls back to its default (F81).
     model_config = SettingsConfigDict(
@@ -24,6 +30,7 @@ class _Base(BaseSettings):
         env_ignore_empty=True,
         extra="ignore",
         frozen=True,
+        hide_input_in_errors=True,
     )
 
 
@@ -52,6 +59,78 @@ class BuildSettings(_Base):
     reel_fixtures_dir: Path
 
 
+@dataclass(frozen=True)
+class LaptopRuntime:
+    smtp_host: str
+    smtp_port: int
+    data_dir: Path
+
+
+@dataclass(frozen=True)
+class CloudRuntime:
+    gcs_bucket: str
+    editor_job: str
+    resend_sending_key: SecretStr
+
+
+class RuntimeSettings(_Base):
+    """Where orders live and how mail leaves: the website and the editor that runs orders both
+    read these, without holding each other's keys (D62). TIER says which adapters to build:
+    `laptop` (Firestore emulator, Mailpit, a data folder) or `cloud` (Cloud Run: Firestore,
+    Resend, Cloud Storage, the editor job). It is set on purpose, never guessed from the
+    environment (MAIN-NEXT task 2)."""
+
+    tier: Literal["laptop", "cloud"]
+    site_url: str
+    mail_from: str
+    kevin_alert_email: str
+    # The emulator's project id on the laptop (the client finds the emulator through
+    # FIRESTORE_EMULATOR_HOST itself, F308); the real project on Cloud Run.
+    firestore_project: str
+    # TIER=laptop: Mailpit's SMTP address (F309) and the filesystem Storage root.
+    smtp_host: str | None = None  # default-because: TIER=cloud mails through Resend
+    smtp_port: int | None = None  # default-because: TIER=cloud mails through Resend
+    data_dir: Path | None = None  # default-because: TIER=cloud keeps files in Cloud Storage
+    # TIER=cloud: names Terraform sets (infra/main/locals.tf) and Resend's sending-only key.
+    gcs_bucket: str | None = None  # default-because: TIER=laptop keeps files in DATA_DIR
+    editor_job: str | None = None  # default-because: TIER=laptop runs the editor itself
+    resend_sending_key: SecretStr | None = None  # default-because: TIER=laptop mails by SMTP
+
+    @field_validator("editor_job")
+    @classmethod
+    def _full_job_name(cls, value: str | None) -> str | None:
+        if value is not None and not JOB_NAME.match(value):
+            raise ValueError("must be projects/<project>/locations/<region>/jobs/<name>")
+        return value
+
+    @model_validator(mode="after")
+    def _tier_needs_its_values(self) -> Self:
+        needed = (
+            {"SMTP_HOST": self.smtp_host, "SMTP_PORT": self.smtp_port, "DATA_DIR": self.data_dir}
+            if self.tier == "laptop"
+            else {
+                "GCS_BUCKET": self.gcs_bucket,
+                "EDITOR_JOB": self.editor_job,
+                "RESEND_SENDING_KEY": self.resend_sending_key,
+            }
+        )
+        missing = [name for name, value in needed.items() if value is None]
+        if missing:
+            raise ValueError(f"TIER={self.tier} needs {', '.join(missing)}")
+        return self
+
+    def laptop(self) -> LaptopRuntime:
+        if self.smtp_host is None or self.smtp_port is None or self.data_dir is None:
+            raise ValueError("TIER=laptop values are not set")
+        return LaptopRuntime(self.smtp_host, self.smtp_port, self.data_dir)
+
+    def cloud(self) -> CloudRuntime:
+        key = self.resend_sending_key
+        if self.gcs_bucket is None or self.editor_job is None or key is None:
+            raise ValueError("TIER=cloud values are not set")
+        return CloudRuntime(self.gcs_bucket, self.editor_job, key)
+
+
 class WebSettings(_Base):
     """The website and its API (Tier 1 on the laptop, Tier 2 in the cloud)."""
 
@@ -62,19 +141,9 @@ class WebSettings(_Base):
     # create` attaches promotion codes to. Ids, not secrets.
     stripe_price_id: str | None = None  # default-because: unused when PAYMENTS=off
     stripe_coupon_id: str | None = None  # default-because: unused when PAYMENTS=off
-    site_url: str
-    mail_from: str
-    kevin_alert_email: str
     ga4_measurement_id: str = ""  # default-because: empty = analytics off (D75)
     google_ads_id: str = ""  # default-because: empty = ads off (D75)
-    # Laptop runtime (STEP-06): the Firestore emulator's project id (the client finds the
-    # emulator through FIRESTORE_EMULATOR_HOST itself, F308), Mailpit's SMTP address (F309),
-    # the filesystem Storage root and the Astro build the API serves.
-    firestore_project: str
-    smtp_host: str
-    smtp_port: int
-    data_dir: Path
-    web_dist: Path
+    web_dist: Path  # the Astro build the API serves
     # D14, D62: this service never holds the Gemini key, so it is told whether voice works.
     voice_available: bool
 
@@ -114,10 +183,18 @@ class CloudSettings(_Base):
     email_domain: str
 
 
-AppSettings = EditorSettings | BuildSettings | WebSettings | CloudProjectSettings | CloudSettings
+AppSettings = (
+    EditorSettings
+    | BuildSettings
+    | RuntimeSettings
+    | WebSettings
+    | CloudProjectSettings
+    | CloudSettings
+)
 SETTINGS_CLASSES: tuple[type[_Base], ...] = (
     EditorSettings,
     BuildSettings,
+    RuntimeSettings,
     WebSettings,
     CloudProjectSettings,
     CloudSettings,

@@ -30,3 +30,24 @@ variable "alert_email" {
   description = "Where failure and pause alerts go; KEVIN_ALERT_EMAIL in .env.example."
   type        = string
 }
+
+variable "stripe_price_id" {
+  description = "The €19 price `make stripe-setup` finds or creates (D58); STRIPE_PRICE_ID in .env.example."
+  type        = string
+
+  # An unset repository variable arrives as "": stop at plan, not in a crash-looping revision.
+  validation {
+    condition     = length(var.stripe_price_id) > 0
+    error_message = "Set the repository variable STRIPE_PRICE_ID (make stripe-setup prints it)."
+  }
+}
+
+variable "stripe_coupon_id" {
+  description = "The 100%-off coupon promotion codes attach to; STRIPE_COUPON_ID in .env.example."
+  type        = string
+
+  validation {
+    condition     = length(var.stripe_coupon_id) > 0
+    error_message = "Set the repository variable STRIPE_COUPON_ID."
+  }
+}

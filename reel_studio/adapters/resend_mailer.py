@@ -32,7 +32,7 @@ CONCURRENT_KEY = "concurrent_idempotent_requests"
 @dataclass(frozen=True)
 class Email:
     subject: str
-    html: str
+    html: str | None  # None for a text-only email (Kevin's alert); Resend needs neither (F91)
     text: str
 
 
@@ -52,7 +52,14 @@ class Backoff:
 
     def wait(self, attempt: int) -> None:
         if attempt:
-            self.sleep(self.base_s * 2 ** (attempt - 1))
+            self.sleep(self._delay(attempt))
+
+    def total_wait_s(self) -> float:
+        """Every wait of a send that uses all its attempts."""
+        return sum(self._delay(attempt) for attempt in range(1, self.retries + 1))
+
+    def _delay(self, attempt: int) -> float:
+        return self.base_s * 2.0 ** (attempt - 1)
 
 
 Render = Callable[[str, ports.Record], Email]
@@ -86,13 +93,14 @@ class ResendMailer:
 
     def send(self, template: str, to: str, data: ports.Record) -> None:
         email = self._render(template, data)
-        body = {
+        body: dict[str, object] = {
             "from": self._config.sender,
             "to": [to],
             "subject": email.subject,
-            "html": email.html,
             "text": email.text,
         }
+        if email.html is not None:
+            body["html"] = email.html
         headers = {
             "Authorization": f"Bearer {self._config.api_key.get_secret_value()}",
             IDEMPOTENCY_HEADER: idempotency_key(template, to, data),
