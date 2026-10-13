@@ -4,16 +4,14 @@ The main checkout's log and the status of every lane. Lanes write their own file
 Newest entry on top.
 
 ## Status board
-READY TO MERGE: PR #9 (queued with `gh pr merge 9 --auto --squash`; GitHub merges once `ci` passes)
+MAIN-NEXT in progress (13 Oct 2026): task 1, the parked docs and config (branch `main-parked`)
 - Done: starter kit v1.1; STEP-01 (#1), STEP-02 (#2), STEP-03 (#5), STEP-08 short of the real project
-  (#3), STEP-06 except task 8 (#4, #8), `httpx2` and laptop `WebSettings` (#6), auto-merge guardrail
-  (#7), all merged
-- Partly: STEP-00 on the Mac (ffmpeg-full and node@24 not on PATH, see Needs Kevin); PR #9 gives
-  STEP-07 its Stripe settings and adds `.dockerignore`
+  (#3), STEP-06 except task 8 (#4, #8), STEP-07 (#11, #13, #14), `httpx2` and laptop `WebSettings`
+  (#6), auto-merge guardrail (#7), Stripe ids (#9), cloud cost cap (#15, #16), all merged
+- Partly: STEP-00 on the Mac (see Needs Kevin); MAIN-NEXT tasks 1-3
 - Blocked: —
-- Not started: STEP-04, STEP-05, STEP-07 (web lane, waits on #9), STEP-09
-- Next: #9 merges by itself; lane web then wires `stripe_price_id`/`stripe_coupon_id` into the Stripe
-  adapter and `reelctl codes create`
+- Not started: STEP-09
+- Next: MAIN-NEXT task 2 (cloud composition) after task 1's pull request
 
 ## Lanes
 | Lane | Worktree | Steps | File |
