@@ -39,7 +39,12 @@ Written by the engine lane only. Newest entry on top.
   and the craft reference, and the critic does not know the new rules; REDO with the same name
   twice keeps only the last entry; the prompt tests pin phrases, not whole rules; the cross-day
   side-only redo has no saved test. meat and pastav2 rows keep their first-15 files; a later
-  REDO on them would pick the spread files, so rerun both sides there, never one.
+  REDO on them would pick the spread files, so rerun both sides there, never one. From the 13 Oct
+  review: `run()` rewrites `row["files"]` for every fixture it visits, even ones it does not rerun
+  (a `REDO=creami:new` changes meat's recorded files), so it should set them only when an arm runs
+  and refuse a one-sided REDO whose files differ; the cross-day `superseded_paid_usd` pop has no
+  test; `max_files` 1 divides by zero in `select_inputs`; `limits.toml:56` still says "videos
+  first" (Kevin's file).
 - Needs Kevin: the round 3 decision in the BLOCKED line above. PR #10 stays open until the
   step04 gate passes.
 - Waits on #10 and Kevin: STEP-05 on PR #12 (see that branch's handoff: film the speech
