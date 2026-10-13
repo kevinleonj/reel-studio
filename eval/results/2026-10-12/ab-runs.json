@@ -6,46 +6,45 @@
    "name": "cookies",
    "files": [
     "IMG_0472.mov",
-    "IMG_0473.mov",
     "IMG_0474.mov",
-    "IMG_0475.mov",
     "IMG_0476.mov",
     "IMG_0477.mov",
-    "IMG_0478.mov",
     "IMG_0479.mov",
-    "IMG_0480.mov",
     "IMG_0481.mov",
-    "IMG_0482.mov",
     "IMG_0483.mov",
     "IMG_0484.mov",
-    "IMG_0485.mov",
-    "IMG_0487.mov"
+    "IMG_0487.mov",
+    "IMG_0490.mov",
+    "IMG_0492.mov",
+    "IMG_0494.mov",
+    "IMG_0495.mov",
+    "IMG_0499.mov",
+    "IMG_0502.mov"
    ],
    "new": {
-    "critic_total": 17,
+    "critic_total": 22,
     "passed": false,
-    "weakness": "hook 3 < 4; retention 2 < 3; story 2 < 3; peak 2 < 3; share 2 < 3; total 17 < 26",
-    "loop_critic_total": 18,
+    "weakness": "total 22 < 26",
+    "loop_critic_total": 22,
     "outputs": {
-     "text": "out/ab/2026-10-12/cookies/new-204422/text.mp4"
+     "text": "out/ab/2026-10-12/cookies/new-210614/text.mp4"
     },
-    "cost_usd": 0.7044288,
-    "wall_s": 263.7,
+    "cost_usd": 1.1426696,
+    "wall_s": 469.1,
     "error": null
    },
    "old": {
-    "critic_total": 19,
+    "critic_total": 23,
     "passed": false,
-    "weakness": "hook 3 < 4; peak 2 < 3; share 2 < 3; total 19 < 26",
-    "job": "abcookies-b7f2",
-    "kit_cost_usd": 1.3768147999999998,
+    "weakness": "total 23 < 26",
+    "job": "abcookies-9b16",
+    "kit_cost_usd": 1.4502657,
     "outputs": {
-     "text": "out/ab/2026-10-11/cookies/old-202052/text.mp4"
+     "text": "out/ab/2026-10-12/cookies/old-211403/text.mp4"
     },
-    "cost_usd": 1.4380977999999998,
-    "wall_s": 574.1,
-    "error": null,
-    "carried": true
+    "cost_usd": 1.5096337,
+    "wall_s": 740.1,
+    "error": null
    },
    "attempts": [
     {
@@ -102,38 +101,8 @@
      "wall_s": 574.1,
      "error": null,
      "carried": true
-    },
-    {
-     "side": "new",
-     "critic_total": 22,
-     "passed": false,
-     "weakness": "total 22 < 26",
-     "loop_critic_total": 22,
-     "outputs": {
-      "text": "out/ab/2026-10-12/cookies/new-210614/text.mp4"
-     },
-     "cost_usd": 0.4382408,
-     "wall_s": 469.1,
-     "error": null,
-     "withdrawn": "spread inputs, 3d5f3da reverted"
-    },
-    {
-     "side": "old",
-     "critic_total": 23,
-     "passed": false,
-     "weakness": "total 23 < 26",
-     "job": "abcookies-9b16",
-     "kit_cost_usd": 1.4502657,
-     "outputs": {
-      "text": "out/ab/2026-10-12/cookies/old-211403/text.mp4"
-     },
-     "cost_usd": 1.5096337,
-     "wall_s": 740.1,
-     "error": null,
-     "withdrawn": "spread inputs, 3d5f3da reverted"
     }
-   ],
-   "superseded_paid_usd": 1.9478745
+   ]
   },
   {
    "name": "creami",
