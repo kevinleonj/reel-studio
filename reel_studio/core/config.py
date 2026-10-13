@@ -267,6 +267,9 @@ class _ClaudeFile(_Strict):
 class Gcp(_Strict):
     call_timeout_s: float
     retry_deadline_s: float
+    # reel-api's calls inside one request (reel_studio.api.cloud.Budget.request).
+    request_timeout_s: float
+    request_retry_deadline_s: float
     retry_initial_s: float
     retry_multiplier: float
     retry_max_s: float
@@ -277,6 +280,10 @@ class Resend(_Strict):
     timeout_s: float
     retries: int
     backoff_s: float
+    # reel-api sends the order-link email inside a request, so it gets its own smaller budget
+    # (cloud.md W7, F90); the editor job uses the three values above.
+    request_timeout_s: float
+    request_retries: int
 
 
 class GcpProject(_Strict):

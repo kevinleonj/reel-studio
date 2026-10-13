@@ -4,7 +4,7 @@ small and flat and a YAML parser would be one more dependency for five assertion
 import re
 from pathlib import Path
 
-from reel_studio.settings import WebSettings
+from reel_studio.settings import RuntimeSettings, WebSettings
 
 COMPOSE = Path(__file__).resolve().parents[3] / "compose.yaml"
 SERVICES = ("api", "dispatcher", "firestore", "mailpit")
@@ -33,7 +33,11 @@ def test_the_website_receives_exactly_its_settings() -> None:
     listed = re.findall(r"^  ([A-Z][A-Z0-9_]*):", block, flags=re.M)
     # Compose refuses a repeated key (PyYAML would quietly keep the last): STEP-07 review round 2.
     assert len(listed) == len(set(listed)), sorted(n for n in listed if listed.count(n) > 1)
-    assert set(listed) == {f.upper() for f in WebSettings.model_fields} | COMPOSE_ONLY
+    assert (
+        set(listed)
+        == {f.upper() for cls in (WebSettings, RuntimeSettings) for f in cls.model_fields}
+        | COMPOSE_ONLY
+    )
     for name in ("api", "dispatcher"):
         assert "environment: *website" in service(name), name
 

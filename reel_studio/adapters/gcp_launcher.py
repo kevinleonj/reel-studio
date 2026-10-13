@@ -4,7 +4,9 @@
 order"); the caller needs roles/run.jobsExecutorWithOverrides on the job. At most once: the
 call is never retried here, and callers must not retry `launch` for the same run token either,
 because a lost response may hide a started execution and both runs would pass the worker's token
-check and pay Claude twice. On CloudUnavailable leave the order running; the lease sweep fails it.
+check and pay Claude twice. On CloudUnavailable the caller fails the order at once and frees its
+slot (reel_studio.core.dispatch); an execution the lost response may have started then finds the
+order no longer running and exits.
 """
 
 import time

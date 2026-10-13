@@ -13,8 +13,8 @@ from reel_studio.adapters.storage_local import LocalStorage
 from reel_studio.api.app import ApiDeps, create_app
 from reel_studio.core.config import load
 from reel_studio.core.ports import QueueLimits
-from reel_studio.settings import WebSettings
-from tests.conftest import MakeSettings
+from reel_studio.settings import RuntimeSettings, WebSettings
+from tests.conftest import TEST_VALUES, MakeSettings
 from tests.fakes.clock import FrozenClock
 from tests.fakes.mailer import FakeMailer
 from tests.fakes.orders import FakeOrders
@@ -51,6 +51,11 @@ class Api:
     payments: FakePayments | None = None
 
 
+def runtime_settings() -> RuntimeSettings:
+    values = {k: v for k, v in TEST_VALUES.items() if k in RuntimeSettings.model_fields}
+    return RuntimeSettings(_env_file=None, **values)
+
+
 def build(
     tmp_path: Path,
     settings: WebSettings,
@@ -82,6 +87,7 @@ def build(
         clock=clock,
         config=load(),
         settings=settings,
+        runtime=runtime_settings(),
         voice_available=voice_available,
         web_dist=dist,
     )

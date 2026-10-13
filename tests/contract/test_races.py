@@ -23,6 +23,7 @@ from tests.contract.test_orders import LIMITS, SETTINGS, START, queued
 from tests.fakes.clock import FrozenClock
 from tests.fakes.mailer import FakeMailer
 from tests.fakes.payments import FakePayments
+from tests.unit.api.conftest import runtime_settings
 
 pytestmark = pytest.mark.race
 
@@ -109,12 +110,13 @@ def test_the_same_webhook_three_times_pays_once_and_emails_once(
         clock=clock,
         config=load(),
         settings=settings,
+        runtime=runtime_settings(),
         voice_available=False,
         web_dist=None,
     )
     token, order_id = "the-link-token", f"{1:032x}"
     store.create_awaiting_payment(order(1, token))
-    urls = {"success": f"{settings.site_url}/o/{order_id}?t={token}", "cancel": "unused"}
+    urls = {"success": f"{runtime_settings().site_url}/o/{order_id}?t={token}", "cancel": "unused"}
     session = gateway.create_checkout(order_id, "promo_x", urls, START + timedelta(minutes=31))
     session_id = str(session["session_id"])
     store.set_checkout(order_id, session_id=session_id)

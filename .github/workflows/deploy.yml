@@ -2,7 +2,7 @@
 # approval on the `beta` environment and applies exactly the plan the plan job produced.
 # Repository variables (not secrets: none grants access on its own). From the bootstrap outputs:
 #   GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_DEPLOYER_SA, TF_STATE_BUCKET. Chosen by Kevin:
-#   GCP_PROJECT_ID, EMAIL_DOMAIN, MAIL_FROM, KEVIN_ALERT_EMAIL.
+#   GCP_PROJECT_ID, EMAIL_DOMAIN, MAIL_FROM, KEVIN_ALERT_EMAIL, STRIPE_PRICE_ID, STRIPE_COUPON_ID.
 # Actions are pinned by commit SHA to releases at least two weeks old (FACTS F402).
 name: deploy
 
@@ -26,6 +26,8 @@ env:
   TF_VAR_email_domain: ${{ vars.EMAIL_DOMAIN }}
   TF_VAR_mail_from: ${{ vars.MAIL_FROM }}
   TF_VAR_alert_email: ${{ vars.KEVIN_ALERT_EMAIL }}
+  TF_VAR_stripe_price_id: ${{ vars.STRIPE_PRICE_ID }}
+  TF_VAR_stripe_coupon_id: ${{ vars.STRIPE_COUPON_ID }}
 
 jobs:
   plan:

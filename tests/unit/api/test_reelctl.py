@@ -215,6 +215,7 @@ STRIPE_ENV = {
     "SITE_URL": "http://example.test",
     "MAIL_FROM": "reels@example.test",
     "KEVIN_ALERT_EMAIL": "kevin@example.test",
+    "TIER": "laptop",
     "FIRESTORE_PROJECT": "reel-studio-test",
     "SMTP_HOST": "mailpit",
     "SMTP_PORT": "1025",

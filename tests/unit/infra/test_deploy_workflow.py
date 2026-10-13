@@ -3,6 +3,7 @@
 Read as text: no YAML parser is a declared dependency, and these are line-level settings.
 """
 
+import re
 from pathlib import Path
 
 WORKFLOW = Path(__file__).resolve().parents[3] / ".github" / "workflows" / "deploy.yml"
@@ -33,3 +34,14 @@ def test_plan_artifacts_live_one_day() -> None:
     text = job("plan")
     assert "retention-days: 1\n" in text
     assert text.count("retention-days:") == 1
+
+
+def test_every_main_root_variable_is_passed_to_terraform() -> None:
+    """A variable with no default and no TF_VAR_ line stops the plan job; a new one was easy to
+    forget in deploy.yml (task 2 review W5)."""
+    variables = (WORKFLOW.parents[2] / "infra" / "main" / "variables.tf").read_text()
+    names = re.findall(r'^variable "([a-z_]+)"', variables, re.MULTILINE)
+    text = WORKFLOW.read_text(encoding="utf-8")
+
+    assert names
+    assert [name for name in names if f"TF_VAR_{name}" not in text] == []

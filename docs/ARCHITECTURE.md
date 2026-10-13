@@ -152,7 +152,7 @@ Workload Identity provider condition: `assertion.repository_id == "<numeric>" &&
 |---|---|---|---|
 | Claude API key (workspace `reel-studio`) | `.env` `ANTHROPIC_API_KEY` | `anthropic-api-key`, from a second key in the same workspace (`.env` `CLOUD_ANTHROPIC_API_KEY`), so each can be rotated alone | reel-editor only |
 | Gemini API key | `.env` `GEMINI_API_KEY` | `gemini-api-key`, from a billing-enabled project (`.env` `CLOUD_GEMINI_API_KEY`; Google's terms treat free-tier data differently, read https://ai.google.dev/gemini-api/terms in STEP-08) | reel-editor only |
-| Resend API key | `.env` `RESEND_API_KEY`: full access, laptop only, used by `make dns` | `resend-api-key`: a sending-only key for `reels.limeralda.com`, created by `make dns` and written straight to Secret Manager | both |
+| Resend API key | `.env` `RESEND_API_KEY`: full access, laptop only, used by `make dns` | `resend-api-key`: a sending-only key for `reels.limeralda.com`, created by `make dns` and written straight to Secret Manager; both workloads read it as `RESEND_SENDING_KEY` | both |
 | Stripe secret key | `.env` `STRIPE_SECRET_KEY` (test mode) | `stripe-secret-key` | reel-api only |
 | Stripe webhook secret | `.env` `STRIPE_WEBHOOK_SECRET`, captured by `make stripe-listen` without printing | `stripe-webhook-secret`, created by `make stripe-setup` for the cloud endpoint and written straight to Secret Manager | reel-api only |
 | Cloudflare API token (DNS edit on limeralda.com) | `.env` `CLOUDFLARE_API_TOKEN` | Not stored in the cloud | `make dns` on the laptop |
@@ -177,7 +177,7 @@ instances).
 | `GET /api/orders/{id}` | token | Status view for the page: status, stage, queue position, result with signed links | 404 for a wrong id or token (same answer for both) |
 | `POST /api/orders/{id}/uploads` `{files[]}` | token; status `paid` | Check totals (40 files, 4 GB, types), create one resumable session per file (origin-bound, size-capped), return targets | `too_many_files`, `too_large`, `bad_type` |
 | `GET /api/orders/{id}/files` | token | Finished uploads (from the bucket listing) | — |
-| `POST /api/orders/{id}/start` | token; status `paid`; ≥ 1 file | Write the manifest, queue, try to take a slot, launch | `no_files` |
+| `POST /api/orders/{id}/start` | token; status `paid`; ≥ 1 file | Write the manifest, queue, try to take a slot, launch (`TIER=cloud`; on the laptop the dispatcher launches) | `no_files`, 503 `cloud_unavailable` |
 | `POST /api/orders/{id}/viewed` | token | Set `result_viewed_at` once | — |
 | `POST /api/orders/{id}/feedback` `{rating, comment}` | token | Store rating 1–5 and comment ≤ 1,000 chars | — |
 | `DELETE /api/orders/{id}/files` | token | Delete `in/`, `work/`, `out/`; status `deleted` | — |
