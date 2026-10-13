@@ -83,7 +83,7 @@ adapter. One contract test suite runs against every adapter.
 |---|---|---|---|
 | `Storage` | `create_upload_session(order_id, file) -> UploadTarget`, `list_inputs(order_id)`, `download(key, path)`, `upload(path, key, content_type)`, `signed_url(key, filename, minutes)`, `delete_order(order_id)` | Filesystem + API chunk endpoint | Cloud Storage (F32–F34) |
 | `Orders` | `create_awaiting_payment(...)`, `mark_paid(order_id, stripe)`, `expire(order_id)`, `set_manifest(...)`, `queue(order_id)`, `take_slot(order_id)`, `release_slot(order_id)`, `next_queued()`, `set_stage(...)`, `finish(...)`, `fail(...)`, `pause(...)`, `get(order_id)` | Firestore emulator | Firestore |
-| `Launcher` | `launch(order_id) -> str` | Dispatcher subprocess | Cloud Run Admin API `jobs.run` with env override |
+| `Launcher` | `launch(order_id) -> str`, at most once per run token: never retried (a lost response may hide a started execution) | Dispatcher subprocess | Cloud Run Admin API `jobs.run` with env override `ORDER_ID` and `RUN_TOKEN`; the adapter reads `queue.run_token` from the order |
 | `Mailer` | `send(template, to, data)` | SMTP to Mailpit | Resend |
 | `Payments` | `find_code(code)`, `create_checkout(order_id, promo_id, urls, expires_at)`, `parse_webhook(payload, signature)`, `get_session(session_id)` | Off adapter or Stripe test | Stripe |
 | `Claude` | `count_tokens(request)`, `create(request)` | Anthropic API (your key) | Same |
@@ -114,7 +114,7 @@ done | failed | expired ─"Delete my files now"→ deleted
 Rules (each has a test in `tests/contract/test_orders.py`):
 - **One place per checkout:** the week counter and the order are created in one transaction; `count < cap` is checked inside it (F51).
 - **Idempotent fulfilment:** `mark_paid` and `expire` do nothing when the status already moved. Webhook and success page both call `fulfil(order_id)`.
-- **One run per order:** `queued → running` happens inside the `take_slot` transaction, which also writes a random `queue.run_token`; the launcher passes `ORDER_ID` and `RUN_TOKEN` as overrides, and the worker exits at once unless the order is `running` with that token.
+- **One run per order:** `queued → running` happens inside the `take_slot` transaction, which also writes a random `queue.run_token`; the launcher passes `ORDER_ID` and `RUN_TOKEN` as overrides, and the worker exits at once unless the order is `running` with that token. The worker then claims the token in a transaction that sets `queue.started_at`, and exits if it is already set, so a second execution with the same token does nothing.
 - **Lease:** `lease_until = start + 70 min` (job timeout 60 + 10). The sweep fails orders whose lease ran out and frees the slot.
 - **Service pause (D26):** a spend-limit error sets `limits/capacity.paused = true`, frees the slot and puts the order back at the front of the queue; nothing launches until `reelctl resume`.
 - **Abandoned (D25):** the sweep moves `paid` orders not started within 7 days to `abandoned`.
@@ -142,9 +142,9 @@ three prefixes and sets status `deleted`.
 | `reel-api@` | `roles/datastore.user` (project); `roles/storage.objectAdmin` (bucket); `roles/run.jobsExecutorWithOverrides` (job `reel-editor`); `roles/iam.serviceAccountTokenCreator` (itself, for signing; F34 conflicting: prove in step 8); `roles/secretmanager.secretAccessor` on `stripe-secret-key`, `stripe-webhook-secret`, `resend-api-key` | Orders, uploads, start jobs, signed links |
 | `reel-editor@` | `roles/datastore.user` (project); `roles/storage.objectAdmin` (bucket); `roles/run.jobsExecutorWithOverrides` (its own job, to start the next order); `secretAccessor` on `anthropic-api-key`, `gemini-api-key`, `resend-api-key` | Edit one order |
 | `reel-scheduler@` | None on resources; its OIDC token is checked by reel-api (audience = service URL, email = this account) | Sweep |
-| `github-deployer@` (Workload Identity Federation) | Granted by the bootstrap root: `roles/run.admin`, `roles/artifactregistry.writer` (the repository itself is created by bootstrap), `roles/logging.configWriter`, `roles/iam.serviceAccountUser` on the three runtime accounts, `roles/datastore.owner`, `roles/storage.admin`, `roles/secretmanager.admin`, `roles/cloudscheduler.admin`, `roles/iam.serviceAccountAdmin`, `roles/resourcemanager.projectIamAdmin`, `roles/serviceusage.serviceUsageAdmin` | Terraform apply of the main root. Single-purpose project. Never `roles/owner` or `roles/editor` |
+| `github-deployer@` (Workload Identity Federation) | Granted by the bootstrap root: `roles/run.admin`, `roles/artifactregistry.writer` (the repository itself is created by bootstrap), `roles/logging.configWriter`, `roles/datastore.owner`, `roles/storage.admin`, `roles/secretmanager.admin`, `roles/cloudscheduler.admin`, `roles/iam.serviceAccountAdmin`, `roles/serviceusage.serviceUsageAdmin`, and `roles/resourcemanager.projectIamAdmin` only with the condition `modifiedGrantsByRole` `hasOnly(['roles/datastore.user'])` (F410). Granted by the main root, where the accounts are created: `roles/iam.serviceAccountUser` on the three runtime accounts | Terraform apply of the main root. Single-purpose project. Never `roles/owner` or `roles/editor` |
 
-Workload Identity provider condition: `assertion.repository_id == "<numeric>" && assertion.repository_owner_id == "<numeric>" && assertion.ref == "refs/heads/main"`.
+Workload Identity provider condition: `assertion.repository_id == "<numeric>" && assertion.repository_owner_id == "<numeric>" && assertion.ref == "refs/heads/main"`. Only jobs in the GitHub `beta` environment may act as the deployer (`attribute.environment/beta`, F411), so Kevin approves both the plan and the apply job.
 
 ## 6. Secrets
 

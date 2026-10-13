@@ -22,7 +22,7 @@ from google.auth.exceptions import GoogleAuthError
 from google.auth.transport.requests import Request
 
 # google-cloud-storage ships no py.typed; the module override belongs in pyproject.toml (main lane).
-from google.cloud.storage.retry import DEFAULT_RETRY  # type: ignore[import-untyped]
+from google.cloud.storage.retry import DEFAULT_RETRY
 
 from reel_studio.core import config, ports
 from reel_studio.core.constants import GOOGLE_CLOUD_PLATFORM_SCOPE

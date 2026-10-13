@@ -12,8 +12,10 @@ it equals the default, with a one-line comment saying why. Look up every argumen
 | `infra/bootstrap/` | Project services needed by Terraform itself, the state bucket, Workload Identity pool and provider, `github-deployer@` and its roles, the budget, the Artifact Registry repository and the 5 secret containers (no values) | Kevin, once, from his laptop (`make bootstrap-plan`, then he runs the printed apply command himself; Claude Code is denied `terraform apply`) | Local file, then migrated into the state bucket |
 | `infra/main/` | Everything else in the table below | GitHub `deploy.yml` only, after a manual approval | `gs://<state bucket>/main` |
 
-Order of the first deploy: bootstrap (Kevin applies) → `make secrets-push` → `make stripe-setup` and
-`make dns` (they write their own secrets) → `deploy.yml`. Images can be pushed only after bootstrap.
+Order of the first deploy: bootstrap (Kevin applies) → `make spend-cap` (Cloud Run spend cap, F414) →
+`make secrets-push` → `make stripe-setup` and `make dns` (they write their own secrets) →
+`make github-env` (the `beta` approval gate, F417) → `deploy.yml`. Images can be pushed only after
+bootstrap.
 
 The website's address is known before it exists: `https://reel-api-<project number>.europe-west1.run.app`
 (F61). Terraform builds it from `data.google_project.number` and uses it for `SITE_URL`, the bucket CORS
@@ -27,7 +29,7 @@ login (billing account ID from `.env` `GCP_BILLING_ACCOUNT`).
 | Resource | Arguments set on purpose | Why |
 |---|---|---|
 | `google_project_service` | run, firestore, storage, artifactregistry, secretmanager, cloudscheduler, iam, iamcredentials, logging; `disable_on_destroy = false` | Only what we use |
-| `google_artifact_registry_repository.reel` (bootstrap root) | `format = "DOCKER"`, `location = europe-west1`, cleanup: DELETE any tag state older than 30 days, KEEP the 5 most recent versions (keep wins), `cleanup_policy_dry_run = false` | Storage after 0.5 GiB is billed; every image is tagged with its commit, so a delete-untagged rule alone deletes nothing |
+| `google_artifact_registry_repository.reel` (bootstrap root) | `format = "DOCKER"`, `location = europe-west1`, cleanup: DELETE any tag state older than 30 days, KEEP the 5 most recent versions (keep wins), `cleanup_policy_dry_run = false`, `vulnerability_scanning_config { enablement_config = DISABLED }` (F416) | Storage after 0.5 GiB is billed; every image is tagged with its commit, so a delete-untagged rule alone deletes nothing |
 | `google_storage_bucket.media` | `location = "EUROPE-WEST1"`, `storage_class = "STANDARD"`, `uniform_bucket_level_access = true`, `public_access_prevention = "enforced"`, `soft_delete_policy { retention_duration_seconds = 0 }`, lifecycle delete: age 7 for `in/` and `work/`, age 30 for `out/`, CORS: origin = the service URL (F61), methods GET HEAD PUT POST, headers Content-Type Content-Range Range x-goog-resumable, max age 3600; `force_destroy = false`; `versioning` off | Soft delete is on and billed by default (F50); browser uploads and playback |
 | `google_firestore_database` `(default)` | `location_id = "europe-west1"`, `type = "FIRESTORE_NATIVE"`, `database_edition = "STANDARD"`, `point_in_time_recovery_enablement = "POINT_IN_TIME_RECOVERY_DISABLED"`, `delete_protection_state = "DELETE_PROTECTION_ENABLED"`, `deletion_policy = "ABANDON"` | Free quota only on `(default)` (F35); orders are short-lived, so no recovery cost |
 | `google_firestore_index` × 3 | `(status, queue.queued_at)`, `(status, queue.lease_until)`, `(status, created_at)` on `orders` | Queue, sweep, missed expiries |
@@ -41,6 +43,7 @@ login (billing account ID from `.env` `GCP_BILLING_ACCOUNT`).
 | `google_cloud_scheduler_job.sweep` | `region = "europe-west1"`, `schedule = "*/10 * * * *"`, `time_zone = "Europe/Madrid"`, `attempt_deadline = "60s"`, `retry_config { retry_count = 0 }`, `http_target { http_method = "POST", uri = "<api>/api/internal/sweep", oidc_token { service_account_email = reel-scheduler, audience = "<api>" } }` | Not offered in Madrid (F26); the next sweep is the retry |
 | `google_logging_project_bucket_config` `_Default` | `retention_days = 30` | Explicit |
 | `google_logging_project_exclusion` | Cloud Run request logs for `/health` (needs `roles/logging.configWriter`) | Noise |
+| `google_logging_project_exclusion` `requests` | reel-api request logs, any status, `sample(insertId, 0.99)` (keeps 1 %) | Cloud Logging cannot be spend capped (F415) |
 | Labels on every resource that takes them | `app = "reel-studio"`, `env = "beta"`, `component`, `managed_by = "terraform"` | Cost reports by component |
 
 Bootstrap root extras: state bucket (`versioning = true`, uniform access, public access prevention,
@@ -83,13 +86,17 @@ The `main` branch has a GitHub ruleset (set by STEP-01 through `gh api`): pull r
 check must pass, no force-push, no deletion.
 
 `deploy.yml`, manual trigger only:
-- Job **plan**: Workload Identity login, build both images for `linux/amd64`, push with the commit SHA
-  as tag, `terraform plan -out tfplan`, `terraform show -json tfplan` uploaded as an artifact. 20 min.
-- Job **apply**: `environment: beta` with Kevin as required reviewer, applies that exact plan, then
-  runs `make smoke URL=<service url>`. 15 min. `concurrency: deploy`, `cancel-in-progress: false`.
+- Job **plan**: `environment: beta` with Kevin as required reviewer, Workload Identity login, build
+  both images for `linux/amd64`, push with the commit SHA as tag, `terraform plan -out tfplan`,
+  `terraform show -json tfplan` uploaded as an artifact. 20 min.
+- Job **apply**: `environment: beta` again, applies that exact plan, then runs
+  `make smoke URL=<service url>`. 15 min. `concurrency: deploy`, `cancel-in-progress: false`.
+- Kevin approves twice per deploy, once per job: the deployer trusts only jobs in the `beta`
+  environment (F411), and the plan job needs the deployer to read state and push images.
 - `make smoke` (outside-in): `GET /health` is 200; `GET /` contains the app root; `GET /api/config` is
   JSON; the live service has `cpu_idle = true` and max instances 2; the job has timeout 3600 s and
-  0 retries (read with `gcloud run ... describe`). Any failure marks the deploy red.
+  0 retries; the orders TTL policy is active (read with the Cloud Run and Firestore Admin clients and
+  Application Default Credentials). Any failure marks the deploy red.
 
 ## 5. Cost (FinOps: inform, optimise, operate)
 
@@ -119,4 +126,6 @@ Levers, largest first: (1) caching stays on and stable (forgetting it costs abou
 (4) effort `medium`, only if the A/B allows; (5) job memory down to what step 8 measures.
 
 Hard stops: Anthropic workspace limit $100 a month (D59); $5 per Reel (D37); 2 running jobs and
-50 Reels a week (D55); API max 2 instances (D51). Warning only: the $10 Google Cloud budget alert.
+50 Reels a week (D55); API max 2 instances (D51); Cloud Run spend cap 30 units a month in the
+billing account's currency, gross cost, pauses new Cloud Run usage until next month or a lift
+(`make spend-cap`, F414). Warning only: the $10 Google Cloud budget alert.

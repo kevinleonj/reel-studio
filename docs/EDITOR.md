@@ -44,7 +44,10 @@ Style to prompt files (from `config/styles.toml`):
 
 **First user message** (`prompts/brief.md.j2`): the order settings (style, target length, text
 language, voice on or off), the file inventory from `shots.json` (clip id, kind, duration, fps,
-orientation, has audio, sharpest window, motion), the list of sheet ids, the transcript (voice on),
+orientation, has audio, sharpest window, motion), the brightness of each clip (mean luma 0-255, with QA's `luma_jump` limit for a cut), the order
+target with every format's length range from the edit-list checks, the text reading time (at least
+`read_min_s`, and one second per `read_chars_per_s` characters), the list of sheet ids, the
+transcript (voice on),
 the defaults that replace the kit's questions (no names, prices or facts printed unless the note
 gives them; avoid recognisable faces when an alternative exists), and the preferences block:
 
@@ -91,7 +94,7 @@ Rules the loop must keep (each has a unit test with a fake Claude client):
 - The SDK's own retries are off (`max_retries=0`). Our wrapper retries connection errors, 408, 409, 429 and 5xx twice with backoff, except a 429 `enforced_spend_limit_reached`. A 400 whose message starts "You have reached your specified workspace API usage limits" or a 429 `enforced_spend_limit_reached` raises `SpendLimitReached` (D45): the service pauses (D26), Kevin is emailed.
 - Look up the exact SDK spelling of the top-level `cache_control` and `output_config` arguments with Context7 (`/anthropics/anthropic-sdk-python`) before writing the call; if the SDK lacks a named argument, use `extra_body` and record that in `docs/FACTS.md`.
 
-## 4. Tools (all strict, all read-only except `write_edl`)
+## 4. Tools (all read-only except `write_edl`; all strict except `write_edl`)
 
 | Tool | Input | Returns | Guards |
 |---|---|---|---|
@@ -100,6 +103,10 @@ Rules the loop must keep (each has a unit test with a fake Claude client):
 | `read_grade_preview` | `frames` (optional list of `clip:time`) | The grade preview (looks side by side, kit `grade.py`) | At most 2 per run |
 | `read_transcript` | `clip` | Word-level transcript of one clip with gaps marked | Voice off → `is_error` "no transcript for this order" |
 | `write_edl` | The edit list (section 7) | `accepted` with warnings, or `is_error` with every violation | Pydantic validation + the kit's `render.py --check` rules + speech-cut rules |
+
+`write_edl` is sent without `strict`: the API refused its strict grammar as too large (400 "The
+compiled grammar is too large", F211, Kevin's call on 11 Oct 2026), so the validator returns every
+violation instead. Do not turn it back on without a request that proves the API accepts it.
 
 Every image a tool returns is resized to fit 2000×2000 px before sending (F08). Tool definitions
 are generated from the Pydantic models, with numeric bounds removed from the JSON schema and kept in
@@ -183,6 +190,8 @@ Per segment, added: `beat` (purpose in the story), `quote` (exact words kept, sp
 | `OutputTooLong` | loop | failed | "Something broke while planning. Kevin has been notified." | yes | Start again |
 | `SpendLimitReached` | loop | paused (service paused, D26) | "We hit this month's budget. Your Reel is saved and starts when it resets." | no (kept) | no |
 | `ProviderUnavailable` (after retries) | loop, speech | failed | "A service we use was down. Try again with the same code." | yes | Start again |
+| `ProviderRejected` (bad key, billing, bad request) | Claude adapter | failed | "Something broke while planning. Kevin has been notified." | yes | Start again |
+| `CloudUnavailable` (Cloud Storage, Cloud Run, Resend after retries) | editor job | failed | "A service we use was down. Try again with the same code." | yes | Start again |
 | `RenderError` | render | failed | "Something broke while cutting. Kevin has been notified." | yes | Start again |
 | Job killed (timeout, memory) | sweep finds lease expired | failed | "Something broke while cutting. Kevin has been notified." | yes | Start again |
 

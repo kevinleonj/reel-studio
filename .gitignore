@@ -5,8 +5,8 @@
 .lane
 .ci-pass
 .DS_Store
-# Written by the session hooks on every start
-.claude/state/
+# Written by the session hooks on every start, under the session's working directory (L305)
+**/.claude/state/
 # Kevin's user-level documentation gate; the project's record is docs/FACTS.md
 .claude/doc-ledger.json
 # Per-machine Claude Code permissions
@@ -33,3 +33,6 @@ runs/
 *.tfstate
 *.tfstate.*
 tfplan
+tfplan.json
+*.tfvars
+crash.log

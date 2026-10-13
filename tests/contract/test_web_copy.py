@@ -17,8 +17,10 @@ FAILED_CODES = {
     ErrorCode.COST_CAP,
     ErrorCode.OUTPUT_TOO_LONG,
     ErrorCode.PROVIDER_UNAVAILABLE,
+    ErrorCode.PROVIDER_REJECTED,
     ErrorCode.RENDER_ERROR,
     ErrorCode.JOB_KILLED,
+    ErrorCode.CLOUD_UNAVAILABLE,
 }
 CHECKOUT_CODES = {
     ErrorCode.CODE_INVALID,
