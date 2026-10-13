@@ -8,7 +8,8 @@ MAIN-NEXT in progress (13 Oct 2026): task 1, the parked docs and config (branch 
 - Done: starter kit v1.1; STEP-01 (#1), STEP-02 (#2), STEP-03 (#5), STEP-08 short of the real project
   (#3), STEP-06 except task 8 (#4, #8), STEP-07 (#11, #13, #14), `httpx2` and laptop `WebSettings`
   (#6), auto-merge guardrail (#7), Stripe ids (#9), cloud cost cap (#15, #16), all merged
-- Partly: STEP-00 on the Mac (see Needs Kevin); MAIN-NEXT tasks 1-3
+- Partly: STEP-00 on the Mac (see Needs Kevin); STEP-04 (#10 open) and STEP-05 (#12 open, partial)
+  in lane engine; MAIN-NEXT tasks 1-3
 - Blocked: —
 - Not started: STEP-09
 - Next: MAIN-NEXT task 2 (cloud composition) after task 1's pull request
@@ -50,7 +51,8 @@ MAIN-NEXT in progress (13 Oct 2026): task 1, the parked docs and config (branch 
   log exclusion (F415) and the registry's scanning off (F416); §4 two approvals (plan and apply both in
   `beta`, F411) and how smoke reads; §5 the Cloud Run spend cap (F414). ARCHITECTURE §3 the launcher is
   at most once and reads `queue.run_token`; §4 the worker claims the token by setting
-  `queue.started_at` in a transaction; §5 the conditional projectIamAdmin (F410), the `beta`
+  `queue.claimed_at` in a transaction (`take_slot` already writes `started_at`); §5 the
+  conditional projectIamAdmin (F410), the `beta`
   environment, `serviceAccountUser` granted by the main root. EDITOR §2 brightness, length ranges and
   reading time; §4 `write_edl` not strict; §10 rows for `ProviderRejected` and `CloudUnavailable`.
   `en.json`, `types.ts` and `StatusViews.tsx` carry both codes (Start again). mypy override for

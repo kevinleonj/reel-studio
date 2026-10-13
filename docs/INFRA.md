@@ -10,7 +10,7 @@ it equals the default, with a one-line comment saying why. Look up every argumen
 | Root | Holds | Applied by | State |
 |---|---|---|---|
 | `infra/bootstrap/` | Project services needed by Terraform itself, the state bucket, Workload Identity pool and provider, `github-deployer@` and its roles, the budget, the Artifact Registry repository and the 5 secret containers (no values) | Kevin, once, from his laptop (`make bootstrap-plan`, then he runs the printed apply command himself; Claude Code is denied `terraform apply`) | Local file, then migrated into the state bucket |
-| `infra/main/` | Everything else in the table below | GitHub `deploy.yml` only, after a manual approval | `gs://<state bucket>/main` |
+| `infra/main/` | Everything else in the table below | GitHub `deploy.yml` only, after Kevin approves its plan and apply jobs | `gs://<state bucket>/main` |
 
 Order of the first deploy: bootstrap (Kevin applies) → `make spend-cap` (Cloud Run spend cap, F414) →
 `make secrets-push` → `make stripe-setup` and `make dns` (they write their own secrets) →
@@ -95,7 +95,8 @@ check must pass, no force-push, no deletion.
   environment (F411), and the plan job needs the deployer to read state and push images.
 - `make smoke` (outside-in): `GET /health` is 200; `GET /` contains the app root; `GET /api/config` is
   JSON; the live service has `cpu_idle = true` and max instances 2; the job has timeout 3600 s and
-  0 retries; the orders TTL policy is active (read with the Cloud Run and Firestore Admin clients and
+  0 retries; the orders TTL policy is ACTIVE, or CREATING right after a first deploy (read with the
+  Cloud Run and Firestore Admin clients and
   Application Default Credentials). Any failure marks the deploy red.
 
 ## 5. Cost (FinOps: inform, optimise, operate)
@@ -128,4 +129,5 @@ Levers, largest first: (1) caching stays on and stable (forgetting it costs abou
 Hard stops: Anthropic workspace limit $100 a month (D59); $5 per Reel (D37); 2 running jobs and
 50 Reels a week (D55); API max 2 instances (D51); Cloud Run spend cap 30 units a month in the
 billing account's currency, gross cost, pauses new Cloud Run usage until next month or a lift
-(`make spend-cap`, F414). Warning only: the $10 Google Cloud budget alert.
+(set by `make spend-cap`, lifted by `make spend-cap-lift`; enforcement can lag up to a day, F414).
+Warning only: the $10 Google Cloud budget alert.

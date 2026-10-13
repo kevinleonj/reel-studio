@@ -191,7 +191,7 @@ Per segment, added: `beat` (purpose in the story), `quote` (exact words kept, sp
 | `SpendLimitReached` | loop | paused (service paused, D26) | "We hit this month's budget. Your Reel is saved and starts when it resets." | no (kept) | no |
 | `ProviderUnavailable` (after retries) | loop, speech | failed | "A service we use was down. Try again with the same code." | yes | Start again |
 | `ProviderRejected` (bad key, billing, bad request) | Claude adapter | failed | "Something broke while planning. Kevin has been notified." | yes | Start again |
-| `CloudUnavailable` (Cloud Storage, Cloud Run, Resend after retries) | editor job | failed | "A service we use was down. Try again with the same code." | yes | Start again |
+| `CloudUnavailable` (Cloud Storage after retries) | editor job | failed | "A service we use was down. Try again with the same code." | yes | Start again |
 | `RenderError` | render | failed | "Something broke while cutting. Kevin has been notified." | yes | Start again |
 | Job killed (timeout, memory) | sweep finds lease expired | failed | "Something broke while cutting. Kevin has been notified." | yes | Start again |
 

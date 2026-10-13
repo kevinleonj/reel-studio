@@ -35,4 +35,5 @@ runs/
 tfplan
 tfplan.json
 *.tfvars
+*.tfvars.json
 crash.log

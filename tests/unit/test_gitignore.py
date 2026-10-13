@@ -13,6 +13,7 @@ MUST_IGNORE = (
     "web/.claude/state/session.json",
     "infra/main/.claude/state/session.json",
     "prod.tfvars",
+    "prod.tfvars.json",
     "infra/main/beta.tfvars",
     "tfplan.json",
     "infra/main/tfplan.json",
@@ -28,6 +29,8 @@ def _ignored(path: str) -> bool:
         cwd=ROOT,
         check=False,
     )
+    # 0 ignored, 1 not ignored; anything else (not a repository, a bad path) is an error.
+    assert result.returncode in (0, 1), f"git check-ignore failed with {result.returncode}"
     return result.returncode == 0
 
 

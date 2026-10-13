@@ -2,6 +2,7 @@
 web/src/copy/en.json, reel_studio/core/errors.py and config/styles.toml)."""
 
 import json
+import re
 from pathlib import Path
 
 from reel_studio.core.config import load
@@ -53,3 +54,16 @@ def test_styles_and_chips_match_the_config() -> None:
         assert COPY["styles"][key] == {"label": style.label, "description": style.description}
     assert set(COPY["chips"]) == set(styles.chips.items)
     assert set(COPY["textLanguages"]) == {item.code for item in styles.text_languages.items}
+
+
+def test_every_error_code_has_a_place_on_the_page() -> None:
+    # SPEND_LIMIT shows as the `paused` status, not as a failure message.
+    left = set(ErrorCode) - FAILED_CODES - CHECKOUT_CODES - UPLOAD_CODES
+    assert left == {ErrorCode.SPEND_LIMIT}
+
+
+def test_the_page_types_every_failure_code() -> None:
+    """StatusViews.tsx keys its retry map by this union, so TypeScript then checks the map."""
+    types = (ROOT / "web" / "src" / "lib" / "types.ts").read_text()
+    union = types.split("export type FailureCode =", 1)[1].split("\n\n", 1)[0]
+    assert set(re.findall(r'"([a-z_]+)"', union)) == {str(c) for c in FAILED_CODES}

@@ -49,7 +49,7 @@ flowchart LR
 5. **reel-api → Firestore.** Transactions: reserve one of 50 weekly places, create the order, take one of 2 running slots.
 6. **reel-api → Cloud Storage.** Creates one resumable upload session per file, bound to the website's origin and capped at the declared size. Signs download links for finished Reels.
 7. **Browser → Cloud Storage.** Uploads file chunks straight to the bucket (resumable), later downloads or plays the Reels.
-8. **reel-api → reel-editor.** Starts one job execution with `ORDER_ID` as an override (role `roles/run.jobsExecutorWithOverrides`, F30).
+8. **reel-api → reel-editor.** Starts one job execution with `ORDER_ID` and `RUN_TOKEN` as overrides (role `roles/run.jobsExecutorWithOverrides`, F30).
 9. **reel-editor → Cloud Storage.** Downloads one original at a time, writes proxies, sheets, logs and the two Reels.
 10. **reel-editor → Gemini.** Transcribes speech with word timestamps, only when "Keep the voice?" is on.
 11. **reel-editor → Claude API.** The edit loop (about 20 requests) and the critic.
@@ -96,7 +96,7 @@ adapter. One contract test suite runs against every adapter.
 
 | Document | Key fields | Written when | Read when |
 |---|---|---|---|
-| `orders/{order_id}` (32 hex chars, our own random id) | `status`, `settings{style, length_s, text_lang, keep_voice, chips[], note}`, `token_hash`, `week_id`, `place_held`, `stripe{session_id, promo_id, email}`, `files[]` (manifest, ≤40), `bytes_declared`, `queue{queued_at, started_at, lease_until, execution}`, `stage{name, started_at}`, `stages_done[]`, `result{...}`, `cost{usd_total, by_model{}}`, `error{code, user_message}`, `feedback{rating, comment}`, `emails{link_at, ready_at, failed_at}`, `created_at`, `expires_at` | Checkout creation, webhook, upload-link batch, start, each stage, finish | Status polling, worker, sweep, `reelctl` |
+| `orders/{order_id}` (32 hex chars, our own random id) | `status`, `settings{style, length_s, text_lang, keep_voice, chips[], note}`, `token_hash`, `week_id`, `place_held`, `stripe{session_id, promo_id, email}`, `files[]` (manifest, ≤40), `bytes_declared`, `queue{queued_at, started_at, lease_until, run_token, claimed_at}`, `stage{name, started_at}`, `stages_done[]`, `result{...}`, `cost{usd_total, by_model{}}`, `error{code, user_message}`, `feedback{rating, comment}`, `emails{link_at, ready_at, failed_at}`, `created_at`, `expires_at` | Checkout creation, webhook, upload-link batch, start, each stage, finish | Status polling, worker, sweep, `reelctl` |
 | `limits/week-YYYY-Www` (ISO week) | `count`, `cap` | +1 in the checkout transaction; −1 on expiry or failure | Checkout |
 | `limits/capacity` | `slots{order_id: lease_until}` (at most 2), `paused` | Start, finish, sweep, spend-limit error, `reelctl resume` | Start, sweep |
 
@@ -114,7 +114,7 @@ done | failed | expired ─"Delete my files now"→ deleted
 Rules (each has a test in `tests/contract/test_orders.py`):
 - **One place per checkout:** the week counter and the order are created in one transaction; `count < cap` is checked inside it (F51).
 - **Idempotent fulfilment:** `mark_paid` and `expire` do nothing when the status already moved. Webhook and success page both call `fulfil(order_id)`.
-- **One run per order:** `queued → running` happens inside the `take_slot` transaction, which also writes a random `queue.run_token`; the launcher passes `ORDER_ID` and `RUN_TOKEN` as overrides, and the worker exits at once unless the order is `running` with that token. The worker then claims the token in a transaction that sets `queue.started_at`, and exits if it is already set, so a second execution with the same token does nothing.
+- **One run per order:** `queued → running` happens inside the `take_slot` transaction, which also writes a random `queue.run_token`; the launcher passes `ORDER_ID` and `RUN_TOKEN` as overrides, and the worker exits at once unless the order is `running` with that token. The worker then claims the token in a transaction that sets `queue.claimed_at` (a field `take_slot` never writes; `started_at` is the slot's start), and exits if it is already set, so a second execution with the same token does nothing.
 - **Lease:** `lease_until = start + 70 min` (job timeout 60 + 10). The sweep fails orders whose lease ran out and frees the slot.
 - **Service pause (D26):** a spend-limit error sets `limits/capacity.paused = true`, frees the slot and puts the order back at the front of the queue; nothing launches until `reelctl resume`.
 - **Abandoned (D25):** the sweep moves `paid` orders not started within 7 days to `abandoned`.
