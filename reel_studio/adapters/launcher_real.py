@@ -104,8 +104,8 @@ class RealEditor:
 
     def _stopped(self, order_id: str, error: ReelError) -> None:
         """The engine's own refusal: the page shows its words (EDITOR.md §10). The monthly
-        limit keeps the order and pauses the service (D26); everything else fails it and tells
-        Kevin and the customer (the notifier writes only for failed orders)."""
+        limit keeps the order and pauses the service (D26); everything else fails it. Either way
+        Kevin and the customer hear of it (D45, EDITOR.md §10)."""
         paused = isinstance(error, SpendLimitReached)
         log.warning(
             "real editor stopped: %s",
