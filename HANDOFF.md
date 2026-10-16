@@ -68,7 +68,10 @@ Trimmed 16 Oct 2026 to the open items (`~/projects/reel/TIDY.md`); the full log 
   `secrets-push` still requires the Resend and Cloudflare values and `dns` the model keys.
 - The required `ci` check names no `integration_id`; pin it to GitHub Actions if that ever matters.
 - Main-lane pull requests outside a step are queued on green CI and a senior PASS: `step01.py`
-  fails on ".github/workflows/ holds exactly ci.yml" since STEP-08 added deploy.yml.
+  fails on ".github/workflows/ holds exactly ci.yml: found ci.yml, deploy.yml" since STEP-08, and
+  `step08.py` needs a live deploy (gates are Kevin's).
+- The "Decided by standing orders" entries of tasks 1-3, each with its undo, are in
+  `git log -p -- HANDOFF.md` (before 16 Oct).
 
 ## Log
 ### 16 Oct 2026 — tidy (branch `main-tidy`)
