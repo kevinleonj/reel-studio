@@ -4,7 +4,7 @@ dispatcher that survives its own errors (senior review W2, W7)."""
 import threading
 from datetime import UTC, datetime, timedelta
 
-from reel_studio.adapters.launcher_local import Dispatcher
+from reel_studio.adapters.launcher_local import Dispatcher, FakeEditorLauncher
 from reel_studio.api.notify import Notifier
 from reel_studio.core import order_rules
 from reel_studio.core.config import load
@@ -141,3 +141,61 @@ def test_queue_limits_come_from_the_config() -> None:
         5,
         30,
     )
+
+
+def test_a_crashed_editor_thread_fails_the_order_and_tells_kevin_and_the_customer() -> None:
+    # EDITOR.md §10: every failure emails Kevin, an unexpected exception included (re-review N1).
+    clock = FrozenClock(START)
+    orders, mailer = FakeOrders(clock, LIMITS), FakeMailer()
+    running(orders, "a" * 32, "friend@example.test")
+
+    class Crashing:
+        def run(self, order_id: str) -> None:
+            raise RuntimeError("disk full")
+
+    launcher = FakeEditorLauncher(Crashing(), orders, notifier=notifier(orders, mailer))
+    launcher._run("a" * 32)  # the thread's body, run here so the test needs no join
+    doc = orders.get("a" * 32)
+    assert doc is not None and doc["status"] == "failed"
+    assert [(m.template, m.to) for m in mailer.sent] == [
+        ("kevin", KEVIN),
+        ("failed", "friend@example.test"),
+    ]
+
+
+def test_a_spend_limit_pause_tells_kevin_and_the_customer_once() -> None:
+    # D45: Kevin is emailed; the page promises the customer an email (copy `order.paused`).
+    clock = FrozenClock(START)
+    orders, mailer = FakeOrders(clock, LIMITS), FakeMailer()
+    running(orders, "a" * 32, "friend@example.test")
+    orders.pause("a" * 32, code=ErrorCode.SPEND_LIMIT)
+    tell = notifier(orders, mailer)
+    tell.order_paused("a" * 32, "planning")
+    tell.order_paused("a" * 32, "planning")
+    assert [(m.template, m.to) for m in mailer.sent] == [
+        ("kevin", KEVIN),
+        ("paused", "friend@example.test"),
+    ]
+    assert mailer.sent[0].subject == f"[reel-studio] paused {'a' * 32} at planning: spend_limit"
+    assert "We hit this month's budget." in mailer.sent[1].text
+
+
+def test_a_paused_order_that_fails_later_still_alerts_kevin() -> None:
+    clock = FrozenClock(START)
+    orders, mailer = FakeOrders(clock, LIMITS), FakeMailer()
+    running(orders, "a" * 32, "")
+    orders.pause("a" * 32, code=ErrorCode.SPEND_LIMIT)
+    notifier(orders, mailer).order_paused("a" * 32, "planning")
+    orders.resume_paused()
+    orders.take_slot("a" * 32)
+    orders.fail("a" * 32, code=ErrorCode.RENDER_ERROR)
+    notifier(orders, mailer).order_failed("a" * 32, ErrorCode.RENDER_ERROR, "rendering")
+    assert [m.subject.split()[1] for m in mailer.sent] == ["paused", "failed"]
+
+
+def test_a_pause_notice_for_an_order_that_is_not_paused_sends_nothing() -> None:
+    clock = FrozenClock(START)
+    orders, mailer = FakeOrders(clock, LIMITS), FakeMailer()
+    running(orders, "a" * 32, "friend@example.test")
+    notifier(orders, mailer).order_paused("a" * 32, "planning")
+    assert mailer.sent == []
