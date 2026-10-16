@@ -29,8 +29,7 @@ entries, logs and standing-order decisions are in git history: `git log -p -- do
 - W4: reelctl's Stripe commands end in a traceback on a bad key, a docker failure or Ctrl-C.
 - W5: pin `run_docker`'s capture branch, a non-404 coupon lookup, the price's idempotency key.
 - W7: the test-key prefixes live in three places; `STRIPE_SECRET_TIMEOUT_S` belongs in `[stripe]`.
-- S1: a fixed `STRIPE_DEVICE_NAME` for both listener containers.
-- S2: a reused coupon is checked for 100% and once only; also check `valid`, `max_redemptions`,
+- S1: a fixed `STRIPE_DEVICE_NAME` for both listener containers. S2: a reused coupon is checked for 100% and once only; also check `valid`, `max_redemptions`,
   `redeem_by`.
 - S4-S6, S10: split reelctl's Stripe half out (377 lines); `latency_ms` in the real editor's logs.
 - The real editor sends no `text_lines`, `left_out` or `wishes`, and `doubts` carry the critic's
