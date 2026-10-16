@@ -26,6 +26,7 @@ from reel_studio.api.cloud import (
 )
 from reel_studio.api.deps import ApiDeps
 from reel_studio.core.config import load, load_cloud
+from reel_studio.core.constants import RESEND_API_BASE
 from reel_studio.core.errors import DeliveryFailed, OrderBusy
 from reel_studio.settings import RuntimeSettings, WebSettings
 from tests.conftest import MakeSettings
@@ -308,7 +309,7 @@ def test_both_http_clients_carry_the_budget_timeouts(make_budget: Callable[..., 
 
     assert resend.timeout == httpx.Timeout(budget.resend_timeout_s)
     assert sessions.timeout == httpx.Timeout(budget.call_timeout_s)
-    assert resend.base_url == httpx.URL(cloud.RESEND_API_BASE)
+    assert resend.base_url == httpx.URL(RESEND_API_BASE)
 
 
 def test_reel_api_mails_with_its_request_budget(
