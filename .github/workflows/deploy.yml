@@ -103,7 +103,9 @@ jobs:
   apply:
     needs: plan
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # Firestore TTL takes ten minutes or more to enable (infra/main/firestore.tf skips that wait);
+    # the first apply also builds the indexes and waits on IAM propagation. 45 leaves margin.
+    timeout-minutes: 45
     environment: beta # Kevin is the required reviewer
     permissions:
       contents: read
