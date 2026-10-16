@@ -71,7 +71,8 @@ Plan row 10: `qa.json` `hard_checks` keys are the kit's PASS/FAIL lines (`spec_t
     so `write_edl` goes without `strict` (`tools.py` NOT_STRICT); read tools and `submit_review`
     stay strict.
 21. Answered 11 Oct: `httpx2` declared in `[editor]`; `adapters/claude/client.py` imports it to catch
-    `httpx2.TransportError` mid-stream, which the SDK does not wrap.
+    `httpx2.TransportError` mid-stream, which the SDK does not wrap. Alternative that lost:
+    non-streaming `create`, which the errors page warns against for long replies.
 
 ## Evidence lines
 - 2026-10-13 round 3 rerun, our arm only: $1.6120; eval/results/2026-10-13/ab-runs.json.
