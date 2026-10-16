@@ -78,4 +78,4 @@ Stripe e2e order: c86d1bf26052af262931df7ab248a8c5, $0.3587172 (12 Oct 2026, Str
 - 2, fixes: the laptop's crash handler (`FakeEditorLauncher`) now emails Kevin and the customer
   (re-review N1); the order view turns a stored null result field into its empty value (S3,
   L303). The pause emails are parked (For MAIN).
-- 3, this file: 486 lines to under 80.
+- 3, this file: 486 lines to 80.
