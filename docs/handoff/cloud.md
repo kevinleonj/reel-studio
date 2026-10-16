@@ -176,6 +176,23 @@ READY TO MERGE: PR #16 (cost-cap follow-ups; PR #15 merged 12 Oct 2026)
 
 ## Log
 
+### 16 Oct 2026, 22:46 — bootstrap state in the bucket (branch cloud-bootstrap-state)
+- Deploy run dispatched at 22:43 on d955256 (PR #25): actions/runs/38964345709, waiting for Kevin.
+- Kevin's order (STEP-08 task 3): `backend "gcs" { prefix = "bootstrap" }` in
+  `infra/bootstrap/versions.tf`, then `terraform -chdir=infra/bootstrap init -migrate-state
+  -force-copy -backend-config="bucket=reel-studio-beta-6a48-tfstate"` (the `state_bucket` output).
+  `make bootstrap-plan` against the bucket: "No changes. Your infrastructure matches the
+  configuration."
+- The migration emptied the local `infra/bootstrap/terraform.tfstate` (sha256 became the empty
+  file's). Kevin had asked to keep it untouched; the session had copied it first (sha256
+  26d65a9b...) and put that copy back. It is a backup only now; Terraform reads the bucket.
+  Terraform also left `terraform.tfstate.backup` (gitignored).
+- `make bootstrap-plan` now passes `-backend-config=bucket=<project>-tfstate` to init (test
+  first): with a partial backend, a fresh clone's init has no bucket otherwise.
+- PR #25 review warnings fixed here: the apply timeout's reason, the `firestore.tf` TTL comment
+  and the `main.tftest.hcl` message no longer cite the 15-minute job. For MAIN: `docs/INFRA.md`
+  §4 still says "15 min" for the apply job (now 45).
+
 ### 16 Oct 2026, 22:15 — apply job timeout (branch cloud-apply-timeout)
 - Kevin's order: deploy.yml apply job `timeout-minutes` 15 to 45, for the first deploy tonight.
   The TTL wait stays skipped (`infra/main/firestore.tf`); the margin is for the first apply's
