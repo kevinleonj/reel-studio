@@ -308,7 +308,7 @@ def test_both_http_clients_carry_the_budget_timeouts(make_budget: Callable[..., 
 
     assert resend.timeout == httpx.Timeout(budget.resend_timeout_s)
     assert sessions.timeout == httpx.Timeout(budget.call_timeout_s)
-    assert str(resend.base_url) == cloud.RESEND_API_BASE.rstrip("/") + "/"
+    assert resend.base_url == httpx.URL(cloud.RESEND_API_BASE)
 
 
 def test_reel_api_mails_with_its_request_budget(
