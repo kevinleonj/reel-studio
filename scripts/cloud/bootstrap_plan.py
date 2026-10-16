@@ -14,6 +14,9 @@ from scripts.cloud._shell import CommandError, Runner, run, say
 
 ROOT = "infra/bootstrap"
 PLAN_FILE = "tfplan"  # ignored by infra/.gitignore
+# The root's own state bucket (infra/bootstrap/main.tf google_storage_bucket.state); its backend
+# is partial, so init names it.
+STATE_BUCKET = "{project}-tfstate"
 
 
 def billing_currency(runner: Runner, billing_account: str, timeout_s: float) -> str:
@@ -41,7 +44,12 @@ def plan(
 ) -> None:
     currency = billing_currency(runner, billing_account, timeout_s)
     repo_id, owner_id = repository_ids(runner, repository, timeout_s)
-    runner(["terraform", f"-chdir={ROOT}", "init", "-input=false"], None, timeout_s)
+    bucket = STATE_BUCKET.format(project=project)
+    runner(
+        ["terraform", f"-chdir={ROOT}", "init", "-input=false", f"-backend-config=bucket={bucket}"],
+        None,
+        timeout_s,
+    )
     runner(
         [
             "terraform",

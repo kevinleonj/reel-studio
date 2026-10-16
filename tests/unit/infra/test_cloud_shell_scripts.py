@@ -223,6 +223,22 @@ def test_bootstrap_plan_reads_currency_and_ids_then_prints_the_apply_command(
     assert "terraform -chdir=infra/bootstrap apply tfplan" in out
 
 
+def test_bootstrap_plan_init_names_the_state_bucket() -> None:
+    # The backend is partial (infra/bootstrap/versions.tf): a fresh clone's init needs the bucket,
+    # named after the project in infra/bootstrap/main.tf.
+    runner = FakeRunner(
+        answers={
+            "billing accounts describe": json.dumps({"currencyCode": "EUR"}),
+            "gh api": "1\n2\n",
+        }
+    )
+
+    bootstrap_plan.plan(runner, PROJECT, "000000-000000-000000", "owner/repo", TIMEOUT_S)
+
+    init = next(c[0] for c in runner.calls if c[0][0] == "terraform" and "init" in c[0])
+    assert f"-backend-config=bucket={PROJECT}-tfstate" in init
+
+
 def test_bootstrap_plan_never_applies() -> None:
     runner = FakeRunner(
         answers={
