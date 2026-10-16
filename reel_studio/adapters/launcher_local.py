@@ -177,9 +177,10 @@ class FakeEditorLauncher:
     """Launcher port: runs an editor (fake or the laptop's real one) on a thread; returns a
     made-up execution name."""
 
-    def __init__(self, editor: Editor, orders: OrderStore) -> None:
+    def __init__(self, editor: Editor, orders: OrderStore, *, notifier: FailureNotifier) -> None:
         self._editor = editor
         self._orders = orders
+        self._notifier = notifier
 
     def launch(self, order_id: str) -> str:
         thread = threading.Thread(
