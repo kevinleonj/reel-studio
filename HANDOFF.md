@@ -77,6 +77,5 @@ Trimmed 16 Oct 2026 to the open items (`~/projects/reel/TIDY.md`); the full log 
 ### 16 Oct 2026 — tidy (branch `main-tidy`)
 - This file cut from 280 lines to the open items above; CLAUDE.md gains the clean-up line from
   Anthropic's prompting guide.
-- Branches: 20 merged branches deleted locally and on GitHub, each after its tip matched the
-  merged PR's head SHA. Kept: open PRs (#10, #12, this one) and worktree branches.
-- Tidy rules: `~/projects/reel/TIDY.md` (not in the repo).
+- Branches (rules: `~/projects/reel/TIDY.md`, not in the repo): 20 merged branches deleted locally
+  and on GitHub after a SHA match with the merged PR. Kept: open PRs and worktree branches.
