@@ -141,7 +141,7 @@ def build_dispatcher(deps: ApiDeps, *, make_reel: MakeReel | None = None) -> Dis
     )
     return Dispatcher(
         orders,
-        FakeEditorLauncher(editor, orders),
+        FakeEditorLauncher(editor, orders, notifier=notifier),
         clock,
         sweep=Sweep(lambda: payments.sweep(deps), every_s=times.sweep_seconds),
         notifier=notifier,
