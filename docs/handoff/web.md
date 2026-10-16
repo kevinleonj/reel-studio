@@ -57,10 +57,8 @@ entries, logs and standing-order decisions are in git history: `git log -p -- do
   `config` today, so it needs the order's `settings.length_s` passed from `OrderPage.tsx`).
 - **Merging:** the hook allows only `gh pr merge N --auto --squash`, which GitHub refuses once
   the checks have already passed. Lanes then wait for you even when everything is green.
-- **Review verdict file:** a senior review cannot write `.claude/review-verdict.json` from this
-  worktree (lane main's path). Add it to the shared list, or have lane main write it.
-- **Laptop webhook signing secret** appeared in a local scratch log on 12 Oct (test mode,
-  scrubbed, never pushed). How to rotate a CLI listen secret is not looked up; say if wanted.
+- **Review verdict file:** a review cannot write `.claude/review-verdict.json` from this lane.
+- **Laptop webhook secret** was in a local scratch log on 12 Oct (test mode, never pushed).
 - **`KEVIN_ALERT_EMAIL`** on the laptop is the placeholder `kevin@laptop.invalid`.
 - **The ready email's link** (D18 edge): decided by standing orders as "open the link from your
   first email" (HANDOFF.md). Other options if you want one: an encrypted token, or a re-access flow.
