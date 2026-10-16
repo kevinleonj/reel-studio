@@ -35,9 +35,10 @@ Trimmed 16 Oct 2026 to the open items (`~/projects/reel/TIDY.md`); the full log 
   files were written through the shell. Their docs are cited in FACTS (F89-F94).
 - D35 in the decisions file still says `write_edl` is strict; since 11 Oct it is not (F211, engine.md
   Needs Kevin 20). The file is locked, so that line is yours; EDITOR.md §4 already says so.
-- STEP-00 on the Mac: `command -v ffmpeg` is `/opt/homebrew/bin/ffmpeg` (no zscale), and Homebrew
-  Node 26 fails to start (`libsimdjson.33.dylib` missing). Fix: the PATH line in STEP-00 §1 for
-  `ffmpeg-full` and `node@24`.
+- Add the D79 row to the decisions file and mark D44 superseded for the beta (locked file, yours);
+  the row's text is in lane engine's handoff on PR #10.
+- STEP-00 on the Mac: `command -v ffmpeg` is `/opt/homebrew/bin/ffmpeg` (no zscale). Fix: put
+  `ffmpeg-full` first on PATH (STEP-00 §1). `node` already resolves to node@24.
 - Private vulnerability reporting is off (SECURITY.md points reporters to it):
   `gh api -X PUT repos/kevinleonj/reel-studio/private-vulnerability-reporting`.
 - Ruleset `protect main` (id 24815348) has `require_extra_approval_for_unattributed_changes: true`;
