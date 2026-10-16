@@ -24,9 +24,6 @@ class Notices:
     def order_failed(self, order_id: str, code: ErrorCode, stage: str) -> None:
         self.sent.append((order_id, code, stage))
 
-    def order_paused(self, order_id: str, stage: str) -> None:
-        self.sent.append((order_id, ErrorCode.SPEND_LIMIT, stage))
-
 
 def running(orders: FakeOrders, storage: FakeStorage, order_id: str = ORDER) -> None:
     queued(orders, order_id)
@@ -132,9 +129,7 @@ def test_the_monthly_spend_limit_pauses_the_order_and_the_service() -> None:
     assert doc["status"] == "paused"
     assert orders.capacity["paused"] is True
     assert orders.capacity["slots"] == {}
-    # Not a failure (the order starts again when the month resets), but Kevin and the customer
-    # hear of it (D45).
-    assert notices.sent == [(ORDER, ErrorCode.SPEND_LIMIT, "planning")]
+    assert notices.sent == []  # not a failure: the order starts again when the month resets
 
 
 def test_an_order_that_is_not_running_is_left_alone() -> None:

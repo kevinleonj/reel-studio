@@ -1,6 +1,5 @@
-"""Failure and pause emails (docs/UX.md §3): the customer's "Your Reel didn't finish" or "Your
-Reel is waiting" when they gave an address, and Kevin's alert for every failure (EDITOR.md §10)
-and every spend-limit pause (D45). Each is claimed on the order first
+"""Failure emails (docs/UX.md §3): the customer's "Your Reel didn't finish" when they gave an
+address, and Kevin's alert for every failure (EDITOR.md §10). Each is claimed on the order first
 (`claim_email`), so a sweep that runs twice never sends twice. A mail server that is down is
 logged and never stops the caller (the dispatcher, the sweep).
 
@@ -12,7 +11,7 @@ the first email instead (decided by standing orders, HANDOFF.md).
 from collections.abc import Callable
 
 from reel_studio.api.deps import ApiDeps
-from reel_studio.api.messages import failure_message, paused_message
+from reel_studio.api.messages import failure_message
 from reel_studio.core.constants import BYTES_PER_GB
 from reel_studio.core.errors import DeliveryFailed, ErrorCode
 from reel_studio.core.logging import get_logger
@@ -58,41 +57,6 @@ class Notifier:
         hook = lines[0] if lines else ""
         if self._orders.claim_email(order_id, "ready"):
             self._send("ready", email, {"order_id": order_id, "hook": hook, "out_days": out_days})
-
-    def order_paused(self, order_id: str, stage: str) -> None:
-        """The month's spend limit paused the order (D26): Kevin's alert (D45) and the customer's
-        "Your Reel is waiting", once each. Claimed apart from the failure emails, so a paused
-        order that fails later still alerts Kevin."""
-        doc = self._orders.get(order_id)
-        if doc is None or doc["status"] != "paused":
-            return
-        if self._orders.claim_email(order_id, "kevin_paused"):
-            alert: dict[str, object] = {
-                "order_id": order_id,
-                "status": "paused",
-                "stage": stage,
-                "code": str(ErrorCode.SPEND_LIMIT),
-            }
-            self._send("kevin", self._kevin, alert)
-        email = doc.get("email")
-        if not (isinstance(email, str) and email):
-            return
-        try:
-            # Built before the claim: if the words cannot be read, the email stays unclaimed.
-            paused: dict[str, object] = {"order_id": order_id, "message": paused_message()}
-        except (OSError, ValueError, KeyError):
-            log.exception(
-                "customer pause email could not be built",
-                extra={
-                    "order_id": order_id,
-                    "stage": "notify",
-                    "event": "paused",
-                    "outcome": "error",
-                },
-            )
-            return
-        if self._orders.claim_email(order_id, "paused"):
-            self._send("paused", email, paused)
 
     def order_failed(self, order_id: str, code: ErrorCode, stage: str) -> None:
         """`stage` names where it broke when the order cannot say (no stage was ever set)."""

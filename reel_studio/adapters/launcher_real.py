@@ -11,7 +11,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
-from typing import Protocol
 
 from reel_studio.adapters.launcher_local import FailureNotifier
 from reel_studio.core.errors import ReelError, SpendLimitReached
@@ -35,10 +34,6 @@ class MadeReel:
     music_hint: str | None  # the engine's one line (EDITOR.md music_hint), or none
 
 
-class EditorNotifier(FailureNotifier, Protocol):
-    def order_paused(self, order_id: str, stage: str) -> None: ...
-
-
 # (folder of the order's uploads, folder for the output, the order's settings) -> the Reel
 MakeReel = Callable[[Path, Path, dict[str, object]], MadeReel]
 
@@ -50,7 +45,7 @@ class RealEditor:
         storage: Storage,
         make_reel: MakeReel,
         *,
-        notifier: EditorNotifier,
+        notifier: FailureNotifier,
     ) -> None:
         self._orders = orders
         self._storage = storage
@@ -109,8 +104,8 @@ class RealEditor:
 
     def _stopped(self, order_id: str, error: ReelError) -> None:
         """The engine's own refusal: the page shows its words (EDITOR.md §10). The monthly
-        limit keeps the order and pauses the service (D26); everything else fails it. Either way
-        Kevin and the customer hear of it (D45, EDITOR.md §10)."""
+        limit keeps the order and pauses the service (D26); everything else fails it and tells
+        Kevin and the customer (the notifier writes only for failed orders)."""
         paused = isinstance(error, SpendLimitReached)
         log.warning(
             "real editor stopped: %s",
@@ -123,13 +118,10 @@ class RealEditor:
         )
         if paused:
             self._orders.pause(order_id, code=error.code)
-        else:
-            self._orders.fail(order_id, code=error.code)
+            return
+        self._orders.fail(order_id, code=error.code)
         try:
-            if paused:
-                self._notifier.order_paused(order_id, "planning")
-            else:
-                self._notifier.order_failed(order_id, error.code, "planning")
+            self._notifier.order_failed(order_id, error.code, "planning")
         except Exception:
             # Logged with its traceback; the order's own state is already written.
             log.exception(
