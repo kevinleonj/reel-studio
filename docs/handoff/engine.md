@@ -76,7 +76,8 @@ Plan row 10: `qa.json` `hard_checks` keys are the kit's PASS/FAIL lines (`spec_t
 
 ## Evidence lines
 - 2026-10-13 round 3 rerun, our arm only: $1.6120; eval/results/2026-10-13/ab-runs.json.
-- 2026-10-11 STEP-03 Sonnet rounds on creami: $1.4731 total; critic 23, 24, 21, 23 of 35.
+- 2026-10-11 STEP-03 Sonnet rounds on creami: branch total $1.4731 of $5 (Haiku
+  $0.0422 included); critic 23, 24, 21, 23 of 35.
 - 2026-10-10 Editor image (CI, linux/amd64): built in 29 s, 1,264,698,610 bytes; `reel render`
   inside it exits 0 with every hard check true (tests/integration/editor/test_image.py).
 - 2026-10-10 STEP-02 local gate on cf1def3: `GATE step02 PASS`; outputs 1080x1920, h264, 30/1,
