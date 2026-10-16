@@ -2,6 +2,7 @@
 the same routes, every Google and Resend client replaced by its fake."""
 
 import json
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -296,6 +297,18 @@ def test_reel_api_wires_the_request_budget_into_every_adapter(
     assert storage._cfg.retry._timeout == budget.retry_deadline_s
     assert launcher._timeout_s == budget.call_timeout_s
     assert mailer._backoff.retries == budget.resend_retries
+
+
+@pytest.mark.parametrize("make_budget", [Budget.request, Budget.job])
+def test_both_http_clients_carry_the_budget_timeouts(make_budget: Callable[..., Budget]) -> None:
+    """A client built without a timeout falls back to httpx's 5 s default (review warning)."""
+    budget = make_budget(load_cloud())
+
+    resend, sessions = cloud.http_clients(budget)
+
+    assert resend.timeout == httpx.Timeout(budget.resend_timeout_s)
+    assert sessions.timeout == httpx.Timeout(budget.call_timeout_s)
+    assert str(resend.base_url) == cloud.RESEND_API_BASE.rstrip("/") + "/"
 
 
 def test_reel_api_mails_with_its_request_budget(
