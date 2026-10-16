@@ -101,6 +101,11 @@ mask `whsec_\S+`)
 
 
 ## Needs Kevin (decisions, not blocking)
+- **Upload copy (16 Oct 2026):** `docs/UX.md` §2 (`paid` row) still quotes the old upload
+  sentence; add "Vertical videos only. At least 15 seconds of video in total." there (the web
+  lane cannot edit UX.md). And 15 s is the shortest Reel on offer, not enough footage for the
+  30 s default: say if the sentence should name the ordered length instead (`{length}` from the
+  order's settings, one line in `UploadPanel.tsx`).
 - **Review verdict file:** the senior review could not write `.claude/review-verdict.json` from this
   worktree (the lane guard says it is lane main's). Its verdict, for the record: PASS, 0 critical,
   on the diff before the fixes above. Add the path to the shared list, or have lane main write it.
@@ -128,6 +133,15 @@ iPhone upload: 345 MiB HEVC .mov from Photos, Safari, home Wi-Fi, complete in 9 
 Stripe e2e order: c86d1bf26052af262931df7ab248a8c5, $0.3587172 (12 Oct 2026, Stripe test mode, a friend code, €0 checkout, six clips, real editor, critic 20, render 2)
 
 ## Log
+
+### 16 Oct 2026 — upload step states the input rules (NIGHT WEB 1)
+
+- Before: the upload step named only file count, size and minutes per video. After: it also
+  says "Vertical videos only. At least 15 seconds of video in total." (`order.upload.limits`),
+  because the clearest A/B losses were those inputs (Kevin, 13 Oct 2026; pending as D79 on the
+  engine lane's branch). `tests/contract/test_web_copy.py` ties the 15 to the shortest length in
+  `config/limits.toml`. Copy and its test only.
+- Follow-ups: see Needs Kevin (UX.md §2 quotes the old sentence; 15 s versus the ordered length).
 
 ### 13 Oct 2026 — why the iPhone upload ran at 0.66 MB/s; one real Reel for the phone
 
