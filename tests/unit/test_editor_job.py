@@ -192,6 +192,24 @@ def test_an_engine_crash_fails_the_order_tells_kevin_and_still_starts_the_next(
     assert launched(world.jobs) == [B]
 
 
+def test_a_crashed_run_started_again_fails_and_mails_only_once(
+    make_settings: MakeSettings,
+) -> None:
+    """A second execution of a crashed run (a retry, a duplicate) finds the order failed: it
+    must not fail it again or send the two failure emails twice (review warning)."""
+    world, engine = World(make_settings), Engine(fails=RuntimeError("ffmpeg vanished"))
+    world.order(A)
+    token = world.token(A)
+
+    assert job.run_job(settings(A, token), world.ports, engine) == job.FAILED
+    assert job.run_job(settings(A, token), world.ports, engine) == job.OK
+
+    assert len(engine.inputs) == 1
+    assert len(world.sent.bodies) == 2
+    doc = world.orders.get(A)
+    assert doc is not None and doc["status"] == "failed"
+
+
 def test_settings_problems_name_the_variable_never_its_value(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
