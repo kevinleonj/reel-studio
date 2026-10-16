@@ -24,6 +24,9 @@ class Notices:
     def order_failed(self, order_id: str, code: ErrorCode, stage: str) -> None:
         self.sent.append((order_id, code, stage))
 
+    def order_paused(self, order_id: str, stage: str) -> None:
+        self.sent.append((order_id, ErrorCode.SPEND_LIMIT, stage))
+
 
 def running(orders: FakeOrders, storage: FakeStorage, order_id: str = ORDER) -> None:
     queued(orders, order_id)
