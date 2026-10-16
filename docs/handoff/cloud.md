@@ -176,6 +176,13 @@ READY TO MERGE: PR #16 (cost-cap follow-ups; PR #15 merged 12 Oct 2026)
 
 ## Log
 
+### 16 Oct 2026, 22:15 — apply job timeout (branch cloud-apply-timeout)
+- Kevin's order: deploy.yml apply job `timeout-minutes` 15 to 45, for the first deploy tonight.
+  The TTL wait stays skipped (`infra/main/firestore.tf`); the margin is for the first apply's
+  database, indexes and IAM propagation. For MAIN: `docs/INFRA.md` §4 still says "15 min".
+- Before he approves: `resend-api-key` has no version (`make dns` refused by Resend, branch
+  cloud-gcp-project), and the API service and editor job read it at `latest`.
+
 ### 13 Oct 2026 — cost-cap follow-ups (branch cloud-cost-cap-followups)
 - The final review's warnings on PR #15: `spend_cap.main()` tests now cover `--project` and
   `--service` with two caps in one project, a cap on another project with the same service, a
