@@ -23,3 +23,11 @@ Verdict: FAIL
 What to tune: read each lost fixture's weakness in ab-runs.json, change the prompts
 for it, and rerun only those fixtures (`make ab REDO=<names>`; a plain `make ab`
 resumes a run that stopped).
+
+## Kevin's decision, 13 Oct 2026 (D79)
+
+Ship the new engine to the friends beta anyway; no more A/B rounds. Round 3: Kevin picked
+the new engine in 1 of 5; mean critic 21.4 new vs 22.0 old; mean cost $0.42 new vs $1.35 old.
+The clearest losses were inputs, not editing: `meat` had a landscape clip shown with blur
+fill, and `mercadona` had 13.7 s of footage, under the 15 s minimum. D79 supersedes D44 for
+the beta only; this A/B gate stays the bar for leaving the beta.
