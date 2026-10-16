@@ -41,8 +41,9 @@ resource "google_firestore_field" "orders_ttl" {
 
   ttl_config {}
 
-  # Enabling TTL takes ten minutes or more; waiting would spend most of the apply job's time on it
-  # (deploy.yml). Terraform then cannot see the TTL state, so `make smoke` reads it through
-  # the Firestore admin API (CREATING right after a first deploy, then ACTIVE).
+  # Google documents "a minimum of ten minutes or more" to enable TTL, with no upper bound, and the
+  # provider's create timeout is 20 minutes, so waiting could fail the apply. Terraform records the
+  # TTL state as CREATING and never waits for ACTIVE; `make smoke` reads it through the Firestore
+  # admin API (CREATING right after a first deploy, then ACTIVE).
   skip_wait = true
 }
