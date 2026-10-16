@@ -145,7 +145,7 @@ def test_the_result_carries_every_score(tmp_path: Path) -> None:
 
 
 def test_a_run_stops_at_the_eval_cap_before_any_call(tmp_path: Path) -> None:
-    tiny = Eval(run_cap_usd=Decimal("0.01"))
+    tiny = Eval(run_cap_usd=Decimal("0.01"), ab=CFG.limits.eval.ab)
     capped = CFG.model_copy(update={"limits": CFG.limits.model_copy(update={"eval": tiny})})
     fake, media = FakeClaude([edl_turn("e1")]), FakeMedia()
     (tmp_path / "fixtures" / "creami").mkdir(parents=True)

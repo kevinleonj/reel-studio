@@ -1,0 +1,339 @@
+{
+ "spent_usd": 12.900319,
+ "stopped": null,
+ "fixtures": [
+  {
+   "name": "cookies",
+   "files": [
+    "IMG_0472.mov",
+    "IMG_0474.mov",
+    "IMG_0476.mov",
+    "IMG_0477.mov",
+    "IMG_0479.mov",
+    "IMG_0481.mov",
+    "IMG_0483.mov",
+    "IMG_0484.mov",
+    "IMG_0487.mov",
+    "IMG_0490.mov",
+    "IMG_0492.mov",
+    "IMG_0494.mov",
+    "IMG_0495.mov",
+    "IMG_0499.mov",
+    "IMG_0502.mov"
+   ],
+   "new": {
+    "critic_total": 22,
+    "passed": false,
+    "weakness": "total 22 < 26",
+    "loop_critic_total": 22,
+    "outputs": {
+     "text": "out/ab/2026-10-12/cookies/new-210614/text.mp4"
+    },
+    "cost_usd": 1.1426696,
+    "wall_s": 469.1,
+    "error": null,
+    "inputs_note": "read 21 files: the 15 in files plus IMG_0473, 0475, 0478, 0480, 0482, 0485 left in the shared inputs/ folder by the first-15 passes; the kit read the 15 (fixed in stage())"
+   },
+   "old": {
+    "critic_total": 23,
+    "passed": false,
+    "weakness": "total 23 < 26",
+    "job": "abcookies-9b16",
+    "kit_cost_usd": 1.4502657,
+    "outputs": {
+     "text": "out/ab/2026-10-12/cookies/old-211403/text.mp4"
+    },
+    "cost_usd": 1.5096337,
+    "wall_s": 740.1,
+    "error": null
+   },
+   "attempts": [
+    {
+     "side": "new",
+     "critic_total": 19,
+     "passed": false,
+     "weakness": "hook 3 < 4; peak 2 < 3; share 2 < 3; total 19 < 26",
+     "loop_critic_total": 19,
+     "outputs": {
+      "text": "out/ab/2026-10-11/cookies/new-201606/text.mp4"
+     },
+     "cost_usd": 0.3433869,
+     "wall_s": 286.3,
+     "error": null,
+     "carried": true
+    },
+    {
+     "side": "new",
+     "critic_total": 19,
+     "passed": false,
+     "weakness": "hook 3 < 4; peak 2 < 3; share 2 < 3; total 19 < 26",
+     "loop_critic_total": 20,
+     "outputs": {
+      "text": "out/ab/2026-10-12/cookies/new-200938/text.mp4"
+     },
+     "cost_usd": 0.3677717,
+     "wall_s": 301.4,
+     "error": null
+    },
+    {
+     "side": "new",
+     "critic_total": 17,
+     "passed": false,
+     "weakness": "hook 3 < 4; retention 2 < 3; story 2 < 3; peak 2 < 3; share 2 < 3; total 17 < 26",
+     "loop_critic_total": 18,
+     "outputs": {
+      "text": "out/ab/2026-10-12/cookies/new-204422/text.mp4"
+     },
+     "cost_usd": 0.7044288,
+     "wall_s": 263.7,
+     "error": null
+    },
+    {
+     "side": "old",
+     "critic_total": 19,
+     "passed": false,
+     "weakness": "hook 3 < 4; peak 2 < 3; share 2 < 3; total 19 < 26",
+     "job": "abcookies-b7f2",
+     "kit_cost_usd": 1.3768147999999998,
+     "outputs": {
+      "text": "out/ab/2026-10-11/cookies/old-202052/text.mp4"
+     },
+     "cost_usd": 1.4380977999999998,
+     "wall_s": 574.1,
+     "error": null,
+     "carried": true
+    }
+   ]
+  },
+  {
+   "name": "creami",
+   "files": [
+    "IMG_0178.mov",
+    "IMG_0179.mov",
+    "IMG_0180.mov",
+    "IMG_0181.mov",
+    "IMG_0182.mov",
+    "IMG_0183.mov",
+    "IMG_0414.mov",
+    "IMG_0410.jpeg",
+    "IMG_0411.jpeg",
+    "IMG_0412.jpeg",
+    "IMG_0413.jpeg",
+    "IMG_0415.jpeg",
+    "IMG_0416.jpeg",
+    "IMG_0416_VSCO.jpg"
+   ],
+   "new": {
+    "critic_total": 23,
+    "passed": false,
+    "weakness": "hook 3 < 4; total 23 < 26",
+    "loop_critic_total": 24,
+    "outputs": {
+     "text": "out/ab/2026-10-12/creami/new-204845/text.mp4"
+    },
+    "cost_usd": 0.8095667,
+    "wall_s": 290.4,
+    "error": null
+   },
+   "old": {
+    "critic_total": 21,
+    "passed": false,
+    "weakness": "hook 3 < 4; total 21 < 26",
+    "job": "abcreami-3cfb",
+    "kit_cost_usd": 1.1432505999999998,
+    "outputs": {
+     "text": "out/ab/2026-10-11/creami/old-203451/text.mp4"
+    },
+    "cost_usd": 1.2028285999999997,
+    "wall_s": 430.4,
+    "error": null,
+    "carried": true
+   },
+   "attempts": [
+    {
+     "side": "new",
+     "critic_total": 23,
+     "passed": false,
+     "weakness": "total 23 < 26",
+     "loop_critic_total": 23,
+     "outputs": {
+      "text": "out/ab/2026-10-11/creami/new-203054/text.mp4"
+     },
+     "cost_usd": 0.3924289,
+     "wall_s": 237.0,
+     "error": null,
+     "carried": true
+    },
+    {
+     "side": "new",
+     "critic_total": 24,
+     "passed": false,
+     "weakness": "total 24 < 26",
+     "loop_critic_total": 23,
+     "outputs": {
+      "text": "out/ab/2026-10-12/creami/new-201439/text.mp4"
+     },
+     "cost_usd": 0.4106789,
+     "wall_s": 343.9,
+     "error": null
+    }
+   ]
+  },
+  {
+   "name": "meat",
+   "files": [
+    "IMG_0165.mov",
+    "IMG_0166.mov",
+    "IMG_0167.mov",
+    "IMG_0168.mov",
+    "IMG_0169.mov",
+    "IMG_0170.mov",
+    "IMG_0171.mov",
+    "IMG_0420.mov",
+    "IMG_0421.mov",
+    "IMG_0424.mov",
+    "IMG_0425.mov",
+    "IMG_0426.mov",
+    "IMG_0427.mov",
+    "IMG_0429.mov",
+    "IMG_0430.mov"
+   ],
+   "new": {
+    "critic_total": 23,
+    "passed": false,
+    "weakness": "total 23 < 26",
+    "loop_critic_total": 23,
+    "outputs": {
+     "text": "out/ab/2026-10-12/meat/new-205336/text.mp4"
+    },
+    "cost_usd": 0.8593843,
+    "wall_s": 348.6,
+    "error": null
+   },
+   "old": {
+    "critic_total": 24,
+    "passed": false,
+    "weakness": "total 24 < 26",
+    "job": "abmeat-a141",
+    "kit_cost_usd": 1.7062313999999998,
+    "outputs": {
+     "text": "out/ab/2026-10-11/meat/old-204709/text.mp4"
+    },
+    "cost_usd": 1.7651293999999997,
+    "wall_s": 675.3,
+    "error": null,
+    "carried": true
+   },
+   "attempts": [
+    {
+     "side": "new",
+     "critic_total": 24,
+     "passed": false,
+     "weakness": "total 24 < 26",
+     "loop_critic_total": 24,
+     "outputs": {
+      "text": "out/ab/2026-10-11/meat/new-204228/text.mp4"
+     },
+     "cost_usd": 0.4286164,
+     "wall_s": 281.1,
+     "error": null,
+     "carried": true
+    },
+    {
+     "side": "new",
+     "critic_total": 23,
+     "passed": false,
+     "weakness": "total 23 < 26",
+     "loop_critic_total": 23,
+     "outputs": {
+      "text": "out/ab/2026-10-12/meat/new-202023/text.mp4"
+     },
+     "cost_usd": 0.4197306,
+     "wall_s": 324.8,
+     "error": null
+    }
+   ]
+  },
+  {
+   "name": "mercadona",
+   "files": [
+    "IMG_0238.MOV",
+    "IMG_0239.MOV"
+   ],
+   "new": {
+    "critic_total": 16,
+    "passed": false,
+    "weakness": "hook 2 < 4; retention 2 < 3; story 2 < 3; peak 2 < 3; share 2 < 3; total 16 < 26",
+    "loop_critic_total": 16,
+    "outputs": {
+     "text": "out/ab/2026-10-11/mercadona/new-205849/text.mp4"
+    },
+    "cost_usd": 0.2783048,
+    "wall_s": 158.7,
+    "error": null,
+    "carried": true
+   },
+   "old": {
+    "critic_total": 20,
+    "passed": false,
+    "weakness": "hook 3 < 4; peak 2 < 3; total 20 < 26",
+    "job": "abmercadona-e1c2",
+    "kit_cost_usd": 1.0037822,
+    "outputs": {
+     "text": "out/ab/2026-10-11/mercadona/old-210128/text.mp4"
+    },
+    "cost_usd": 1.0601727,
+    "wall_s": 336.2,
+    "error": null,
+    "carried": true
+   }
+  },
+  {
+   "name": "pastav2",
+   "files": [
+    "IMG_0216.mov",
+    "IMG_0222.mov",
+    "IMG_0223.mov",
+    "IMG_0224.mov",
+    "IMG_0225.mov",
+    "IMG_0226.mov",
+    "IMG_0227.mov",
+    "IMG_0230.mov",
+    "IMG_0556.mov",
+    "IMG_0557.mov",
+    "IMG_0558.mov",
+    "IMG_0559.mov",
+    "IMG_0561.mov",
+    "IMG_0562.mov",
+    "IMG_0563.mov"
+   ],
+   "new": {
+    "critic_total": 23,
+    "passed": false,
+    "weakness": "total 23 < 26",
+    "loop_critic_total": 23,
+    "outputs": {
+     "text": "out/ab/2026-10-11/pastav2/new-210733/text.mp4"
+    },
+    "cost_usd": 0.472635,
+    "wall_s": 371.0,
+    "error": null,
+    "carried": true
+   },
+   "old": {
+    "critic_total": 22,
+    "passed": false,
+    "weakness": "total 22 < 26",
+    "job": "abpastav2-1e67",
+    "kit_cost_usd": 1.1386262,
+    "outputs": {
+     "text": "out/ab/2026-10-11/pastav2/old-211344/text.mp4"
+    },
+    "cost_usd": 1.1974642,
+    "wall_s": 510.4,
+    "error": null,
+    "carried": true
+   }
+  }
+ ]
+}

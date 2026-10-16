@@ -11,7 +11,7 @@ from the brief (`c01`...).
   "format": "recipe",
   "text_style": "outline",
   "defaults": {"rotate": 0, "zoom": 1.0, "focus_x": 0.5, "focus_y": 0.5},
-  "grade": {"look": "warm", "strength": 0.6, "match": 0.6},
+  "grade": {"look": "warm", "strength": 0.6, "match": 0.8},
   "audio": {"natural_db": 0},
   "versions": [
     {

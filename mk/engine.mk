@@ -1,5 +1,5 @@
 # Lane engine owns this file (STEP-02 to 05).
-.PHONY: ci-engine image-editor eval
+.PHONY: ci-engine image-editor eval ab ab-pick
 
 # The media tests need an ffmpeg with zscale (F45); this prints which one they found: on the Mac
 # Homebrew's keg-only ffmpeg-full, in CI Ubuntu's ffmpeg (F201). make ci runs it after the tests.
@@ -17,3 +17,16 @@ MODEL ?= sonnet
 eval:
 	@test -n "$(FIX)" || { echo "usage: make eval FIX=<fixture> [MODEL=haiku]"; exit 2; }
 	$(UV) python -m reel_studio.editor.evaluate --fixture $(FIX) --model $(MODEL)
+
+# STEP-04: both engines on the fixtures in limits.toml [eval.ab], judged by our critic, inside the
+# step budget (ONLY=a,b limits it; REDO=a,b reruns their finished arms after a tune,
+# REDO=a:new only our engine's arm);
+# then Kevin's blind picks turn
+# eval/results/<date>/ab-runs.json into ab.json.
+ONLY ?=
+REDO ?=
+ab:
+	$(UV) python -m reel_studio.editor.ab --only "$(ONLY)" --redo "$(REDO)"
+
+ab-pick:
+	$(UV) python -m reel_studio.editor.ab_pick

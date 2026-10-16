@@ -206,3 +206,35 @@ def test_the_crop_effect_is_given_as_typical_and_most() -> None:
     text = prompt.brief(_order(), CFG, MEDIA, SHOTS, transcripts={})
 
     assert "usually by 10-15 and\nup to about 30" in text
+
+
+def test_round_2_rules_from_kevins_picks_are_in_every_food_style() -> None:
+    """STEP-04 A/B, 11 Oct: the finished cookies never appeared; creami held stills too long;
+    meat showed too many steps with arms and told no story."""
+    for style in ("montage", "recipe"):
+        words = " ".join(prompt.system_prompt(style, CFG).split())
+        assert "The finished food is in every Reel" in words
+        assert "A photo holds at most 1.2 s" in words and "never two photos in a row" in words
+        assert "hands or arms fill the frame" in words and "at most four process steps" in words
+
+
+def test_round_3_rules_from_kevins_picks_are_in_every_food_style() -> None:
+    """STEP-04 A/B, 13 Oct: the kit won 4 of 5; Kevin named colour, zoom-ins and flow on two.
+    The kit graded match 0.8 on 4 of 5 (ours 0.6 on all), sped whole actions (ours none on 4 of
+    5) and zoomed more mid-Reel. The editor-only references now agree with the rules."""
+    for style in ("montage", "recipe"):
+        words = " ".join(prompt.system_prompt(style, CFG).split())
+        assert '"strength": 0.6, "match": 0.8' in words and '"match": 0.6' not in words
+        assert "choose warm over natural" in words and "keep clean for ice cream" in words
+        assert "brightness 0.02-0.03" in words and "Do not lower saturation" in words
+        assert "Show each action whole" in words and "usually 2-8x" in words
+        assert "Vary the rhythm" in words and "similar shot lengths" not in words
+        assert "single best moment" not in words and "cut mid-action" not in words
+        assert "Move in on the food" in words and "zoom 1.2-1.4" in words
+
+
+def test_fewer_steps_limits_shots_not_step_labels() -> None:
+    """Round 2 cuts lost every step label (round 1 had 2-4): the rule limits shots only."""
+    words = " ".join(prompt.system_prompt("montage", CFG).split())
+
+    assert "This limits shots, not labels: name each kept step" in words

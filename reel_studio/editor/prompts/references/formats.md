@@ -8,7 +8,7 @@ a strong 25 s beats a padded 45 s. Make ONE cut per Reel.
 
 ## recipe — cooking or baking from scratch (target 30-50 s; short cut 15-25 s)
 1. Hook: finished food in motion (break, pull, pour, slice), 1.5-3 s. Hook text.
-2. Process in true recipe order. One action per shot, cut mid-action, max 2 s each.
+2. Process in true recipe order. One action per shot, whole and sped up to fit, max 2 s each.
    Show what changes (melting, combining, rising), skip what does not (an empty bowl, a hand
    reaching). Group repeated actions: one flour drop, not three.
 3. Transformation moment (oven out, flip, sauce thickens) as a mini-peak around 60-75%.

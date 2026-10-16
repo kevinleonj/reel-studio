@@ -51,6 +51,25 @@ transient_retries = 2
 # Sonnet once).
 run_cap_usd = 2.5
 
+[eval.ab]
+# STEP-04 (docs/EDITOR.md section 11). Five of the eight fixture folders: the kit takes at most 15
+# files (kit make_reel.py MAX_FILES), so both engines get the same 15, spread across the shoot
+# by name (Kevin, 13 Oct 2026; first 15 before); orderinginspanish (speech) waits for STEP-05;
+# pasta and pastav2 are one dish, pastav2 is all video; melocotonjuice is a single 9 s clip.
+# Decided under the standing orders, 11 Oct 2026.
+fixtures = ["cookies", "creami", "meat", "mercadona", "pastav2"]
+style = "montage"                   # the order style; the kit is given no style
+max_files = 15                      # kit make_reel.py MAX_FILES
+budget_usd = 20.0                   # STEP-04 paid budget, both engines and the judge together
+                                    # (Kevin raised it from 15.0 on 13 Oct 2026 for round 3)
+kit_run_cap_usd = 2.5               # the kit's REEL_MAX_BUDGET_USD for one run (kit default 6)
+kit_timeout_s = 3600                # one kit run; the creami run of 10 Oct took 343 s
+log_tail_chars = 300                # of the kit's output kept when a run names no job
+judge_reserve_usd = 0.15            # kept free for one judge call (about $0.06 measured)
+min_new_or_tie = 3                  # EDITOR section 11, for the report (the gate recomputes it)
+critic_margin = 1
+max_mean_cost_usd = 1.20
+
 [sheets]
 tile_w = 384                        # D38
 tile_h = 216

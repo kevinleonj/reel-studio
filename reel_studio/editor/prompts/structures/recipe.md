@@ -4,7 +4,7 @@ From ingredients to the finished dish, in true recipe order, so a stranger could
 the sound off.
 
 1. Hook (0-3 s): the finished food in motion (break, pull, pour, slice), with hook text.
-2. Process in recipe order. One action per shot, cut mid-action, at most 2 s each. Show what
+2. Process in recipe order. One action per shot, whole and sped up to fit, at most 2 s each. Show what
    changes (melting, combining, rising); skip what does not (an empty bowl, a hand reaching).
    Group repeated actions: one flour drop, not three.
 3. Transformation (about 60-75 % in): oven out, flip, sauce thickens; the mini-peak.

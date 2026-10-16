@@ -72,8 +72,23 @@ class Editor(_Strict):
     transient_retries: int
 
 
+class Ab(_Strict):
+    fixtures: list[str]
+    style: str
+    max_files: int
+    budget_usd: Decimal
+    kit_run_cap_usd: Decimal
+    kit_timeout_s: int
+    log_tail_chars: int
+    judge_reserve_usd: Decimal
+    min_new_or_tie: int
+    critic_margin: int
+    max_mean_cost_usd: Decimal
+
+
 class Eval(_Strict):
     run_cap_usd: Decimal  # make eval only: lowers editor.cost_cap_usd for one paid run
+    ab: Ab
 
 
 class Sheets(_Strict):
