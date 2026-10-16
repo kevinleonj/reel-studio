@@ -62,13 +62,9 @@ entries, logs and standing-order decisions are in git history: `git log -p -- do
 - **`KEVIN_ALERT_EMAIL`** on the laptop is the placeholder `kevin@laptop.invalid`.
 - **The ready email's link** (D18 edge): decided by standing orders as "open the link from your
   first email" (HANDOFF.md). Other options if you want one: an encrypted token, or a re-access flow.
-- **Tunables to review:** `[firestore] timeout_s = 10`, `max_attempts = 12`; `[reelctl]
-  list_limit = 200`; `[payments] price_minor = 1900`; `[upload] backoff_ms = 1000`; `[web]
-  request_timeout_ms`, `chunk_timeout_ms`, `signed_url_minutes`, `rating_max`, `comment_max_chars`.
-- **Ports beyond ARCHITECTURE §3:** `OrderUpkeep`, `PaymentsUpkeep`, `PaymentGateway`; confirm
-  or move them into §3.
-- **CI skips the Firestore/Mailpit contract cases** (`make test-emulator` runs them; the image is
-  ~1 GB). Your call whether CI or a gate runs it.
+- **To review:** the STEP-07 tunables in `config/limits.toml` (`[firestore]`, `[reelctl]`,
+  `[payments]`, `[upload]`, `[web]`); ports beyond ARCHITECTURE §3 (`OrderUpkeep`,
+  `PaymentsUpkeep`, `PaymentGateway`); CI skips the emulator contract cases (`make test-emulator`).
 - `scripts/check_literals.py` `WEB_HOMES` still exempts `web/src/lib/analytics.ts`, which holds
   no URL any more (the scanner is protected). `public/og.png` is a screenshot placeholder.
 
