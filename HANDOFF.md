@@ -10,7 +10,7 @@ Trimmed 16 Oct 2026 to the open items (`~/projects/reel/TIDY.md`); the full log 
   main-lane work #6, #7, #9; MAIN-NEXT tasks 1-3 (#17, #19, #22; brief `~/projects/reel/MAIN-NEXT.md`,
   not in the repo) and the CloudSettings split (#21).
 - Open in lane engine: STEP-04 (#10) and STEP-05 (#12, partial). Kevin decided on 13 Oct to ship
-  the new engine to the friends beta; lane engine records it as D79 in PR #10. D79 is not yet in
+  the new engine to the friends beta; lane engine records it as D79 (reaches main with PR #10). D79 is not yet in
   the decisions file (Needs Kevin). The A/B gate stays the bar for leaving the beta.
 - Not started: STEP-09. STEP-00 on the Mac is partly done (Needs Kevin).
 - Not run against real services: no cloud adapter (Google Cloud, Resend), no editor job execution.
