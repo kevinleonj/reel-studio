@@ -1,7 +1,6 @@
 # Handoff — lane engine
 
-Written by the engine lane only. Trimmed 16 Oct 2026 to the live items; older text is in git
-history (`git log -p -- docs/handoff/engine.md`).
+Engine lane only. Trimmed 16 Oct 2026; older text: `git log -p -- docs/handoff/engine.md`.
 
 ## Status
 - STEP-04 closed by Kevin's decision (13 Oct, D79): ship the new engine to the friends beta, no
