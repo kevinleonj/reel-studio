@@ -52,9 +52,10 @@ Plan row 10: `qa.json` `hard_checks` keys are the kit's PASS/FAIL lines (`spec_t
 `spec_clean`, `size_duration_text`, `size_duration_clean`, `no_black_frames`,
 `text_in_safe_zone`); loudness stays a flag, the gate checks −14 ± 1 LUFS itself.
 
-24. **D79 is not in `docs/DECISIONS.md`.** NIGHT.md asked ENGINE to add it; the lane guard refuses
-    (`docs/DECISIONS.md belongs to lane 'main'`). Text ready in eval/AB-RESULT.md; MAIN or Kevin
-    adds the row and marks D44 "superseded for the beta by D79".
+24. **D79 is not in `docs/DECISIONS.md`.** The 16 Oct night instructions asked ENGINE to add it;
+    the lane guard refuses (`docs/DECISIONS.md belongs to lane 'main'`). MAIN or Kevin adds the row
+    (the Status entry above is its text; `make ab-pick` rewrites eval/AB-RESULT.md) and marks D44
+    "superseded for the beta by D79".
 5. EDITOR.md §1 says tonemap "zscale + hable"; the kit and the port use mobius (D46). Fix §1 or ask
    for hable.
 10. `reel render` needs `ANTHROPIC_API_KEY` though it never calls the API (proposal: `MediaSettings`).
