@@ -41,10 +41,9 @@ history (`git log -p -- docs/handoff/engine.md`).
 
 ## For MAIN
 - `docs/build/STEP-04.md:8,54` and `docs/build/README.md:14` still say $15; Kevin raised it to $20.
-- `web/src/copy/en.json` `failed.messages`: add `provider_rejected` ("Something broke while
-  planning. Kevin has been notified.") and `ErrorCode.PROVIDER_REJECTED` to `FAILED_CODES` in
-  `tests/contract/test_web_copy.py`.
-- `docs/DECISIONS.md` D35 and `docs/EDITOR.md` §4 still say `write_edl` is strict (Needs Kevin 20).
+- `docs/DECISIONS.md` D35 still says `write_edl` is strict (EDITOR §4 corrected; Needs Kevin 20).
+- D79 knock-ons: HANDOFF.md still says "STEP-04's gate (D44) before any deploy"; EDITOR.md §11
+  is titled "The A/B before hosting (D44...)".
 
 ## Needs Kevin
 Answered and kept because code cites them: 1. tonemap luma reference = SDR render of the same
