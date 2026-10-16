@@ -32,8 +32,7 @@ entries, logs and standing-order decisions are in git history: `git log -p -- do
 - S1: a fixed `STRIPE_DEVICE_NAME` for both listener containers.
 - S2: a reused coupon is checked for 100% and once only; also check `valid`, `max_redemptions`,
   `redeem_by`.
-- S4-S6, S10: reelctl is 377 lines (split the Stripe half out); the real editor's logs lack
-  `latency_ms`; a few docstrings still say "fake"; `queue.run_token` unused on the laptop.
+- S4-S6, S10: split reelctl's Stripe half out (377 lines); `latency_ms` in the real editor's logs.
 - The real editor sends no `text_lines`, `left_out` or `wishes`, and `doubts` carry the critic's
   raw scores (`peak 2 < 3; ...`): the engine's result shape (EDITOR.md §8).
 - N3: pin that a non-alphanumeric `whsec_` value is masked and reelctl imports without Stripe.
