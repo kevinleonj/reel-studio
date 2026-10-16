@@ -11,6 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
+from typing import Protocol
 
 from reel_studio.adapters.launcher_local import FailureNotifier
 from reel_studio.core.errors import ReelError, SpendLimitReached
@@ -34,6 +35,10 @@ class MadeReel:
     music_hint: str | None  # the engine's one line (EDITOR.md music_hint), or none
 
 
+class EditorNotifier(FailureNotifier, Protocol):
+    def order_paused(self, order_id: str, stage: str) -> None: ...
+
+
 # (folder of the order's uploads, folder for the output, the order's settings) -> the Reel
 MakeReel = Callable[[Path, Path, dict[str, object]], MadeReel]
 
@@ -45,7 +50,7 @@ class RealEditor:
         storage: Storage,
         make_reel: MakeReel,
         *,
-        notifier: FailureNotifier,
+        notifier: EditorNotifier,
     ) -> None:
         self._orders = orders
         self._storage = storage
