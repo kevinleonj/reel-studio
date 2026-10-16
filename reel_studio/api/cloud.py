@@ -104,12 +104,22 @@ def google_clients(runtime: RuntimeSettings, budget: Budget) -> CloudClients:
     from google.cloud.storage import Client  # noqa: PLC0415 (F88: untyped, overridden)
 
     values = runtime.cloud()
+    resend, sessions = http_clients(budget)
     return CloudClients(
         bucket=Client(project=runtime.firestore_project).bucket(values.gcs_bucket),
         identity=AdcIdentity(),
         jobs=run_v2.JobsClient(),
-        resend=httpx.Client(base_url=RESEND_API_BASE, timeout=budget.resend_timeout_s),
-        sessions=httpx.Client(timeout=budget.call_timeout_s),
+        resend=resend,
+        sessions=sessions,
+    )
+
+
+def http_clients(budget: Budget) -> tuple[httpx.Client, httpx.Client]:
+    """Resend's client and the upload-session client, each with the budget's timeout (without
+    one, httpx waits its own 5 s default)."""
+    return (
+        httpx.Client(base_url=RESEND_API_BASE, timeout=budget.resend_timeout_s),
+        httpx.Client(timeout=budget.call_timeout_s),
     )
 
 
