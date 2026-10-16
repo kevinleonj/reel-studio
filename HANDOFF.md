@@ -46,7 +46,7 @@ Trimmed 16 Oct 2026 to the open items (`~/projects/reel/TIDY.md`); the full log 
 - `reel_studio/settings.py` is in no lane's paths: a lane that needs a new variable asks here.
 
 ## Open follow-ups (cited from code; keep until done)
-- Task 2 (cloud wiring), the cloud sweep: the sweep endpoint still refuses every caller
+- Before the first deploy, task 2 (cloud wiring), the cloud sweep: the sweep endpoint still refuses every caller
   (`refuse_all`). It needs the scheduler's OIDC check, or no lease is ever swept; once it
   authenticates it must also start waiting orders (`launch_waiting`) and mail the failures it
   reports (ARCHITECTURE §1 step 14), as the laptop dispatcher does. Cited by `core/dispatch.py`.
