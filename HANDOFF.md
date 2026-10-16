@@ -5,12 +5,17 @@ Trimmed 16 Oct 2026 to the open items (`~/projects/reel/TIDY.md`); the full log 
 `git log -p -- HANDOFF.md`.
 
 ## Status
-- Done and merged: starter kit v1.1; STEP-01 (#1), STEP-02 (#2), STEP-03 (#5), STEP-06 except task
-  8 (#4, #8), STEP-07 (#11, #13, #14), STEP-08 short of the real project (#3); main-lane work #6,
-  #7, #9, #15, #16; MAIN-NEXT tasks 1-3 (#17, #19, #22) and the CloudSettings split (#21).
-- Open in lane engine: STEP-04 (#10; Kevin decided on 13 Oct to ship the new engine to the friends
-  beta, recorded as D79 by lane engine) and STEP-05 (#12, partial).
+- Done and merged: starter kit v1.1; STEP-01 (#1), STEP-02 (#2), STEP-03 (#5), STEP-06 (#4, #8,
+  #18), STEP-07 (#11, #13, #14), STEP-08 short of the real project (#3); cloud cost cap (#15, #16);
+  main-lane work #6, #7, #9; MAIN-NEXT tasks 1-3 (#17, #19, #22; brief `~/projects/reel/MAIN-NEXT.md`,
+  not in the repo) and the CloudSettings split (#21).
+- Open in lane engine: STEP-04 (#10) and STEP-05 (#12, partial). Kevin decided on 13 Oct to ship
+  the new engine to the friends beta; lane engine records it as D79 in PR #10. D79 is not yet in
+  the decisions file (Needs Kevin). The A/B gate stays the bar for leaving the beta.
 - Not started: STEP-09. STEP-00 on the Mac is partly done (Needs Kevin).
+- Not run against real services yet: no cloud adapter (Google Cloud, Resend) and no editor job
+  execution; the image build only in CI.
+- Next: the sweep's OIDC check, then the other first-deploy follow-ups below, then the first deploy.
 
 ## Lanes
 | Lane | Worktree | Steps | File |
