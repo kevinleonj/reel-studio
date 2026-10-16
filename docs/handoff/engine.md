@@ -59,7 +59,11 @@ Plan row 10: `qa.json` `hard_checks` keys are the kit's PASS/FAIL lines (`spec_t
 5. EDITOR.md §1 says tonemap "zscale + hable"; the kit and the port use mobius (D46). Fix §1 or ask
    for hable.
 10. `reel render` needs `ANTHROPIC_API_KEY` though it never calls the API (proposal: `MediaSettings`).
-11. Assumption A2 says "1080p proxies"; cover scaling makes a landscape clip a 3414x1920 proxy.
+11. Assumption A2 (docs/FACTS.md) says "1080p proxies"; cover scaling makes a landscape clip a
+    3414x1920 proxy. Needs your call before STEP-05 measures memory.
+12. Review verdict file: the lane guard refuses `.claude/review-verdict.json` and the doc ledger
+    from a lane worktree (lane main owns them); web.md and cloud.md say the same. Add both to
+    `shared.paths` in `.claude/lanes.json` (protected) or have lane main write them.
 13. Style photos are matched by substring (`vsco`, `look`, `ref`), so `refried_beans.jpg` vanishes
     (logged). Whole-word matching would change kit behaviour.
 16. `audio.natural_db` no longer changes anything audible; remove it or keep it as a no-op.
