@@ -56,6 +56,7 @@ Specs, read the parts the step names: `docs/ARCHITECTURE.md`, `docs/EDITOR.md`, 
   error without logging it; user-facing messages come from one table.
 - Python: `x if x is not None else default`, never `x or default` for values that may be `0` or `""`.
 - Modules under about 300 lines; functions do one thing; comments say why, not what.
+- If you create any temporary new files, scripts, or helper files for iteration, clean up these files by removing them at the end of the task.
 - No new dependency without one line in `HANDOFF.md` saying why and which alternative lost.
 - Tests: freeze the clock; no network in unit tests; paid tests are marked `paid` and run only via
   `make eval`; golden files change only with `REEL_ALLOW_GOLDEN=1` and a reason in the commit.
