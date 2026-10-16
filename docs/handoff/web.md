@@ -101,6 +101,11 @@ mask `whsec_\S+`)
 
 
 ## Needs Kevin (decisions, not blocking)
+- **Upload copy (16 Oct 2026):** `docs/UX.md` §2 (`paid` row) still quotes the old upload
+  sentence; add "Vertical videos only. At least 15 seconds of video in total." there (the web
+  lane cannot edit UX.md). And 15 s is the shortest Reel on offer, not enough footage for the
+  30 s default: say if the sentence should name the ordered length instead (`{length}` from the
+  order's settings, one line in `UploadPanel.tsx`).
 - **Review verdict file:** the senior review could not write `.claude/review-verdict.json` from this
   worktree (the lane guard says it is lane main's). Its verdict, for the record: PASS, 0 critical,
   on the diff before the fixes above. Add the path to the shared list, or have lane main write it.
