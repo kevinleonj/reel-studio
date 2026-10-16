@@ -75,9 +75,7 @@ Trimmed 16 Oct 2026 to the open items (`~/projects/reel/TIDY.md`); the full log 
 ## Log
 ### 16 Oct 2026 — tidy (PR #23) and markdown diet (branch `md-diet`)
 - This file cut from 280 lines to the open items; CLAUDE.md gains the clean-up line (#23).
-- Diet: 41 tracked .md files, 3,762 lines. Only `docs/claude-project/INSTRUCTIONS.md` (30) was
-  referenced nowhere; it is in `docs/archive/`. Kept though no path names them: the editor
-  prompts (loaded by name from config), STEP-00 (cited by docs), `docs/cli-verified.md` (Kevin's
-  hooks).
+- Diet: of 41 .md files (3,762 lines) only `docs/claude-project/INSTRUCTIONS.md` (30) was cited
+  nowhere: now in `docs/archive/`. Kept: editor prompts (loaded via config), STEP-00, cli-verified.
 - Branches (rules: `~/projects/reel/TIDY.md`, not in the repo): 20 merged branches deleted locally
   and on GitHub after a SHA match with the merged PR. Kept: open PRs and worktree branches.
