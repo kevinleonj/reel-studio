@@ -200,3 +200,17 @@ class FakeEditorLauncher:
                 extra={"order_id": order_id, "stage": "editor", "outcome": "error"},
             )
             self._orders.fail(order_id, code=ErrorCode.RENDER_ERROR)
+            try:
+                # EDITOR.md §10: every failure emails Kevin, this one too.
+                self._notifier.order_failed(order_id, ErrorCode.RENDER_ERROR, "editor")
+            except Exception:
+                # Logged with its traceback; the order's own state is already written.
+                log.exception(
+                    "failure notice not sent",
+                    extra={
+                        "order_id": order_id,
+                        "stage": "editor",
+                        "event": "notify",
+                        "outcome": "error",
+                    },
+                )
