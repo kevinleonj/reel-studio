@@ -132,7 +132,9 @@ def test_the_monthly_spend_limit_pauses_the_order_and_the_service() -> None:
     assert doc["status"] == "paused"
     assert orders.capacity["paused"] is True
     assert orders.capacity["slots"] == {}
-    assert notices.sent == []  # not a failure: the order starts again when the month resets
+    # Not a failure (the order starts again when the month resets), but Kevin and the customer
+    # hear of it (D45).
+    assert notices.sent == [(ORDER, ErrorCode.SPEND_LIMIT, "planning")]
 
 
 def test_an_order_that_is_not_running_is_left_alone() -> None:
