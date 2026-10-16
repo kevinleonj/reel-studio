@@ -133,8 +133,10 @@ Stripe e2e order: c86d1bf26052af262931df7ab248a8c5, $0.3587172 (12 Oct 2026, Str
 
 - Before: the upload step named only file count, size and minutes per video. After: it also
   says "Vertical videos only. At least 15 seconds of video in total." (`order.upload.limits`),
-  because round 3 of the A/B lost on those inputs (D79). `tests/contract/test_web_copy.py`
-  ties the 15 to the shortest length in `config/limits.toml`. Copy and its test only.
+  because the clearest A/B losses were those inputs (Kevin, 13 Oct 2026; pending as D79 on the
+  engine lane's branch). `tests/contract/test_web_copy.py` ties the 15 to the shortest length in
+  `config/limits.toml`. Copy and its test only.
+- Follow-ups: see Needs Kevin (UX.md §2 quotes the old sentence; 15 s versus the ordered length).
 
 ### 13 Oct 2026 — why the iPhone upload ran at 0.66 MB/s; one real Reel for the phone
 
