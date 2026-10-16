@@ -25,7 +25,14 @@ history (`git log -p -- docs/handoff/engine.md`).
   the new rules; the grade rule is not always followed (creami natural, mercadona 0.5/0.9).
 - Harness: REDO with the same name twice keeps only the last entry; the cross-day
   `superseded_paid_usd` pop has no test; `max_files` 1 divides by zero in `select_inputs`;
-  `read_grade_preview` renders at `default_match` 0.6; `files` is recorded per row, not per arm.
+  `read_grade_preview` renders at `default_match` 0.6, so the editor never sees match 0.8 before
+  choosing it; `files` is recorded per row, not per arm. Never repeat an identical REDO after a
+  partial run: it pays finished arms again.
+- STEP-03 left open: W6 the 1-hour cache TTL has no price row (`prices.toml`); W8 `--voice on`
+  with a Gemini key keeps the voice with no transcript until STEP-05. Phase B: S7 codec names
+  inline (`prepare.py`, `render_steps.py`); S8 small drifts; dead-air and blur warnings, the hook
+  `""` rule and failing size/black-frame checks have no test; `test_edl_json_is_read_not_written`
+  would pass if a new exit 2 appeared before the read.
 - Review leftovers: a ProviderRejected critic call after a good render still aborts the order
   (S1); a caption escaped twice keeps one backslash (S2); a photo the process cannot read raises
   PermissionError while staging (not a MediaError); render outputs are not atomic (S2 phase B).
