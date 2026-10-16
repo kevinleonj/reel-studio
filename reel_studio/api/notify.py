@@ -1,5 +1,6 @@
-"""Failure emails (docs/UX.md §3): the customer's "Your Reel didn't finish" when they gave an
-address, and Kevin's alert for every failure (EDITOR.md §10). Each is claimed on the order first
+"""Failure and pause emails (docs/UX.md §3): the customer's "Your Reel didn't finish" or "Your
+Reel is waiting" when they gave an address, and Kevin's alert for every failure (EDITOR.md §10)
+and every spend-limit pause (D45). Each is claimed on the order first
 (`claim_email`), so a sweep that runs twice never sends twice. A mail server that is down is
 logged and never stops the caller (the dispatcher, the sweep).
 
