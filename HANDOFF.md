@@ -73,7 +73,7 @@ Trimmed 16 Oct 2026 to the open items (`~/projects/reel/TIDY.md`); the full log 
   `git log -p -- HANDOFF.md` (before 16 Oct).
 
 ## Log
-### 16 Oct 2026 — tidy (branch `main-tidy`)
+### 16 Oct 2026 — tidy (branch `tidy-handoff`, PR #23)
 - This file cut from 280 lines to the open items above; CLAUDE.md gains the clean-up line from
   Anthropic's prompting guide.
 - Branches (rules: `~/projects/reel/TIDY.md`, not in the repo): 20 merged branches deleted locally
