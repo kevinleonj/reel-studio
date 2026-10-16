@@ -9,9 +9,8 @@ Engine lane only. Trimmed 16 Oct 2026; older text: `git log -p -- docs/handoff/e
   clip shown with blur fill; `mercadona` had 13.7 s of footage, under the 15 s minimum. Recorded
   in eval/AB-RESULT.md. The step04 gate still fails "A/B picks: new engine picked or tied in >= 3
   of 5" by design: D44's A/B stays the bar for leaving the beta.
-- A/B ledger: $14.51 of $20 paid across three rounds. No paid call since.
-- Done earlier: STEP-02 (PR #2), STEP-03 (PR #5), STEP-04 harness (`make ab`, `make ab-pick`,
-  `reel_studio/editor/ab*.py`) on PR #10.
+- A/B ledger $14.51 of $20, no paid call since. STEP-02 (#2), STEP-03 (#5) merged; #10 is the
+  STEP-04 harness (`make ab`, `make ab-pick`, `reel_studio/editor/ab*.py`).
 
 ## Next
 - PR #10 merges once CI is green (`gh pr merge 10 --auto --squash`).
