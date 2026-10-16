@@ -1,5 +1,5 @@
 """The web app's words must cover exactly what the API and config can send (no drift between
-web/src/copy/en.json, reel_studio/core/errors.py and config/styles.toml)."""
+web/src/copy/en.json, reel_studio/core/errors.py, config/styles.toml and config/limits.toml)."""
 
 import json
 import re
@@ -70,8 +70,11 @@ def test_the_page_types_every_failure_code() -> None:
 
 
 def test_upload_step_states_the_input_rules() -> None:
-    """Round 3 of the A/B lost on inputs (D79): a landscape clip, and 13.7 s of footage."""
+    """Kevin, 13 Oct 2026 (pending as D79): the clearest A/B losses were inputs, a landscape
+    clip and 13.7 s of footage. The 15 is the shortest Reel on offer (D11)."""
     limits = COPY["order"]["upload"]["limits"]
     shortest = min(load().limits.order.lengths_s)
+    for placeholder in ("{maxFiles}", "{maxSize}", "{maxMinutes}"):
+        assert placeholder in limits
     assert "Vertical videos only." in limits
     assert f"At least {shortest} seconds of video in total." in limits
