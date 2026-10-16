@@ -22,7 +22,7 @@ from reel_studio.api.main import build_deps, build_dispatcher
 from reel_studio.api.routes_local import UPLOAD_PATH
 from reel_studio.core.config import Config, load
 from reel_studio.core.ports import NewOrder
-from reel_studio.settings import WebSettings
+from reel_studio.settings import RuntimeSettings, WebSettings
 from tests.conftest import MakeSettings
 from tests.fakes.clock import FrozenClock
 from tests.fakes.orders import FakeOrders
@@ -32,7 +32,7 @@ SETTINGS = {"style": "recipe", "length_s": 30, "text_lang": "en", "keep_voice": 
 SHELL = "<div>new shell</div>"
 WAIT_S = 5.0
 POLL_S = 0.01
-WEB_NAMES = {f"{name.upper()}" for name in WebSettings.model_fields}
+WEB_NAMES = {name.upper() for cls in (WebSettings, RuntimeSettings) for name in cls.model_fields}
 
 
 def quick_config() -> Config:
@@ -45,7 +45,9 @@ def quick_config() -> Config:
     )
 
 
-def laptop(tmp_path: Path, make_settings: MakeSettings, **changes: object) -> WebSettings:
+def laptop(
+    tmp_path: Path, make_settings: MakeSettings, **changes: object
+) -> tuple[WebSettings, RuntimeSettings]:
     dist = tmp_path / "dist"
     (dist / "new").mkdir(parents=True)
     (dist / "new" / "index.html").write_text(SHELL)
@@ -60,14 +62,18 @@ def laptop(tmp_path: Path, make_settings: MakeSettings, **changes: object) -> We
         **changes,
     }
     settings = make_settings(WebSettings, **values)
+    runtime = make_settings(RuntimeSettings, **values)
     assert isinstance(settings, WebSettings)
-    return settings
+    assert isinstance(runtime, RuntimeSettings)
+    return settings, runtime
 
 
 def test_the_api_is_wired_from_settings(tmp_path: Path, make_settings: MakeSettings) -> None:
-    settings = laptop(tmp_path, make_settings)
+    settings, runtime = laptop(tmp_path, make_settings)
     clock = FrozenClock(START)
-    deps = build_deps(settings, orders=FakeOrders(clock, LIMITS), clock=clock, config=load())
+    deps = build_deps(
+        settings, runtime, orders=FakeOrders(clock, LIMITS), clock=clock, config=load()
+    )
     assert isinstance(deps.mailer, SmtpMailer)
     assert deps.web_dist == settings.web_dist
     assert deps.voice_available is False
@@ -88,13 +94,13 @@ def test_the_api_is_wired_from_settings(tmp_path: Path, make_settings: MakeSetti
         headers={"X-Order-Token": token},
     ).json()
     assert targets["targets"][0]["upload_url"].startswith(f"{UPLOAD_PATH}/")
-    assert (settings.data_dir).is_dir()
+    assert runtime.laptop().data_dir.is_dir()
 
 
 def test_stripe_settings_wire_the_stripe_adapter(
     tmp_path: Path, make_settings: MakeSettings
 ) -> None:
-    settings = laptop(
+    settings, runtime = laptop(
         tmp_path,
         make_settings,
         payments="stripe",
@@ -104,7 +110,9 @@ def test_stripe_settings_wire_the_stripe_adapter(
         stripe_coupon_id="coupon_test",
     )
     clock = FrozenClock(START)
-    deps = build_deps(settings, orders=FakeOrders(clock, LIMITS), clock=clock, config=load())
+    deps = build_deps(
+        settings, runtime, orders=FakeOrders(clock, LIMITS), clock=clock, config=load()
+    )
     assert isinstance(deps.payments, StripePayments)
     assert deps.payments.setup == StripeSetup(
         price_id="price_test",
@@ -117,15 +125,17 @@ def test_stripe_settings_wire_the_stripe_adapter(
 
 def test_payments_off_wires_no_payments(tmp_path: Path, make_settings: MakeSettings) -> None:
     clock = FrozenClock(START)
-    settings = laptop(tmp_path, make_settings)
-    deps = build_deps(settings, orders=FakeOrders(clock, LIMITS), clock=clock, config=load())
+    settings, runtime = laptop(tmp_path, make_settings)
+    deps = build_deps(
+        settings, runtime, orders=FakeOrders(clock, LIMITS), clock=clock, config=load()
+    )
     assert deps.payments is None
 
 
 def test_the_dispatcher_launches_a_queued_order(
     tmp_path: Path, make_settings: MakeSettings
 ) -> None:
-    settings = laptop(tmp_path, make_settings)
+    settings, runtime = laptop(tmp_path, make_settings)
     clock = FrozenClock(START)
     orders = FakeOrders(clock, LIMITS)
     order_id = f"{1:032x}"
@@ -135,7 +145,9 @@ def test_the_dispatcher_launches_a_queued_order(
     orders.mark_paid(order_id, {})
     orders.set_manifest(order_id, files=[], bytes_declared=0)
     orders.queue(order_id)
-    dispatcher = build_dispatcher(settings, orders=orders, clock=clock, config=quick_config())
+    dispatcher = build_dispatcher(
+        build_deps(settings, runtime, orders=orders, clock=clock, config=quick_config())
+    )
     assert isinstance(dispatcher, Dispatcher)
     dispatcher.tick()
     deadline = time.monotonic() + WAIT_S
@@ -149,9 +161,11 @@ def test_the_dispatcher_launches_a_queued_order(
 def test_a_chunk_and_a_signed_download_go_through_the_composed_routes(
     tmp_path: Path, make_settings: MakeSettings
 ) -> None:
-    settings = laptop(tmp_path, make_settings)
+    settings, runtime = laptop(tmp_path, make_settings)
     clock = FrozenClock(START)
-    deps = build_deps(settings, orders=FakeOrders(clock, LIMITS), clock=clock, config=load())
+    deps = build_deps(
+        settings, runtime, orders=FakeOrders(clock, LIMITS), clock=clock, config=load()
+    )
     client = TestClient(create_app(deps))
     body = {"settings": {**SETTINGS, "chips": [], "note": ""}, "code": "", "email": ""}
     order_id, token = (
@@ -192,6 +206,7 @@ COMPLETE = {
     "SITE_URL": "http://example.test",
     "MAIL_FROM": "reels@example.test",
     "KEVIN_ALERT_EMAIL": "kevin@example.test",
+    "TIER": "laptop",
     "FIRESTORE_PROJECT": "reel-studio-test",
     "SMTP_HOST": "mailpit",
     "SMTP_PORT": "1025",
@@ -207,6 +222,7 @@ def test_check_passes_a_complete_environment(
         "SITE_URL": "http://example.test",
         "MAIL_FROM": "reels@example.test",
         "KEVIN_ALERT_EMAIL": "kevin@example.test",
+        "TIER": "laptop",
         "FIRESTORE_PROJECT": "reel-studio-test",
         "SMTP_HOST": "mailpit",
         "SMTP_PORT": "1025",
@@ -232,7 +248,7 @@ def test_the_composed_dispatcher_sweeps_missed_checkouts(
     tmp_path: Path, make_settings: MakeSettings
 ) -> None:
     """On the laptop the dispatcher is the only sweeper (review round 1 of STEP-07)."""
-    settings = laptop(tmp_path, make_settings)
+    settings, runtime = laptop(tmp_path, make_settings)
     clock = FrozenClock(START)
     orders = FakeOrders(clock, LIMITS)
     order_id = f"{2:032x}"
@@ -240,7 +256,9 @@ def test_the_composed_dispatcher_sweeps_missed_checkouts(
         NewOrder(order_id, "h", SETTINGS, "", START + timedelta(minutes=31))
     )
     clock.advance(timedelta(minutes=31 + LIMITS.expiry_grace_minutes))
-    build_dispatcher(settings, orders=orders, clock=clock, config=quick_config()).tick()
+    build_dispatcher(
+        build_deps(settings, runtime, orders=orders, clock=clock, config=quick_config())
+    ).tick()
     doc = orders.get(order_id)
     assert doc is not None
     assert doc["status"] == "expired"
@@ -259,7 +277,7 @@ def test_create_builds_the_stripe_app_from_the_environment(
     monkeypatch.setenv("STRIPE_PRICE_ID", "price_test")
     monkeypatch.setenv("STRIPE_COUPON_ID", "coupon_test")
 
-    def fake_orders(_settings: object, _config: object, clock: FrozenClock) -> FakeOrders:
+    def fake_orders(_runtime: object, _config: object, clock: FrozenClock) -> FakeOrders:
         return FakeOrders(clock, LIMITS)
 
     monkeypatch.setattr(main, "firestore_orders", fake_orders)
@@ -302,7 +320,7 @@ def test_check_names_a_missing_stripe_id(monkeypatch: pytest.MonkeyPatch, tmp_pa
 def test_the_dispatcher_runs_the_real_editor_when_given_one(
     tmp_path: Path, make_settings: MakeSettings
 ) -> None:
-    settings = laptop(tmp_path, make_settings)
+    settings, runtime = laptop(tmp_path, make_settings)
     clock = FrozenClock(START)
     orders = FakeOrders(clock, LIMITS)
     order_id = f"{5:032x}"
@@ -322,7 +340,8 @@ def test_the_dispatcher_runs_the_real_editor_when_given_one(
         return MadeReel(out / "text.mp4", out / "clean.mp4", Decimal("0.5"), 30, "", [], None)
 
     dispatcher = build_dispatcher(
-        settings, orders=orders, clock=clock, config=quick_config(), make_reel=make_reel
+        build_deps(settings, runtime, orders=orders, clock=clock, config=quick_config()),
+        make_reel=make_reel,
     )
     dispatcher.tick()
     deadline = time.monotonic() + WAIT_S

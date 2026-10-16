@@ -49,6 +49,14 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       dynamic "env" {
+        for_each = local.api_env
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+
+      dynamic "env" {
         for_each = local.api_secrets
         content {
           name = env.key
@@ -102,6 +110,7 @@ resource "google_cloud_run_v2_job" "editor" {
 
       containers {
         image = var.editor_image
+        args  = local.editor_args
 
         resources {
           limits = {

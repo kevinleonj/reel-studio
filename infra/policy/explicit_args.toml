@@ -89,6 +89,8 @@ arguments = [
   "template.template.max_retries",
   "template.template.service_account",
   "template.template.containers.resources.limits",
+  # MAIN-NEXT task 3: without it the job runs the image's CMD (--help) and exits on every order.
+  "template.template.containers.args",
 ]
 # Creating it runs as a runtime account: the deployer's actAs grant must exist first
 # (senior review C1). The grant lives in infra/main/iam.tf.

@@ -6,7 +6,7 @@
 # env_file, so the Anthropic, Gemini and cloud keys in .env never reach the website (D62).
 # Images are pinned by digest (docs/FACTS.md F308, F309), the same ones the contract suites use.
 
-x-website-settings: &website  # every WebSettings field (reel_studio/settings.py), tests pin the list
+x-website-settings: &website  # every WebSettings and RuntimeSettings field (reel_studio/settings.py), tests pin the list
   PAYMENTS: ${PAYMENTS:-}
   STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
   STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
@@ -20,6 +20,10 @@ x-website-settings: &website  # every WebSettings field (reel_studio/settings.py
   FIRESTORE_PROJECT: ${FIRESTORE_PROJECT:-}
   VOICE_AVAILABLE: ${VOICE_AVAILABLE:-}
   # The container's view, whatever .env says for running on the host:
+  TIER: laptop
+  GCS_BUCKET: ""  # TIER=cloud only; blank is unset (env_ignore_empty)
+  EDITOR_JOB: ""
+  RESEND_SENDING_KEY: ""
   SMTP_HOST: mailpit
   SMTP_PORT: "1025"
   DATA_DIR: /app/data

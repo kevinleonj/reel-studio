@@ -3,9 +3,12 @@ address, and Kevin's alert for every failure (EDITOR.md §10). Each is claimed o
 (`claim_email`), so a sweep that runs twice never sends twice. A mail server that is down is
 logged and never stops the caller (the dispatcher, the sweep).
 
-The "ready" email is not sent from here yet: its button needs the order link, and the link's
-token is stored only as a hash (D18), so nothing after checkout can rebuild it (Needs Kevin).
+The "ready" email (`order_ready`, sent by the editor job) carries no link: the link's token is
+stored only as a hash (D18), so nothing after checkout can rebuild it; it points to the link in
+the first email instead (decided by standing orders, HANDOFF.md).
 """
+
+from collections.abc import Callable
 
 from reel_studio.api.deps import ApiDeps
 from reel_studio.api.messages import failure_message
@@ -38,6 +41,22 @@ class Notifier:
                     "outcome": "error",
                 },
             )
+
+    def order_ready(self, order_id: str, *, out_days: int) -> None:
+        """The customer's "Your Reel is ready", once. It carries no link: the token is stored
+        only as a hash (D18), so it points to the first email's link instead."""
+        doc = self._orders.get(order_id)
+        if doc is None or doc["status"] != "done":
+            return
+        email = doc.get("email")
+        if not (isinstance(email, str) and email):
+            return
+        result = doc.get("result")
+        caption = result.get("caption") if isinstance(result, dict) else None
+        lines = str(caption).splitlines() if caption else []
+        hook = lines[0] if lines else ""
+        if self._orders.claim_email(order_id, "ready"):
+            self._send("ready", email, {"order_id": order_id, "hook": hook, "out_days": out_days})
 
     def order_failed(self, order_id: str, code: ErrorCode, stage: str) -> None:
         """`stage` names where it broke when the order cannot say (no stage was ever set)."""
@@ -82,6 +101,38 @@ class Notifier:
             self._send("failed", email, failed)
 
 
+def notifier(deps: ApiDeps) -> Notifier:
+    return Notifier(
+        deps.orders,
+        deps.mailer,
+        site_url=deps.runtime.site_url,
+        kevin=deps.runtime.kevin_alert_email,
+    )
+
+
+def launch_failed(deps: ApiDeps) -> Callable[[str], None]:
+    """What launch_waiting calls for an order it had to fail: Kevin's alert and the customer's
+    email, never an error into the request that started it."""
+    tell = notifier(deps)
+
+    def failed(order_id: str) -> None:
+        try:
+            tell.order_failed(order_id, ErrorCode.JOB_KILLED, "launch")
+        except Exception:
+            # Logged with its traceback; the order's own state is already written.
+            log.exception(
+                "failure notice not sent",
+                extra={
+                    "order_id": order_id,
+                    "stage": "start",
+                    "event": "notify",
+                    "outcome": "error",
+                },
+            )
+
+    return failed
+
+
 def send_link(deps: ApiDeps, order_id: str, email: str, path: str) -> None:
     """The optional link email. The order already exists and the page already has the link, so
     a mail server that is down is logged, not turned into a failed checkout."""
@@ -92,7 +143,7 @@ def send_link(deps: ApiDeps, order_id: str, email: str, path: str) -> None:
             email,
             {
                 "order_id": order_id,
-                "order_url": f"{deps.settings.site_url.rstrip('/')}{path}",
+                "order_url": f"{deps.runtime.site_url.rstrip('/')}{path}",
                 "max_files": limits.order.max_files,
                 "max_total": f"{limits.order.max_total_bytes // BYTES_PER_GB} GB",
                 "out_days": limits.retention.out_days,

@@ -66,7 +66,7 @@ def checkout(deps: ApiDeps, settings: Record, code: str) -> dict[str, str]:
     deps.orders.create_awaiting_payment(
         NewOrder(order_id, hash_token(token), settings, "", expires)
     )
-    site = deps.settings.site_url.rstrip("/")
+    site = deps.runtime.site_url.rstrip("/")
     urls = {
         "success": f"{site}/o/{order_id}?t={token}",  # the page moves it behind # at once (§7)
         "cancel": f"{site}/new?cancel={order_id}&t={token}",

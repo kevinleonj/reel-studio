@@ -33,6 +33,15 @@ def test_every_required_setting_but_the_keys_is_in_the_image_env() -> None:
     assert not missing, f"docker/editor.Dockerfile ENV lacks {sorted(missing)}"
 
 
+def test_the_image_holds_what_reel_job_imports() -> None:
+    """`reel job` builds the cloud adapters and the failure emails (cloud.md W10): the api
+    extra's clients and the page's words, which the failure email quotes."""
+    text = DOCKERFILE.read_text(encoding="utf-8")
+
+    assert text.count("--extra editor --extra api") == 2  # dependencies, then the project
+    assert "web/src/copy/en.json" in text
+
+
 def test_the_image_points_at_debians_ffmpeg() -> None:
     text = DOCKERFILE.read_text(encoding="utf-8")
 

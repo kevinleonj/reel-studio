@@ -246,6 +246,21 @@ def abandon(doc: Doc | None, limits: QueueLimits, now: datetime) -> Doc | None:
     return changed
 
 
+def claim_run(doc: Doc | None, run_token: str, now: datetime) -> Doc | None:
+    """The editor's first write (ARCHITECTURE §4): records this run's token as
+    `queue.claimed_token`, only for a running order with that token, so a second execution with
+    the same token does nothing. Keyed to the token: a run resumed after a pause (D26) keeps the
+    old queue fields and gets a new token from take_slot, which claims again."""
+    if doc is None or doc["status"] != "running":
+        return None
+    queue = doc.get("queue") or {}
+    if queue.get("run_token") != run_token or queue.get("claimed_token") == run_token:
+        return None
+    changed = deepcopy(doc)
+    changed["queue"] = {**queue, "claimed_token": run_token, "claimed_at": now}
+    return changed
+
+
 def claim_email(doc: Doc | None, kind: str, now: datetime) -> Doc | None:
     """Marks `emails.<kind>_at` once; None when already sent (or no such order): send nothing."""
     field = f"{kind}_at"

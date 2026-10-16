@@ -106,7 +106,7 @@ def test_transient_failure_is_retried_with_backoff(transient: httpx.Response | E
     assert len({r.headers["Idempotency-Key"] for r in recorder.requests}) == 1
 
 
-def test_retries_are_bounded_then_cloud_unavailable() -> None:
+def test_retries_are_bounded_then_delivery_failed() -> None:
     recorder = Recorder(*[httpx.Response(503, json={})] * (RETRIES + 1))
     sleeps: list[float] = []
 
@@ -156,3 +156,21 @@ def test_failure_uses_the_mailer_ports_error_so_callers_catch_it() -> None:
         )
 
     assert "a@example.test" not in str(caught.value)
+
+
+def test_a_text_only_email_sends_no_html() -> None:
+    """Kevin's alert has no HTML body; Resend needs neither field (F91)."""
+    recorder, sleeps = Recorder(ok()), list[float]()
+    client = httpx.Client(base_url=API, transport=httpx.MockTransport(recorder))
+    mailer = ResendMailer(
+        client,
+        ResendConfig(api_key=SecretStr(KEY), sender=SENDER),
+        lambda template, data: Email(subject=template, html=None, text="alert"),
+        Backoff(retries=RETRIES, base_s=BACKOFF_S, sleep=sleeps.append),
+    )
+
+    mailer.send("kevin", "kevin@example.test", {"order_id": "o1"})
+
+    body = json.loads(recorder.requests[0].content)
+    assert "html" not in body
+    assert body["text"] == "alert"

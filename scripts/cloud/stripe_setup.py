@@ -14,7 +14,7 @@ import stripe
 from pydantic import SecretStr
 
 from reel_studio.core.config import StripeSetup, load_cloud
-from reel_studio.settings import CloudSettings, WebSettings
+from reel_studio.settings import CloudProjectSettings, WebSettings
 from scripts.cloud._shell import (
     CommandError,
     GcloudSecrets,
@@ -113,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Stripe product, price and cloud webhook.")
     parser.add_argument("--mode", choices=sorted(KEY_PREFIXES), required=True)
     mode = parser.parse_args(argv).mode
-    cloud_settings = CloudSettings()
+    cloud_settings = CloudProjectSettings()  # Stripe setup needs no cloud API key
     key = WebSettings().stripe_secret_key
     cfg = load_cloud()
     try:

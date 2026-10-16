@@ -1,4 +1,5 @@
-# The editor image: `reel render` (STEP-02) and later the render job (STEP-05). D72:
+# The editor image: `reel render` (STEP-02) and the reel-editor job, `reel job` (infra/main/run.tf
+# passes the args). D72:
 # python:3.13-slim-trixie pinned by digest (F40, F200), Debian's ffmpeg with zscale (F45) checked
 # at build time, linux/amd64 for Cloud Run, a non-root user.
 #
@@ -24,12 +25,16 @@ RUN chown 10001:10001 /app
 USER 10001:10001
 
 # Dependencies first, so a code change does not reinstall them; uv.lock decides every version.
+# The api extra too: `reel job` uses the Cloud Storage, Firestore and Cloud Run clients and the
+# API's failure emails (cloud.md W10); no package outside uv.lock.
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PROJECT_ENVIRONMENT=/app/.venv
 COPY --chown=10001:10001 pyproject.toml uv.lock README.md ./
-RUN uv sync --locked --extra editor --no-install-project
+RUN uv sync --locked --extra editor --extra api --no-install-project
 COPY --chown=10001:10001 reel_studio ./reel_studio
 COPY --chown=10001:10001 config ./config
-RUN uv sync --locked --extra editor
+# The customer's failure email quotes the page's words for the error code.
+COPY --chown=10001:10001 web/src/copy/en.json ./web/src/copy/en.json
+RUN uv sync --locked --extra editor --extra api
 
 ENV PATH="/app/.venv/bin:${PATH}" \
     FFMPEG_PATH=/usr/bin/ffmpeg \

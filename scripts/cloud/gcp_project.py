@@ -8,7 +8,7 @@ import sys
 from collections.abc import Sequence
 
 from reel_studio.core.config import load_cloud
-from reel_studio.settings import CloudSettings
+from reel_studio.settings import CloudProjectSettings
 from scripts.cloud._shell import CommandError, Runner, run, say
 
 
@@ -50,7 +50,7 @@ def ensure_project(
 
 
 def main() -> int:
-    settings = CloudSettings()
+    settings = CloudProjectSettings()
     cloud = load_cloud()
     try:
         ensure_project(

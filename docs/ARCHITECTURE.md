@@ -32,7 +32,7 @@ flowchart LR
   API -- 5 reserve place, order, slots --> FS
   API -- 6 upload sessions, signed links --> GCS
   B -- 7 upload chunks, download Reels --> GCS
-  API -- 8 run with ORDER_ID --> JOB
+  API -- 8 run with ORDER_ID, RUN_TOKEN --> JOB
   JOB -- 9 read clips, write sheets and Reels --> GCS
   JOB -- 10 transcribe, voice on only --> G
   JOB -- 11 edit loop and critic --> C
@@ -49,7 +49,7 @@ flowchart LR
 5. **reel-api → Firestore.** Transactions: reserve one of 50 weekly places, create the order, take one of 2 running slots.
 6. **reel-api → Cloud Storage.** Creates one resumable upload session per file, bound to the website's origin and capped at the declared size. Signs download links for finished Reels.
 7. **Browser → Cloud Storage.** Uploads file chunks straight to the bucket (resumable), later downloads or plays the Reels.
-8. **reel-api → reel-editor.** Starts one job execution with `ORDER_ID` as an override (role `roles/run.jobsExecutorWithOverrides`, F30).
+8. **reel-api → reel-editor.** Starts one job execution with `ORDER_ID` and `RUN_TOKEN` as overrides (role `roles/run.jobsExecutorWithOverrides`, F30).
 9. **reel-editor → Cloud Storage.** Downloads one original at a time, writes proxies, sheets, logs and the two Reels.
 10. **reel-editor → Gemini.** Transcribes speech with word timestamps, only when "Keep the voice?" is on.
 11. **reel-editor → Claude API.** The edit loop (about 20 requests) and the critic.
@@ -82,8 +82,8 @@ adapter. One contract test suite runs against every adapter.
 | Port | Methods (names are binding) | Local | Cloud |
 |---|---|---|---|
 | `Storage` | `create_upload_session(order_id, file) -> UploadTarget`, `list_inputs(order_id)`, `download(key, path)`, `upload(path, key, content_type)`, `signed_url(key, filename, minutes)`, `delete_order(order_id)` | Filesystem + API chunk endpoint | Cloud Storage (F32–F34) |
-| `Orders` | `create_awaiting_payment(...)`, `mark_paid(order_id, stripe)`, `expire(order_id)`, `set_manifest(...)`, `queue(order_id)`, `take_slot(order_id)`, `release_slot(order_id)`, `next_queued()`, `set_stage(...)`, `finish(...)`, `fail(...)`, `pause(...)`, `get(order_id)` | Firestore emulator | Firestore |
-| `Launcher` | `launch(order_id) -> str` | Dispatcher subprocess | Cloud Run Admin API `jobs.run` with env override |
+| `Orders` | `create_awaiting_payment(...)`, `mark_paid(order_id, stripe)`, `expire(order_id)`, `set_manifest(...)`, `queue(order_id)`, `take_slot(order_id)`, `claim_run(order_id, run_token) -> bool`, `release_slot(order_id)`, `next_queued()`, `set_stage(...)`, `finish(...)`, `fail(...)`, `pause(...)`, `get(order_id)` | Firestore emulator | Firestore |
+| `Launcher` | `launch(order_id) -> str`, at most once per run token: never retried (a lost response may hide a started execution) | Dispatcher subprocess | Cloud Run Admin API `jobs.run` with env override `ORDER_ID` and `RUN_TOKEN`; the adapter reads `queue.run_token` from the order |
 | `Mailer` | `send(template, to, data)` | SMTP to Mailpit | Resend |
 | `Payments` | `find_code(code)`, `create_checkout(order_id, promo_id, urls, expires_at)`, `parse_webhook(payload, signature)`, `get_session(session_id)` | Off adapter or Stripe test | Stripe |
 | `Claude` | `count_tokens(request)`, `create(request)` | Anthropic API (your key) | Same |
@@ -96,7 +96,7 @@ adapter. One contract test suite runs against every adapter.
 
 | Document | Key fields | Written when | Read when |
 |---|---|---|---|
-| `orders/{order_id}` (32 hex chars, our own random id) | `status`, `settings{style, length_s, text_lang, keep_voice, chips[], note}`, `token_hash`, `week_id`, `place_held`, `stripe{session_id, promo_id, email}`, `files[]` (manifest, ≤40), `bytes_declared`, `queue{queued_at, started_at, lease_until, execution}`, `stage{name, started_at}`, `stages_done[]`, `result{...}`, `cost{usd_total, by_model{}}`, `error{code, user_message}`, `feedback{rating, comment}`, `emails{link_at, ready_at, failed_at}`, `created_at`, `expires_at` | Checkout creation, webhook, upload-link batch, start, each stage, finish | Status polling, worker, sweep, `reelctl` |
+| `orders/{order_id}` (32 hex chars, our own random id) | `status`, `settings{style, length_s, text_lang, keep_voice, chips[], note}`, `token_hash`, `week_id`, `place_held`, `stripe{session_id, promo_id, email}`, `files[]` (manifest, ≤40), `bytes_declared`, `queue{queued_at, started_at, lease_until, run_token, claimed_token, claimed_at}`, `stage{name, started_at}`, `stages_done[]`, `result{...}`, `cost{usd_total, by_model{}}`, `error{code, user_message}`, `feedback{rating, comment}`, `emails{link_at, ready_at, failed_at}`, `created_at`, `expires_at` | Checkout creation, webhook, upload-link batch, start, each stage, finish | Status polling, worker, sweep, `reelctl` |
 | `limits/week-YYYY-Www` (ISO week) | `count`, `cap` | +1 in the checkout transaction; −1 on expiry or failure | Checkout |
 | `limits/capacity` | `slots{order_id: lease_until}` (at most 2), `paused` | Start, finish, sweep, spend-limit error, `reelctl resume` | Start, sweep |
 
@@ -114,7 +114,7 @@ done | failed | expired ─"Delete my files now"→ deleted
 Rules (each has a test in `tests/contract/test_orders.py`):
 - **One place per checkout:** the week counter and the order are created in one transaction; `count < cap` is checked inside it (F51).
 - **Idempotent fulfilment:** `mark_paid` and `expire` do nothing when the status already moved. Webhook and success page both call `fulfil(order_id)`.
-- **One run per order:** `queued → running` happens inside the `take_slot` transaction, which also writes a random `queue.run_token`; the launcher passes `ORDER_ID` and `RUN_TOKEN` as overrides, and the worker exits at once unless the order is `running` with that token.
+- **One run per order:** `queued → running` happens inside the `take_slot` transaction, which also writes a random `queue.run_token`; the launcher passes `ORDER_ID` and `RUN_TOKEN` as overrides, and the worker exits at once unless the order is `running` with that token. The worker then claims the run in a transaction that records its token as `queue.claimed_token` (with `claimed_at`), and exits if `claimed_token` already equals its `RUN_TOKEN`, so a second execution with the same token does nothing. Keyed to the token, not to a timestamp: an order resumed after a pause (D26) keeps its old `queue` fields, and `take_slot` gives it a new token, which claims again.
 - **Lease:** `lease_until = start + 70 min` (job timeout 60 + 10). The sweep fails orders whose lease ran out and frees the slot.
 - **Service pause (D26):** a spend-limit error sets `limits/capacity.paused = true`, frees the slot and puts the order back at the front of the queue; nothing launches until `reelctl resume`.
 - **Abandoned (D25):** the sweep moves `paid` orders not started within 7 days to `abandoned`.
@@ -142,9 +142,9 @@ three prefixes and sets status `deleted`.
 | `reel-api@` | `roles/datastore.user` (project); `roles/storage.objectAdmin` (bucket); `roles/run.jobsExecutorWithOverrides` (job `reel-editor`); `roles/iam.serviceAccountTokenCreator` (itself, for signing; F34 conflicting: prove in step 8); `roles/secretmanager.secretAccessor` on `stripe-secret-key`, `stripe-webhook-secret`, `resend-api-key` | Orders, uploads, start jobs, signed links |
 | `reel-editor@` | `roles/datastore.user` (project); `roles/storage.objectAdmin` (bucket); `roles/run.jobsExecutorWithOverrides` (its own job, to start the next order); `secretAccessor` on `anthropic-api-key`, `gemini-api-key`, `resend-api-key` | Edit one order |
 | `reel-scheduler@` | None on resources; its OIDC token is checked by reel-api (audience = service URL, email = this account) | Sweep |
-| `github-deployer@` (Workload Identity Federation) | Granted by the bootstrap root: `roles/run.admin`, `roles/artifactregistry.writer` (the repository itself is created by bootstrap), `roles/logging.configWriter`, `roles/iam.serviceAccountUser` on the three runtime accounts, `roles/datastore.owner`, `roles/storage.admin`, `roles/secretmanager.admin`, `roles/cloudscheduler.admin`, `roles/iam.serviceAccountAdmin`, `roles/resourcemanager.projectIamAdmin`, `roles/serviceusage.serviceUsageAdmin` | Terraform apply of the main root. Single-purpose project. Never `roles/owner` or `roles/editor` |
+| `github-deployer@` (Workload Identity Federation) | Granted by the bootstrap root: `roles/run.admin`, `roles/artifactregistry.writer` (the repository itself is created by bootstrap), `roles/logging.configWriter`, `roles/datastore.owner`, `roles/storage.admin`, `roles/secretmanager.admin`, `roles/cloudscheduler.admin`, `roles/iam.serviceAccountAdmin`, `roles/serviceusage.serviceUsageAdmin`, and `roles/resourcemanager.projectIamAdmin` only with the condition `modifiedGrantsByRole` `hasOnly(['roles/datastore.user'])` (F410). Granted by the main root, where the accounts are created: `roles/iam.serviceAccountUser` on the three runtime accounts | Terraform apply of the main root. Single-purpose project. Never `roles/owner` or `roles/editor` |
 
-Workload Identity provider condition: `assertion.repository_id == "<numeric>" && assertion.repository_owner_id == "<numeric>" && assertion.ref == "refs/heads/main"`.
+Workload Identity provider condition: `assertion.repository_id == "<numeric>" && assertion.repository_owner_id == "<numeric>" && assertion.ref == "refs/heads/main"`. Only jobs in the GitHub `beta` environment may act as the deployer (`attribute.environment/beta`, F411), so Kevin approves both the plan and the apply job.
 
 ## 6. Secrets
 
@@ -152,7 +152,7 @@ Workload Identity provider condition: `assertion.repository_id == "<numeric>" &&
 |---|---|---|---|
 | Claude API key (workspace `reel-studio`) | `.env` `ANTHROPIC_API_KEY` | `anthropic-api-key`, from a second key in the same workspace (`.env` `CLOUD_ANTHROPIC_API_KEY`), so each can be rotated alone | reel-editor only |
 | Gemini API key | `.env` `GEMINI_API_KEY` | `gemini-api-key`, from a billing-enabled project (`.env` `CLOUD_GEMINI_API_KEY`; Google's terms treat free-tier data differently, read https://ai.google.dev/gemini-api/terms in STEP-08) | reel-editor only |
-| Resend API key | `.env` `RESEND_API_KEY`: full access, laptop only, used by `make dns` | `resend-api-key`: a sending-only key for `reels.limeralda.com`, created by `make dns` and written straight to Secret Manager | both |
+| Resend API key | `.env` `RESEND_API_KEY`: full access, laptop only, used by `make dns` | `resend-api-key`: a sending-only key for `reels.limeralda.com`, created by `make dns` and written straight to Secret Manager; both workloads read it as `RESEND_SENDING_KEY` | both |
 | Stripe secret key | `.env` `STRIPE_SECRET_KEY` (test mode) | `stripe-secret-key` | reel-api only |
 | Stripe webhook secret | `.env` `STRIPE_WEBHOOK_SECRET`, captured by `make stripe-listen` without printing | `stripe-webhook-secret`, created by `make stripe-setup` for the cloud endpoint and written straight to Secret Manager | reel-api only |
 | Cloudflare API token (DNS edit on limeralda.com) | `.env` `CLOUDFLARE_API_TOKEN` | Not stored in the cloud | `make dns` on the laptop |
@@ -177,7 +177,7 @@ instances).
 | `GET /api/orders/{id}` | token | Status view for the page: status, stage, queue position, result with signed links | 404 for a wrong id or token (same answer for both) |
 | `POST /api/orders/{id}/uploads` `{files[]}` | token; status `paid` | Check totals (40 files, 4 GB, types), create one resumable session per file (origin-bound, size-capped), return targets | `too_many_files`, `too_large`, `bad_type` |
 | `GET /api/orders/{id}/files` | token | Finished uploads (from the bucket listing) | — |
-| `POST /api/orders/{id}/start` | token; status `paid`; ≥ 1 file | Write the manifest, queue, try to take a slot, launch | `no_files` |
+| `POST /api/orders/{id}/start` | token; status `paid`; ≥ 1 file | Write the manifest, queue, try to take a slot, launch (`TIER=cloud`; on the laptop the dispatcher launches) | `no_files`, 503 `cloud_unavailable` |
 | `POST /api/orders/{id}/viewed` | token | Set `result_viewed_at` once | — |
 | `POST /api/orders/{id}/feedback` `{rating, comment}` | token | Store rating 1–5 and comment ≤ 1,000 chars | — |
 | `DELETE /api/orders/{id}/files` | token | Delete `in/`, `work/`, `out/`; status `deleted` | — |

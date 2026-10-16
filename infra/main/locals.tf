@@ -84,15 +84,17 @@ locals {
   request_log_keep_fraction = 0.01
 
   # docs/ARCHITECTURE.md §6: which secret each workload reads, by environment variable name.
+  # RESEND_SENDING_KEY, not RESEND_API_KEY: in .env that name is the laptop's full-access key for
+  # `make dns`; the runtimes get the sending-only key (reel_studio/settings.py RuntimeSettings).
   api_secrets = {
     STRIPE_SECRET_KEY     = "stripe-secret-key"
     STRIPE_WEBHOOK_SECRET = "stripe-webhook-secret"
-    RESEND_API_KEY        = "resend-api-key"
+    RESEND_SENDING_KEY    = "resend-api-key"
   }
   editor_secrets = {
-    ANTHROPIC_API_KEY = "anthropic-api-key"
-    GEMINI_API_KEY    = "gemini-api-key"
-    RESEND_API_KEY    = "resend-api-key"
+    ANTHROPIC_API_KEY  = "anthropic-api-key"
+    GEMINI_API_KEY     = "gemini-api-key"
+    RESEND_SENDING_KEY = "resend-api-key"
   }
   # Environment secrets resolve when an instance starts: the editor job gets a new value on its next
   # execution, but warm reel-api instances keep the old one until a new revision or a restart.
@@ -101,17 +103,33 @@ locals {
   # pinning is a follow-up in docs/handoff/cloud.md).
   secret_version = "latest"
 
-  # Plain environment for both workloads. Names follow .env.example; GCS_BUCKET and EDITOR_JOB are
-  # provisional until reel_studio/settings.py exists (STEP-01) and the env contract test checks them.
+  # The editor job's command after the image's ENTRYPOINT ["reel"]: one order, from the ORDER_ID
+  # and RUN_TOKEN the launcher sets (reel_studio/cli/job.py). The image's CMD is only --help (F93).
+  editor_args = ["job"]
+
+  # Plain environment for both workloads. Names follow .env.example; the env contract test
+  # (tests/unit/infra/test_env_contract.py) builds each workload's settings from these maps.
+  # TIER=cloud picks the Cloud Run adapters. EDITOR_JOB is the job's full resource name, built from
+  # parts rather than the job's id, so the job's own environment needs no reference to itself.
   common_env = {
+    TIER              = "cloud"
     GCP_PROJECT       = var.project_id
     GCP_REGION        = local.region
+    FIRESTORE_PROJECT = var.project_id
     SITE_URL          = local.service_url
-    PAYMENTS          = "stripe"
     EMAIL_DOMAIN      = var.email_domain
     MAIL_FROM         = var.mail_from
     KEVIN_ALERT_EMAIL = var.alert_email
     GCS_BUCKET        = google_storage_bucket.media.name
-    EDITOR_JOB        = local.editor_name
+    EDITOR_JOB        = "projects/${var.project_id}/locations/${local.region}/jobs/${local.editor_name}"
+  }
+  # reel-api only (WebSettings). The job editor has the Gemini key, so voice works (D14); the site
+  # is built into the image at /app/web/dist (docker/api.Dockerfile).
+  api_env = {
+    PAYMENTS         = "stripe"
+    STRIPE_PRICE_ID  = var.stripe_price_id
+    STRIPE_COUPON_ID = var.stripe_coupon_id
+    VOICE_AVAILABLE  = "true"
+    WEB_DIST         = "/app/web/dist"
   }
 }

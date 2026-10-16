@@ -6,12 +6,14 @@ from pathlib import Path
 
 import google.auth
 import google.auth.exceptions
+import httpx
 import pytest
 from google.api_core import exceptions as google_exceptions
 
 from reel_studio.adapters.gcp_storage import (
     AdcIdentity,
     GcpStorage,
+    SessionCanceller,
     SigningIdentity,
     StorageConfig,
     storage_retry,
@@ -31,7 +33,7 @@ def make(bucket: FakeBucket) -> GcpStorage:
     cfg = StorageConfig(
         origin=ORIGIN, timeout_s=TIMEOUT_S, retry=RETRY, signed_url_max_minutes=MAX_MINUTES
     )
-    return GcpStorage(bucket, lambda: IDENTITY, cfg)
+    return GcpStorage(bucket, lambda: IDENTITY, cfg, cancel=bucket.cancel)
 
 
 def test_satisfies_the_port() -> None:
@@ -43,21 +45,68 @@ def test_upload_session_is_bound_to_origin_and_size() -> None:
     bucket = FakeBucket()
 
     target = make(bucket).create_upload_session(
-        "o1", {"name": "clip.mov", "size": 1234, "content_type": "video/quicktime"}
+        "o1", {"name": "clip.mov", "size": 1234, "type": "video/quicktime"}
     )
 
-    assert target["key"] == "in/o1/clip.mov"
-    assert str(target["url"]).startswith("https://storage.test/upload/in/o1/clip.mov")
-    [(action, key, details)] = bucket.calls
+    assert target["name"] == "clip.mov"
+    assert str(target["upload_url"]).startswith("https://storage.test/upload/in/o1/clip.mov")
+    [read, (action, key, details), write] = bucket.calls
+    assert read[:2] == ("read", "work/o1/upload-sessions/clip.mov")
     assert (action, key) == ("session", "in/o1/clip.mov")
     assert details == {"size": 1234, "origin": ORIGIN, "content_type": "video/quicktime"}
+    assert write[:2] == ("write", "work/o1/upload-sessions/clip.mov")
+    assert bucket.contents["work/o1/upload-sessions/clip.mov"].decode() == target["upload_url"]
+
+
+def test_a_failed_cancel_keeps_the_older_session_recorded_for_the_retry() -> None:
+    """Open, cancel, then record (review W3): if the cancel fails, the marker still names the
+    older live session, so the browser's retry cancels it."""
+    bucket = FakeBucket()
+    calls = {"n": 0}
+
+    def cancel_fails_once(url: str) -> None:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise CloudUnavailable("cloud storage cancel failed: HTTP 503")
+        bucket.cancel(url)
+
+    cfg = StorageConfig(
+        origin=ORIGIN, timeout_s=TIMEOUT_S, retry=RETRY, signed_url_max_minutes=MAX_MINUTES
+    )
+    storage = GcpStorage(bucket, lambda: IDENTITY, cfg, cancel=cancel_fails_once)
+    meta = {"name": "clip.mov", "size": 3, "type": "video/quicktime"}
+    first = storage.create_upload_session("o1", meta)
+
+    with pytest.raises(CloudUnavailable):
+        storage.create_upload_session("o1", meta)
+    assert bucket.contents["work/o1/upload-sessions/clip.mov"].decode() == first["upload_url"]
+    third = storage.create_upload_session("o1", meta)
+
+    assert first["upload_url"] not in bucket.sessions
+    assert bucket.contents["work/o1/upload-sessions/clip.mov"].decode() == third["upload_url"]
+
+
+def test_asking_again_cancels_the_older_session_after_opening_the_new() -> None:
+    bucket = FakeBucket()
+    storage = make(bucket)
+    meta = {"name": "clip.mov", "size": 3, "type": "video/quicktime"}
+
+    first = storage.create_upload_session("o1", meta)
+    second = storage.create_upload_session("o1", meta)
+
+    assert [c[:2] for c in bucket.calls if c[0] in {"session", "cancel"}] == [
+        ("session", "in/o1/clip.mov"),
+        ("session", "in/o1/clip.mov"),
+        ("cancel", first["upload_url"]),
+    ]
+    assert list(bucket.sessions) == [second["upload_url"]]
 
 
 @pytest.mark.parametrize("name", ["../escape.mov", "a/b.mov", "", "."])
 def test_file_names_cannot_leave_the_order_folder(name: str) -> None:
     with pytest.raises(ValueError, match="file name"):
         make(FakeBucket()).create_upload_session(
-            "o1", {"name": name, "size": 1, "content_type": "video/mp4"}
+            "o1", {"name": name, "size": 1, "type": "video/mp4"}
         )
 
 
@@ -68,9 +117,7 @@ def test_list_inputs_empty_one_many() -> None:
 
     bucket.contents["in/o1/a.mov"] = b"aa"
     bucket.types["in/o1/a.mov"] = "video/quicktime"
-    assert storage.list_inputs("o1") == [
-        {"key": "in/o1/a.mov", "size": 2, "content_type": "video/quicktime"}
-    ]
+    assert storage.list_inputs("o1") == [{"name": "a.mov", "size": 2, "key": "in/o1/a.mov"}]
 
     bucket.contents["in/o1/b.jpg"] = b"bbb"
     bucket.contents["in/o2/other.mov"] = b"x"
@@ -161,13 +208,16 @@ def test_signed_url_and_token_never_reach_the_log(caplog: pytest.LogCaptureFixtu
     assert IDENTITY.token not in text.replace("token=", "")
 
 
+DEADLINE_S = 10.0
+
+
 def test_storage_retry_follows_cloud_toml() -> None:
     gcp = config.load_cloud().gcp
 
-    retry = storage_retry(gcp)
+    retry = storage_retry(gcp, DEADLINE_S)
 
     # api_core's Retry keeps its settings in private attributes and offers no getter.
-    assert retry._timeout == gcp.retry_deadline_s
+    assert retry._timeout == DEADLINE_S
     assert retry._initial == gcp.retry_initial_s
     assert retry._multiplier == gcp.retry_multiplier
     assert retry._maximum == gcp.retry_max_s
@@ -236,9 +286,52 @@ def test_retry_and_auth_failures_are_typed_too(error: Exception) -> None:
         raise error
 
     cfg = StorageConfig(ORIGIN, TIMEOUT_S, RETRY, MAX_MINUTES)
-    storage = GcpStorage(FakeBucket(), failing_identity, cfg)
+    bucket = FakeBucket()
+    storage = GcpStorage(bucket, failing_identity, cfg, cancel=bucket.cancel)
 
     with pytest.raises(CloudUnavailable) as caught:
         storage.signed_url("out/o1/reel.mp4", "reel.mp4", 30)
 
     assert type(error).__name__ in str(caught.value)
+
+
+SESSION_URL = "https://storage.test/upload/in/o1/a.mov?upload_id=1"
+
+
+def canceller(status: int, seen: list[httpx.Request]) -> SessionCanceller:
+    def answer(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(status)
+
+    return SessionCanceller(httpx.Client(transport=httpx.MockTransport(answer)))
+
+
+@pytest.mark.parametrize("status", [499, 404, 410, 200, 400, 401, 403])
+def test_a_cancelled_or_finished_session_counts_as_closed(status: int) -> None:
+    seen: list[httpx.Request] = []
+
+    canceller(status, seen)(SESSION_URL)
+
+    [request] = seen
+    assert (request.method, str(request.url)) == ("DELETE", SESSION_URL)
+    assert request.headers["Content-Length"] == "0"
+    assert "Authorization" not in request.headers  # the session URL is its own credential
+
+
+@pytest.mark.parametrize("status", [500, 503, 408, 429])
+def test_a_session_that_may_still_be_open_is_cloud_unavailable(status: int) -> None:
+    with pytest.raises(CloudUnavailable, match=f"HTTP {status}"):
+        canceller(status, [])(SESSION_URL)
+
+
+def test_a_cancel_that_never_arrives_is_cloud_unavailable_without_the_url(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def broken(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("timed out", request=request)
+
+    cancel = SessionCanceller(httpx.Client(transport=httpx.MockTransport(broken)))
+    with caplog.at_level(logging.INFO), pytest.raises(CloudUnavailable) as caught:
+        cancel(SESSION_URL)
+    assert "upload_id" not in str(caught.value)
+    assert "upload_id" not in caplog.text

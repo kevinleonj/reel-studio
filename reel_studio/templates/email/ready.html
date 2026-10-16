@@ -1,8 +1,9 @@
 {% extends "email/_layout.html" %}
 {% block title %}Your Reel is ready{% endblock %}
 {% block body %}
-<p style="font-size:18px;font-weight:600">“{{ hook }}”</p>
-{% with href = order_url, label = "Watch and download" %}{% include "email/_button.html" %}{% endwith %}
+{% if hook %}<p style="font-size:18px;font-weight:600">“{{ hook }}”</p>{% endif %}
+{# No button: the order link's token is stored only as a hash (D18), so nothing after checkout can rebuild it. #}
+<p>Watch and download it from the link in your first email from us (“Your Reel Studio link”).</p>
 <p>Files are deleted after {{ out_days }} days.</p>
 <p>Edited by AI (Claude). Check it before posting.</p>
 {% endblock %}

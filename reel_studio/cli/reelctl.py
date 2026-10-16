@@ -364,14 +364,14 @@ def connect() -> Ports:
         settings_problem,
     )
     from reel_studio.core.config import load  # noqa: PLC0415
-    from reel_studio.settings import WebSettings  # noqa: PLC0415
+    from reel_studio.settings import RuntimeSettings, WebSettings  # noqa: PLC0415
 
     try:
-        settings = WebSettings()
+        settings, runtime = WebSettings(), RuntimeSettings()
     except ValidationError as error:
         raise SystemExit(settings_problem(error)) from None
     config, clock = load(), SystemClock()
     payments = build_payments(settings, config, clock)
     if payments is None:
         raise SystemExit("reelctl needs PAYMENTS=stripe and the Stripe settings in .env")
-    return Ports(firestore_orders(settings, config, clock), payments, clock, config)
+    return Ports(firestore_orders(runtime, config, clock), payments, clock, config)

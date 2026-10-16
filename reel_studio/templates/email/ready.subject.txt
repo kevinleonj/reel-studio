@@ -1,1 +1,1 @@
-Your Reel is ready: "{{ hook }}"
+Your Reel is ready{% if hook %}: "{{ hook }}"{% endif %}

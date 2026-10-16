@@ -65,8 +65,14 @@ class RealEditor:
             inputs, out = Path(folder) / "in", Path(folder) / "out"
             inputs.mkdir()
             self._orders.set_stage(order_id, name="reading")
+            # Only what Start listed: in the cloud an upload session can still finish after
+            # Start, straight into the bucket (web.md, For CLOUD).
+            files = doc.get("files")
+            listed = files if isinstance(files, list) else []
+            manifest = {str(f["name"]) for f in listed if isinstance(f, dict)}
             for item in self._storage.list_inputs(order_id):
-                self._storage.download(str(item["key"]), inputs / str(item["name"]))
+                if item["name"] in manifest:
+                    self._storage.download(str(item["key"]), inputs / str(item["name"]))
             self._orders.set_stage(order_id, name="planning")
             try:
                 made = self._make_reel(inputs, out, settings)
