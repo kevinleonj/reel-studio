@@ -118,10 +118,13 @@ class RealEditor:
         )
         if paused:
             self._orders.pause(order_id, code=error.code)
-            return
-        self._orders.fail(order_id, code=error.code)
+        else:
+            self._orders.fail(order_id, code=error.code)
         try:
-            self._notifier.order_failed(order_id, error.code, "planning")
+            if paused:
+                self._notifier.order_paused(order_id, "planning")
+            else:
+                self._notifier.order_failed(order_id, error.code, "planning")
         except Exception:
             # Logged with its traceback; the order's own state is already written.
             log.exception(
