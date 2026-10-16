@@ -8,8 +8,8 @@ history (`git log -p -- docs/handoff/engine.md`).
   more A/B rounds. Round 3 (eval/results/2026-10-13/ab.json): new picked 1 of 5; mean critic 21.4
   new vs 22.0 old; mean cost $0.42 vs $1.35. Clearest losses were inputs: `meat` had a landscape
   clip shown with blur fill; `mercadona` had 13.7 s of footage, under the 15 s minimum. Recorded
-  in eval/AB-RESULT.md. The step04 gate still fails its picks rule (`new picked or tied in >= 3 of
-  5`) by design: D44's A/B stays the bar for leaving the beta.
+  in eval/AB-RESULT.md. The step04 gate still fails "A/B picks: new engine picked or tied in >= 3
+  of 5" by design: D44's A/B stays the bar for leaving the beta.
 - A/B ledger: $14.51 of $20 paid across three rounds. No paid call since.
 - Done earlier: STEP-02 (PR #2), STEP-03 (PR #5), STEP-04 harness (`make ab`, `make ab-pick`,
   `reel_studio/editor/ab*.py`) on PR #10.
