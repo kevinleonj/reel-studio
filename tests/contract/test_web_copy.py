@@ -67,3 +67,11 @@ def test_the_page_types_every_failure_code() -> None:
     types = (ROOT / "web" / "src" / "lib" / "types.ts").read_text()
     union = types.split("export type FailureCode =", 1)[1].split("\n\n", 1)[0]
     assert set(re.findall(r'"([a-z_]+)"', union)) == {str(c) for c in FAILED_CODES}
+
+
+def test_upload_step_states_the_input_rules() -> None:
+    """Round 3 of the A/B lost on inputs (D79): a landscape clip, and 13.7 s of footage."""
+    limits = COPY["order"]["upload"]["limits"]
+    shortest = min(load().limits.order.lengths_s)
+    assert "Vertical videos only." in limits
+    assert f"At least {shortest} seconds of video in total." in limits
