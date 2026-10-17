@@ -22,7 +22,7 @@ entries, logs and standing-order decisions are in git history: `git log -p -- do
   claimed as `paused`; `RealEditor` calls it; an `EditorNotifier` protocol), but
   `tests/unit/test_editor_job.py::test_the_monthly_limit_pauses_and_sends_and_starts_nothing`
   pins `assert world.sent.bodies == []`. Change that line to `assert len(world.sent.bodies) == 2`
-  and the web lane lands the fix with its tests.
+  and the web lane lands the fix: `git revert efb6ba5` on PR #28's head restores it with tests.
 
 ## Open follow-ups (from the STEP-07 reviews)
 - W3: `engine_make_reel` and `dispatch(real=True)` have no unit test (patch `cli.reel.real_deps`).
