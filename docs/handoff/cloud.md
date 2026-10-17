@@ -3,7 +3,7 @@
 Written by the cloud lane only. Newest entry on top.
 
 ## Status board
-READY TO MERGE: PR #16 (cost-cap follow-ups; PR #15 merged 12 Oct 2026)
+DONE (17 Oct 03:10): the beta runs at https://reel-api-432019668075.europe-west1.run.app (deploy run 38989137070 applied; smoke 7 of 8, the eighth is a smoke bug, see Log).
 - Done: STEP-08 phase A (Terraform roots, policy data, deploy.yml, offline `terraform test`) and,
   after STEP-01 merged, the no-cloud part of the step: task 1 (`scripts/check_policy.py` test
   first with mutated-infra bad fixtures, `mk/cloud.mk` `ci-cloud`, `scripts/ci-install.d/cloud.sh`,
@@ -175,6 +175,27 @@ READY TO MERGE: PR #16 (cost-cap follow-ups; PR #15 merged 12 Oct 2026)
 ## Evidence lines (the gates read these)
 
 ## Log
+
+### 17 Oct 2026, 03:10 — first deploy (branch cloud-night-report)
+- Run 38988284799 (02:51, a7466ef): plan passed; apply failed creating the Cloud Run service and
+  job, "Error code 7 ... internal error" (code 7 = PERMISSION_DENIED; actAs and secret grants
+  made in the same apply, the IAM propagation this file already expected).
+- Run 38989137070 (03:03, same commit, no change): plan and apply passed. Smoke from CI and from
+  the laptop: PASS /health, /, /api/config, service max instances 2, cpu_idle, job timeout 1 h,
+  job max retries 0; FAIL "orders TTL active: PermissionDenied 403".
+- Cause, measured with the same Firestore Admin call: `projects/reel-studio-beta-6a48/...` returns
+  the field with TTL state ACTIVE; `projects/432019668075/...` returns 403. `scripts/smoke.py`
+  `ttl_active` builds the name from the project number (line 161); the admin API needs the project
+  id. Next: pass the id (`--project`, deploy.yml has `vars.GCP_PROJECT_ID`), test first.
+- Review follow-ups on PR #30: validate the forwarded client address before using it as a rate
+  limit key (`reel_studio/api/deps.py`, web lane: with `*` a client picks the key and its
+  length); add FORWARDED_ALLOW_IPS to `infra/main/tests/main.tftest.hcl` env list; FACTS rows for
+  `$FORWARDED_ALLOW_IPS` / `*` (F316) and `gcloud projects describe --format=value(projectNumber)`;
+  `test -n "${project_number}"` in deploy.yml.
+- Not on main yet: branch `cloud-gcp-project` (local, 3 commits: `make github-vars` with 11 tests,
+  the dns refusal detail, the NIGHT tasks 0-6 log). Its "Resend refuses the sending domain" note
+  is wrong about the cause (it was the Free plan's 3-domain limit, now fixed); correct it when
+  that branch is merged with main.
 
 ### 17 Oct 2026, 02:06 — SITE_URL, FORWARDED_ALLOW_IPS (branch cloud-site-url)
 - deploy.yml builds api.Dockerfile with `--build-arg SITE_URL`, the F61 service URL from the
