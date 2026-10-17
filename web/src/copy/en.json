@@ -90,7 +90,7 @@
     "awaitingPayment": "Confirming your code…",
     "upload": {
       "heading": "Add your clips and photos",
-      "limits": "Up to {maxFiles} files, {maxSize} in total, {maxMinutes} minutes per video.",
+      "limits": "Up to {maxFiles} files, {maxSize} in total, {maxMinutes} minutes per video. Vertical videos only. At least 15 seconds of video in total.",
       "choose": "Choose files",
       "addMore": "Add more files",
       "total": "{used} of {max} · {count} of {maxFiles} files",
