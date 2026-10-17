@@ -25,7 +25,7 @@ from reel_studio.api.cloud import (
     link_email_worst_case_s,
 )
 from reel_studio.api.deps import ApiDeps
-from reel_studio.core.config import load, load_cloud
+from reel_studio.core.config import Cloud, load, load_cloud
 from reel_studio.core.constants import RESEND_API_BASE
 from reel_studio.core.errors import DeliveryFailed, OrderBusy
 from reel_studio.settings import RuntimeSettings, WebSettings
@@ -300,12 +300,33 @@ def test_reel_api_wires_the_request_budget_into_every_adapter(
     assert mailer._backoff.retries == budget.resend_retries
 
 
+class FakeStorageClient:
+    """Stands in for google.cloud.storage.Client, which would look for credentials."""
+
+    def __init__(self, project: str) -> None:
+        self.project = project
+
+    def bucket(self, name: str) -> str:
+        return name
+
+
 @pytest.mark.parametrize("make_budget", [Budget.request, Budget.job])
-def test_both_http_clients_carry_the_budget_timeouts(make_budget: Callable[..., Budget]) -> None:
-    """A client built without a timeout falls back to httpx's 5 s default (review warning)."""
+def test_both_http_clients_carry_the_budget_timeouts(
+    make_budget: Callable[[Cloud], Budget],
+    make_settings: MakeSettings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Through the real google_clients, so a client built inline without a timeout (httpx's own
+    5 s default), a swapped pair or the wrong budget fails here (#22 review, timeout tests)."""
+    runtime = make_settings(RuntimeSettings, **CLOUD)
+    assert isinstance(runtime, RuntimeSettings)
+    monkeypatch.setattr("google.cloud.run_v2.JobsClient", object)
+    monkeypatch.setattr("google.cloud.storage.Client", FakeStorageClient)
+    monkeypatch.setattr(cloud, "AdcIdentity", object)
     budget = make_budget(load_cloud())
 
-    resend, sessions = cloud.http_clients(budget)
+    clients = cloud.google_clients(runtime, budget)
+    resend, sessions = clients.resend, clients.sessions
 
     assert resend.timeout == httpx.Timeout(budget.resend_timeout_s)
     assert sessions.timeout == httpx.Timeout(budget.call_timeout_s)
