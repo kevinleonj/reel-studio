@@ -44,8 +44,9 @@ entries, logs and standing-order decisions are in git history: `git log -p -- do
 - Late chunks are refused on the laptop only: Cloud Storage resumable sessions go straight to the
   bucket. The cloud adapter should cancel an order's open sessions at Start; the editor already
   reads only the files in the manifest (`launcher_real.py`).
-- A newer upload session for a name supersedes the older on the laptop; the Cloud Storage adapter
-  should cancel the older resumable session (DELETE on its session URL; check the docs first).
+- The api image needs `--build-arg SITE_URL=<service URL>` (F61); deploy.yml builds it without
+  one and the Dockerfile stops. Set `FORWARDED_ALLOW_IPS` on the Cloud Run service (F316), or
+  every client shares one rate-limit bucket.
 
 ## Needs Kevin (decisions, not blocking)
 - **Upload copy (16 Oct 2026):** `docs/UX.md` §2 (`paid` row) still quotes the old upload
