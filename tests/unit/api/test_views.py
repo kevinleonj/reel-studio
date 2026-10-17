@@ -19,9 +19,18 @@ def view_of(result: dict[str, object]) -> dict[str, object]:
 
 def test_stored_nulls_reach_the_page_as_empty_values() -> None:
     # The page reads `music.mood`; a null crashed it in the STEP-07 e2e run (L303, review S3).
-    shown = view_of({"versions": [], "music": None, "text_lines": None, "doubts": None})
-    assert shown["music"] == {"mood": "", "tempo": ""}
-    assert shown["text_lines"] == [] and shown["doubts"] == []
+    names = ("versions", "duration_s", "caption", "text_lines", "music", "left_out", "wishes")
+    shown = view_of(dict.fromkeys((*names, "doubts")))
+    assert shown == {
+        "versions": [],
+        "duration_s": 0,
+        "caption": "",
+        "text_lines": [],
+        "music": {"mood": "", "tempo": ""},
+        "left_out": [],
+        "wishes": [],
+        "doubts": [],
+    }
 
 
 def test_stored_values_are_passed_through() -> None:
