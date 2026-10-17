@@ -109,7 +109,7 @@ run "ttl_does_not_block_the_apply" {
 
   assert {
     condition     = google_firestore_field.orders_ttl.skip_wait == true
-    error_message = "Enabling TTL takes ten minutes or more; waiting would outlive the 15-minute apply job."
+    error_message = "Enabling TTL takes ten minutes or more with no upper bound; the provider's 20-minute create timeout could fail the apply."
   }
 }
 
