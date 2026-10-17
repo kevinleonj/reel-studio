@@ -177,7 +177,12 @@ READY TO MERGE: PR #16 (cost-cap follow-ups; PR #15 merged 12 Oct 2026)
 ## Log
 
 ### 16 Oct 2026, 22:46 — bootstrap state in the bucket (branch cloud-bootstrap-state)
-- Deploy run dispatched at 22:43 on d955256 (PR #25): actions/runs/38964345709, waiting for Kevin.
+- Deploy run dispatched at 22:43 on d955256 (PR #25): actions/runs/38964345709. Seen failed at
+  22:48 in the plan job's image build: docker/api.Dockerfile requires build arg SITE_URL and
+  deploy.yml passes none (fixed in the next pull request).
+- 17 Oct 02:01, `make dns` after Kevin freed Resend domain slots (the Free plan's 3-domain limit
+  was the 403, not another team): domain created in eu-west-1, 4 Cloudflare records, verified,
+  sending key stored; `resend-api-key` lists version 1, enabled (metadata only).
 - Kevin's order (STEP-08 task 3): `backend "gcs" { prefix = "bootstrap" }` in
   `infra/bootstrap/versions.tf`, then `terraform -chdir=infra/bootstrap init -migrate-state
   -force-copy -backend-config="bucket=reel-studio-beta-6a48-tfstate"` (the `state_bucket` output).
@@ -185,7 +190,11 @@ READY TO MERGE: PR #16 (cost-cap follow-ups; PR #15 merged 12 Oct 2026)
   configuration."
 - The migration emptied the local `infra/bootstrap/terraform.tfstate` (sha256 became the empty
   file's). Kevin had asked to keep it untouched; the session had copied it first (sha256
-  26d65a9b...) and put that copy back. It is a backup only now; Terraform reads the bucket.
+  26d65a9b...) and put that copy back. It is a backup only while `infra/bootstrap/.terraform`
+  exists: without it, init would offer to migrate that stale local state into the bucket. Needs
+  Kevin: move both `terraform.tfstate` files out of `infra/bootstrap/` (the bucket is versioned).
+  Also: the committed backend means a brand-new project needs the two-phase start again
+  (backend block out, apply, then `init -migrate-state`); For MAIN, `docs/INFRA.md` §1.
   Terraform also left `terraform.tfstate.backup` (gitignored).
 - `make bootstrap-plan` now passes `-backend-config=bucket=<project>-tfstate` to init (test
   first): with a partial backend, a fresh clone's init has no bucket otherwise.
