@@ -176,6 +176,16 @@ READY TO MERGE: PR #16 (cost-cap follow-ups; PR #15 merged 12 Oct 2026)
 
 ## Log
 
+### 17 Oct 2026, 02:06 — SITE_URL, FORWARDED_ALLOW_IPS (branch cloud-site-url)
+- deploy.yml builds api.Dockerfile with `--build-arg SITE_URL`, the F61 service URL from the
+  project number (same shape as `infra/main/locals.tf` service_url); a test fails without it.
+- `FORWARDED_ALLOW_IPS = "*"` on reel-api (uvicorn trusts only loopback otherwise, F316). Limit:
+  a client can prepend X-Forwarded-For entries and so spread its requests over rate-limit keys.
+- Closes, for MAIN to strike: HANDOFF.md "Before the first deploy" (SITE_URL, FORWARDED_ALLOW_IPS,
+  `make test-emulator`: 17 Oct 02:07, "39 passed, 1135 deselected", NIGHT task 9) and, for WEB, docs/handoff/web.md "For CLOUD" items 1 and 3.
+  Item 2 (WebSettings values) is already met: `tests/unit/infra/test_env_contract.py` builds the
+  settings from `locals.tf` and passes.
+
 ### 16 Oct 2026, 22:46 — bootstrap state in the bucket (branch cloud-bootstrap-state)
 - Deploy run dispatched at 22:43 on d955256 (PR #25): actions/runs/38964345709. Seen failed at
   22:48 in the plan job's image build: docker/api.Dockerfile requires build arg SITE_URL and

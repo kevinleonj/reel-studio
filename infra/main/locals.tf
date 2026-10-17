@@ -130,6 +130,11 @@ locals {
     STRIPE_PRICE_ID  = var.stripe_price_id
     STRIPE_COUPON_ID = var.stripe_coupon_id
     VOICE_AVAILABLE  = "true"
-    WEB_DIST         = "/app/web/dist"
+    # Rate limits key on the client address. uvicorn trusts X-Forwarded-For only from the IPs in
+    # FORWARDED_ALLOW_IPS (default loopback, uvicorn settings docs); on Cloud Run every request
+    # comes through Google's front end, so trust it, or every client shares one bucket. Limit: a
+    # client can prepend its own X-Forwarded-For entries (web.md For CLOUD, F316).
+    FORWARDED_ALLOW_IPS = "*"
+    WEB_DIST            = "/app/web/dist"
   }
 }
