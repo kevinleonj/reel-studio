@@ -65,8 +65,13 @@ jobs:
           SHA: ${{ github.sha }}
         run: |
           registry="${REGION}-docker.pkg.dev/${PROJECT_ID}/reel"
+          # The site's canonical URL is baked in at build time (docker/api.Dockerfile); it is the
+          # service URL, known before the service exists (F61, infra/main/locals.tf service_url).
+          project_number="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
+          site_url="https://reel-api-${project_number}.${REGION}.run.app" # hardcode-ok: F61 URL shape
           gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
           docker buildx build --platform linux/amd64 --file docker/api.Dockerfile \
+            --build-arg SITE_URL="${site_url}" \
             --tag "${registry}/reel-api:${SHA}" --push .
           docker buildx build --platform linux/amd64 --file docker/editor.Dockerfile \
             --tag "${registry}/reel-editor:${SHA}" --push .

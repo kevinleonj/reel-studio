@@ -28,6 +28,19 @@ def test_every_job_that_can_mint_a_token_waits_for_the_beta_environment() -> Non
         assert "environment: beta" in text, name
 
 
+def test_the_api_image_is_built_with_its_site_url() -> None:
+    # docker/api.Dockerfile stops without build arg SITE_URL (deploy run 38964345709 failed so).
+    builds = [
+        cmd
+        for cmd in re.split(r"\n\s*docker ", job("plan"))
+        if "--file docker/api.Dockerfile" in cmd
+    ]
+    assert len(builds) == 1
+    assert '--build-arg SITE_URL="${site_url}"' in builds[0]
+    # The same F61 shape as infra/main/locals.tf service_url.
+    assert 'site_url="https://reel-api-${project_number}.${REGION}.run.app"' in job("plan")
+
+
 def test_plan_artifacts_live_one_day() -> None:
     # Anyone signed in can download a public repository's artifacts; the plan holds the project
     # id, the alert email and service-account emails (REVIEW-FIXES CLOUD item 5).
