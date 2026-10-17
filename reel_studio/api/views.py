@@ -27,7 +27,8 @@ def _result(result: object, storage: Storage, minutes: int) -> dict[str, object]
         return value if value is not None else empty
 
     versions = []
-    for version in result.get("versions") or []:
+    stored = result.get("versions")
+    for version in stored if stored is not None else []:
         kind, key = str(version["kind"]), str(version["key"])
         url = storage.signed_url(key, VERSION_FILES.get(kind, f"{kind}.mp4"), minutes)
         versions.append({"kind": kind, "play_url": url, "download_url": url})
