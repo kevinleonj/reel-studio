@@ -20,16 +20,17 @@ def mask_email(email: object) -> str | None:
 def _result(result: object, storage: Storage, minutes: int) -> dict[str, object] | None:
     if not isinstance(result, Mapping):
         return None
-    versions = []
-    for version in result.get("versions", []):
-        kind, key = str(version["kind"]), str(version["key"])
-        url = storage.signed_url(key, VERSION_FILES.get(kind, f"{kind}.mp4"), minutes)
-        versions.append({"kind": kind, "play_url": url, "download_url": url})
 
     def field(name: str, empty: object) -> object:
         # A stored null reads as the empty value: the page indexes into each of these (L303).
         value = result.get(name)
         return value if value is not None else empty
+
+    versions = []
+    for version in result.get("versions") or []:
+        kind, key = str(version["kind"]), str(version["key"])
+        url = storage.signed_url(key, VERSION_FILES.get(kind, f"{kind}.mp4"), minutes)
+        versions.append({"kind": kind, "play_url": url, "download_url": url})
 
     return {
         "versions": versions,
