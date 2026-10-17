@@ -20,20 +20,28 @@ def mask_email(email: object) -> str | None:
 def _result(result: object, storage: Storage, minutes: int) -> dict[str, object] | None:
     if not isinstance(result, Mapping):
         return None
+
+    def field(name: str, empty: object) -> object:
+        # A stored null reads as the empty value: the page indexes into each of these (L303).
+        value = result.get(name)
+        return value if value is not None else empty
+
     versions = []
-    for version in result.get("versions", []):
+    stored = result.get("versions")
+    for version in stored if stored is not None else []:
         kind, key = str(version["kind"]), str(version["key"])
         url = storage.signed_url(key, VERSION_FILES.get(kind, f"{kind}.mp4"), minutes)
         versions.append({"kind": kind, "play_url": url, "download_url": url})
+
     return {
         "versions": versions,
-        "duration_s": result.get("duration_s", 0),
-        "caption": result.get("caption", ""),
-        "text_lines": result.get("text_lines", []),
-        "music": result.get("music", {"mood": "", "tempo": ""}),
-        "left_out": result.get("left_out", []),
-        "wishes": result.get("wishes", []),
-        "doubts": result.get("doubts", []),
+        "duration_s": field("duration_s", 0),
+        "caption": field("caption", ""),
+        "text_lines": field("text_lines", []),
+        "music": field("music", {"mood": "", "tempo": ""}),
+        "left_out": field("left_out", []),
+        "wishes": field("wishes", []),
+        "doubts": field("doubts", []),
     }
 
 

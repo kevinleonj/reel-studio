@@ -177,9 +177,10 @@ class FakeEditorLauncher:
     """Launcher port: runs an editor (fake or the laptop's real one) on a thread; returns a
     made-up execution name."""
 
-    def __init__(self, editor: Editor, orders: OrderStore) -> None:
+    def __init__(self, editor: Editor, orders: OrderStore, *, notifier: FailureNotifier) -> None:
         self._editor = editor
         self._orders = orders
+        self._notifier = notifier
 
     def launch(self, order_id: str) -> str:
         thread = threading.Thread(
@@ -199,3 +200,17 @@ class FakeEditorLauncher:
                 extra={"order_id": order_id, "stage": "editor", "outcome": "error"},
             )
             self._orders.fail(order_id, code=ErrorCode.RENDER_ERROR)
+            try:
+                # EDITOR.md §10: every failure emails Kevin, this one too.
+                self._notifier.order_failed(order_id, ErrorCode.RENDER_ERROR, "editor")
+            except Exception:
+                # Logged with its traceback; the order's own state is already written.
+                log.exception(
+                    "failure notice not sent",
+                    extra={
+                        "order_id": order_id,
+                        "stage": "editor",
+                        "event": "notify",
+                        "outcome": "error",
+                    },
+                )

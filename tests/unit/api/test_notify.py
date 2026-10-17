@@ -4,7 +4,7 @@ dispatcher that survives its own errors (senior review W2, W7)."""
 import threading
 from datetime import UTC, datetime, timedelta
 
-from reel_studio.adapters.launcher_local import Dispatcher
+from reel_studio.adapters.launcher_local import Dispatcher, FakeEditorLauncher
 from reel_studio.api.notify import Notifier
 from reel_studio.core import order_rules
 from reel_studio.core.config import load
@@ -141,3 +141,41 @@ def test_queue_limits_come_from_the_config() -> None:
         5,
         30,
     )
+
+
+def test_a_crashed_editor_thread_fails_the_order_and_tells_kevin_and_the_customer() -> None:
+    # EDITOR.md §10: every failure emails Kevin, an unexpected exception included (re-review N1).
+    clock = FrozenClock(START)
+    orders, mailer = FakeOrders(clock, LIMITS), FakeMailer()
+    running(orders, "a" * 32, "friend@example.test")
+
+    class Crashing:
+        def run(self, order_id: str) -> None:
+            raise RuntimeError("disk full")
+
+    launcher = FakeEditorLauncher(Crashing(), orders, notifier=notifier(orders, mailer))
+    launcher._run("a" * 32)  # the thread's body, run here so the test needs no join
+    doc = orders.get("a" * 32)
+    assert doc is not None and doc["status"] == "failed"
+    assert [(m.template, m.to) for m in mailer.sent] == [
+        ("kevin", KEVIN),
+        ("failed", "friend@example.test"),
+    ]
+
+
+def test_a_notice_that_raises_after_a_crash_still_leaves_the_order_failed() -> None:
+    clock = FrozenClock(START)
+    orders = FakeOrders(clock, LIMITS)
+    running(orders, "a" * 32, "")
+
+    class Crashing:
+        def run(self, order_id: str) -> None:
+            raise RuntimeError("disk full")
+
+    class Broken:
+        def order_failed(self, order_id: str, code: ErrorCode, stage: str) -> None:
+            raise FileNotFoundError("copy table missing")
+
+    FakeEditorLauncher(Crashing(), orders, notifier=Broken())._run("a" * 32)  # raises nothing
+    doc = orders.get("a" * 32)
+    assert doc is not None and doc["status"] == "failed"
