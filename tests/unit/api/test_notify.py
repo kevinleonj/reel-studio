@@ -161,3 +161,21 @@ def test_a_crashed_editor_thread_fails_the_order_and_tells_kevin_and_the_custome
         ("kevin", KEVIN),
         ("failed", "friend@example.test"),
     ]
+
+
+def test_a_notice_that_raises_after_a_crash_still_leaves_the_order_failed() -> None:
+    clock = FrozenClock(START)
+    orders = FakeOrders(clock, LIMITS)
+    running(orders, "a" * 32, "")
+
+    class Crashing:
+        def run(self, order_id: str) -> None:
+            raise RuntimeError("disk full")
+
+    class Broken:
+        def order_failed(self, order_id: str, code: ErrorCode, stage: str) -> None:
+            raise FileNotFoundError("copy table missing")
+
+    FakeEditorLauncher(Crashing(), orders, notifier=Broken())._run("a" * 32)  # raises nothing
+    doc = orders.get("a" * 32)
+    assert doc is not None and doc["status"] == "failed"
